@@ -1,7 +1,7 @@
 import type { InitArgs } from '../types/commands.js';
 
 async function init(argv: InitArgs) {
-  const { specPath, base } = argv;
+  const { spec, base } = argv;
 }
 
 export { init };
