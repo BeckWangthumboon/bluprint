@@ -3,16 +3,28 @@
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import { init } from './commands/init.js';
+import type { InitArgs } from './types/commands.js';
 
 yargs(hideBin(process.argv))
   .scriptName('bluprint')
   .usage('$0 <command> [options]')
-  .command(
+  .command<InitArgs>(
     'init',
     'Initialize a new project',
-    () => {},
-    () => {
-      init();
+    (cmd) => {
+      cmd.option('specPath', {
+        type: 'string',
+        description: 'Path to the feature spec file',
+        required: true,
+      });
+      cmd.option('base', {
+        type: 'string',
+        description: 'Base git branch to work from',
+        required: true,
+      });
+    },
+    async (argv) => {
+      await init(argv);
     }
   )
   .strict()
