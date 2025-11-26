@@ -1,5 +1,5 @@
 interface InitArgs {
-  specPath: string;
+  spec: string;
   base: string;
 }
 

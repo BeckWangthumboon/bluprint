@@ -12,15 +12,15 @@ yargs(hideBin(process.argv))
     'init',
     'Initialize a new project',
     (cmd) => {
-      cmd.option('specPath', {
+      cmd.option('spec', {
         type: 'string',
-        description: 'Path to the feature spec file',
-        required: true,
+        description: 'Path to the spec markdown file',
+        demandOption: true,
       });
       cmd.option('base', {
         type: 'string',
         description: 'Base git branch to work from',
-        required: true,
+        demandOption: true,
       });
     },
     async (argv) => {
