@@ -4,23 +4,16 @@ import { fsUtils } from '../lib/fs.js';
 import { gitUtils } from '../lib/git.js';
 import { err, ok, ResultAsync } from 'neverthrow';
 import { createAppError, type AppError } from '../types/errors.js';
+import type { SuccessInfo } from '../lib/exit.js';
 
 /**
- * Init Flow
+ * Creates the initial Bluprint configuration in the current git repository.
  *
- * 1. Validate inputs
- *    - Check spec file exists
- *    - Validate base ref exists
- *
- * 2. Create config directory
- *    - Ensure .bluprint/ exists
- *    - Write config.json with spec and base
- *    - Move spec.md file to .bluprint/spec.md
- *
- * 3. Validate feature spec
- *    - Load and parse the spec
+ * @param argv - CLI args containing spec path and base branch; spec must be a file; base branch must exist.
+ * @returns ResultAsync containing success info on configuration creation, or AppError when validation or git/fs operations fail. Never throws.
+ * @throws Never throws. Errors are represented using AppError.
  */
-function init(argv: InitArgs): ResultAsync<void, AppError> {
+function init(argv: InitArgs): ResultAsync<SuccessInfo, AppError> {
   const { spec, base } = argv;
   const specPath = path.resolve(spec);
 
@@ -35,18 +28,9 @@ function init(argv: InitArgs): ResultAsync<void, AppError> {
     })
     .andThen(() => {
       return gitUtils
-        .gitFetchPrune()
-        .andThen(() => gitUtils.ensureInsideGitRepo())
-        .andThen((insideRepo) => {
-          if (!insideRepo) {
-            return err(
-              createAppError('GIT_NOT_REPO', 'Not inside a git repository', {
-                path: process.cwd(),
-              }),
-            );
-          }
-          return gitUtils.gitCheckBranchExists(base);
-        })
+        .ensureInsideGitRepo()
+        .andThen(() => gitUtils.gitFetchPrune())
+        .andThen(() => gitUtils.gitCheckBranchExists(base))
         .andThen((branchExists) => {
           if (!branchExists) {
             return err(
@@ -67,12 +51,13 @@ function init(argv: InitArgs): ResultAsync<void, AppError> {
         JSON.stringify({ base, specPath }, null, 2),
       );
     })
+    .andThen(() => fsUtils.fsMove(specPath, path.resolve('.bluprint', 'spec.md')))
     .andThen(() => {
-      // Delete spec.md file and move to .bluprint directory
-      return fsUtils.fsMove(specPath, path.resolve('.bluprint', 'spec.md'));
-    })
-    .andThen(() => {
-      return ok(void 0); // TODO: validate spec file
+      const successInfo: SuccessInfo = {
+        command: 'init',
+        message: 'Bluprint configuration initialized successfully',
+      };
+      return ok(successInfo);
     });
 }
 
