@@ -4,6 +4,7 @@ import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import { init } from './commands/init.js';
 import type { InitArgs } from './types/commands.js';
+import { exitWithError } from './lib/utils.js';
 
 yargs(hideBin(process.argv))
   .scriptName('bluprint')
@@ -24,7 +25,12 @@ yargs(hideBin(process.argv))
       });
     },
     async (argv) => {
-      await init(argv);
+      await init(argv).match(
+        () => {},
+        (error) => {
+          exitWithError(error.message);
+        }
+      );
     }
   )
   .strict()
