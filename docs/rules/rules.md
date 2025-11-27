@@ -57,15 +57,16 @@ Every **exported function** must have a header comment **unless** the function i
  *
  * @param arg - Purpose, constraints, assumptions.
  * @returns Structured return description. Must note Result/ResultAsync.
- * @throws Never throws. Errors are represented using AppError.
+ * @throws Never throws. Errors flow via AppError in Result/ResultAsync. (Include only if the function performs error handling or returns a Result/ResultAsync.)
  */
 ```
 
 **Content Rules:**
 
 - First line: short, high-level purpose.
+- Optional: include a brief paragraph (1–3 sentences) describing the overall flow for multi-step commands, focusing on intent and sequencing rather than line-by-line narration.
 - Clarify assumptions (cwd must be project root, config must exist, etc.).
-- Must note that the function never throws.
+- Must note that the function never throws when it performs error handling or returns a Result/ResultAsync; omit `@throws` entirely for pure helpers that cannot fail.
 - Must specify what the Result represents.
 
 ---
