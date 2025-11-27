@@ -123,7 +123,9 @@ const gitGetRepoRoot = () => {
     })
     .orElse((e) => {
       if (e.code === 'GIT_COMMAND_FAILED' && /not a git repository/i.test(e.message)) {
-        return err(createAppError('GIT_NOT_REPO', 'Not inside a git repository', { originalError: e }));
+        return err(
+          createAppError('GIT_NOT_REPO', 'Not inside a git repository', { originalError: e }),
+        );
       }
       return err(
         createAppError('GIT_ERROR', `Unable to resolve git repository root: ${e.message}`, {
