@@ -1,5 +1,6 @@
 import { spawn } from 'child_process';
 import { err, ok, ResultAsync } from 'neverthrow';
+import { createAppError, type AppError } from '../types/errors.js';
 
 interface GitRunOptions {
   cwd?: string;
@@ -12,8 +13,15 @@ interface GitRunResult {
   exitCode: number;
 }
 
+export type GitUtils = {
+  gitRun: (args: string[], options?: GitRunOptions) => ResultAsync<GitRunResult, AppError>;
+  gitFetchPrune: () => ResultAsync<GitRunResult, AppError>;
+  ensureInsideGitRepo: () => ResultAsync<boolean, AppError>;
+  gitCheckBranchExists: (branch: string) => ResultAsync<boolean, AppError>;
+};
+
 const gitRun = (args: string[], options?: GitRunOptions) =>
-  ResultAsync.fromPromise<GitRunResult, Error>(
+  ResultAsync.fromPromise<GitRunResult, AppError>(
     new Promise((resolve, reject) => {
       const child = spawn('git', args, {
         cwd: options?.cwd ?? process.cwd(),
@@ -32,7 +40,13 @@ const gitRun = (args: string[], options?: GitRunOptions) =>
       });
 
       child.on('error', (err) => {
-        reject(err);
+        reject(
+          createAppError(
+            'GIT_ERROR',
+            `Git command failed (git ${args.join(' ')}): ${err.message}`,
+            { args, error: err },
+          ),
+        );
       });
 
       child.on('close', (code) => {
@@ -40,11 +54,22 @@ const gitRun = (args: string[], options?: GitRunOptions) =>
         if (exitCode === 0) {
           resolve({ stdout, stderr, exitCode });
         } else {
-          reject(new Error(stderr || `git ${args.join(' ')} exited with code ${exitCode}`));
+          reject(
+            createAppError(
+              'GIT_COMMAND_FAILED',
+              stderr || `git ${args.join(' ')} exited with code ${exitCode}`,
+              { args, exitCode, stdout, stderr },
+            ),
+          );
         }
       });
     }),
-    (error) => new Error(`Git command failed (git ${args.join(' ')}): ${(error as Error).message}`),
+    (error) =>
+      createAppError(
+        'GIT_ERROR',
+        `Git command failed (git ${args.join(' ')}): ${(error as Error).message}`,
+        { args },
+      ),
   );
 
 const gitFetchPrune = () => gitRun(['fetch', '--prune']);
@@ -54,19 +79,29 @@ const ensureInsideGitRepo = () =>
     .andThen((result) => {
       const stdout = result.stdout;
       const inside = stdout.trim() === 'true';
-      return inside ? ok(true) : err(new Error('Not inside a git worktree'));
+      return inside ? ok(true) : err(createAppError('GIT_NOT_REPO', 'Not inside a git worktree'));
     })
-    .mapErr((e) => new Error(`Unable to check git worktree: ${e.message}`));
+    .mapErr((e) =>
+      createAppError('GIT_ERROR', `Unable to check git worktree: ${e.message}`, {
+        originalError: e,
+      }),
+    );
 
 const gitCheckBranchExists = (branch: string) =>
   gitRun(['rev-parse', '--verify', '--quiet', branch])
     .map(() => true)
     .orElse((e) => {
       if (/exit(ed)? with code (1|128)/i.test(e.message)) return ok(false);
-      return err(new Error(`Unable to check branch ${branch}: ${e.message}`));
+      return err(
+        createAppError('GIT_ERROR', `Unable to check branch ${branch}: ${e.message}`, {
+          branch,
+          originalError: e,
+        }),
+      );
     });
 
-export const gitUtils = {
+export const gitUtils: GitUtils = {
+  gitRun,
   gitFetchPrune,
   ensureInsideGitRepo,
   gitCheckBranchExists,
