@@ -22,51 +22,54 @@ function init(argv: InitArgs): ResultAsync<SuccessInfo, AppError> {
   const { spec, base } = argv;
   const specPath = path.resolve(spec);
 
-  return fsUtils
-    .fsCheckAccess(specPath)
-    .andThen(() => fsUtils.fsStat(specPath))
-    .andThen((stat) => {
-      if (!stat.isFile()) {
-        return err(createAppError('FS_ERROR', `Spec file ${specPath} is not a file`, { specPath }));
-      }
-      return ok(void 0);
-    })
-    .andThen(() => {
-      return gitUtils
-        .ensureInsideGitRepo()
-        .andThen(() => gitUtils.gitFetchPrune())
-        .andThen(() => gitUtils.gitCheckBranchExists(base))
-        .andThen((branchExists) => {
-          if (!branchExists) {
-            return err(
-              createAppError('GIT_ERROR', `Base branch '${base}' does not exist`, {
-                branch: base,
-              }),
-            );
-          }
-          return ok(void 0);
-        });
-    })
-    .andThen(() => {
-      return fsUtils.fsMkdir(path.resolve('.bluprint'));
-    })
-    .andThen(() => {
-      return fsUtils.fsWriteFile(
-        path.resolve('.bluprint', 'config.json'),
-        JSON.stringify({ base, specPath }, null, 2),
-      );
-    })
-    .andThen(() => fsUtils.fsMove(specPath, path.resolve('.bluprint', 'spec.md')))
-    .andThen(() => {
-      return ok(void 0); // Placeholder: validate spec file
-    })
-    .andThen(() => {
-      const successInfo: SuccessInfo = {
-        command: 'init',
-        message: 'Bluprint configuration initialized successfully',
-      };
-      return ok(successInfo);
-    });
+  return gitUtils.gitGetRepoRoot().andThen((repoRoot) => {
+    const bluprintDir = path.join(repoRoot, '.bluprint');
+    const finalSpecPath = path.join(bluprintDir, 'spec.md');
+    const configPath = path.join(bluprintDir, 'config.json');
+
+    return fsUtils
+      .fsCheckAccess(specPath)
+      .andThen(() => fsUtils.fsStat(specPath))
+      .andThen((stat) => {
+        if (!stat.isFile()) {
+          return err(
+            createAppError('FS_ERROR', `Spec file ${specPath} is not a file`, { specPath }),
+          );
+        }
+        return ok(void 0);
+      })
+      .andThen(() => {
+        return gitUtils
+          .gitFetchPrune()
+          .andThen(() => gitUtils.gitCheckBranchExists(base))
+          .andThen((branchExists) => {
+            if (!branchExists) {
+              return err(
+                createAppError('GIT_ERROR', `Base branch '${base}' does not exist`, {
+                  branch: base,
+                }),
+              );
+            }
+            return ok(void 0);
+          });
+      })
+      .andThen(() => fsUtils.fsMkdir(bluprintDir))
+      .andThen(() => {
+        return fsUtils.fsWriteFile(
+          configPath,
+          JSON.stringify({ base, specPath: path.relative(repoRoot, finalSpecPath) }, null, 2),
+        );
+      })
+      .andThen(() => fsUtils.fsMove(specPath, finalSpecPath))
+      .andThen(() => ok(void 0)) // Placeholder: validate spec file
+      .andThen(() => {
+        const successInfo: SuccessInfo = {
+          command: 'init',
+          message: 'Bluprint configuration initialized successfully',
+        };
+        return ok(successInfo);
+      });
+  });
 }
 
 export { init };
