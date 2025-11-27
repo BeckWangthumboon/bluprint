@@ -1,6 +1,7 @@
 import path from 'path';
 import type { InitArgs } from '../types/commands.js';
 import { fsUtils } from '../lib/fs.js';
+import { gitUtils } from '../lib/git.js';
 import { err, ok, ResultAsync } from 'neverthrow';
 
 /**
@@ -32,16 +33,18 @@ function init(argv: InitArgs): ResultAsync<void, Error> {
       return ok(void 0);
     })
     .andThen(() => {
-      return ok(void 0); // TODO: validate git base branch exists
+      return gitUtils
+        .gitFetchPrune()
+        .andThen(() => gitUtils.ensureInsideGitRepo())
+        .andThen(() => gitUtils.gitCheckBranchExists(base));
     })
     .andThen(() => {
       return fsUtils.fsMkdir(path.resolve('.bluprint'));
     })
     .andThen(() => {
-      // Write config file in .bluprint directory
       return fsUtils.fsWriteFile(
         path.resolve('.bluprint', 'config.json'),
-        JSON.stringify({ base, specPath }, null, 2)
+        JSON.stringify({ base, specPath }, null, 2),
       );
     })
     .andThen(() => {
