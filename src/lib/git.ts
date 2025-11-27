@@ -1,5 +1,5 @@
 import { spawn } from 'child_process';
-import { err, ok, ResultAsync } from 'neverthrow';
+import { err, ok, okAsync, ResultAsync } from 'neverthrow';
 import { createAppError, type AppError } from '../types/errors.js';
 
 interface GitRunOptions {
@@ -14,13 +14,13 @@ interface GitRunResult {
 }
 
 export type GitUtils = {
-  gitRun: (args: string[], options?: GitRunOptions) => ResultAsync<GitRunResult, AppError>;
   gitFetchPrune: () => ResultAsync<GitRunResult, AppError>;
   ensureInsideGitRepo: () => ResultAsync<boolean, AppError>;
   gitCheckBranchExists: (branch: string) => ResultAsync<boolean, AppError>;
+  gitGetRepoRoot: () => ResultAsync<string, AppError>;
 };
 
-const gitRun = (args: string[], options?: GitRunOptions) =>
+const gitRunRaw = (args: string[], options?: GitRunOptions) =>
   ResultAsync.fromPromise<GitRunResult, AppError>(
     new Promise((resolve, reject) => {
       const child = spawn('git', args, {
@@ -72,20 +72,27 @@ const gitRun = (args: string[], options?: GitRunOptions) =>
       ),
   );
 
+let cachedRepoRoot: string | null = null;
+
+/**
+ * Run a git command scoped to the repository root by default.
+ *
+ * @param args - Arguments passed to git.
+ * @param options - Optional overrides; provided cwd wins over repo root.
+ * @returns ResultAsync containing stdout/stderr/exitCode.
+ * @throws Never throws; errors are returned as AppError.
+ */
+const gitRun = (args: string[], options?: GitRunOptions) =>
+  gitGetRepoRoot().andThen((repoRoot) =>
+    gitRunRaw(args, {
+      ...options,
+      cwd: options?.cwd ?? repoRoot,
+    }),
+  );
+
 const gitFetchPrune = () => gitRun(['fetch', '--prune']);
 
-const ensureInsideGitRepo = () =>
-  gitRun(['rev-parse', '--is-inside-work-tree'])
-    .andThen((result) => {
-      const stdout = result.stdout;
-      const inside = stdout.trim() === 'true';
-      return inside ? ok(true) : err(createAppError('GIT_NOT_REPO', 'Not inside a git worktree'));
-    })
-    .mapErr((e) =>
-      createAppError('GIT_ERROR', `Unable to check git worktree: ${e.message}`, {
-        originalError: e,
-      }),
-    );
+const ensureInsideGitRepo = () => gitGetRepoRoot().map(() => true);
 
 const gitCheckBranchExists = (branch: string) =>
   gitRun(['rev-parse', '--verify', '--quiet', branch])
@@ -100,9 +107,35 @@ const gitCheckBranchExists = (branch: string) =>
       );
     });
 
+/**
+ * Resolve the absolute path to the current git repository root.
+ *
+ * @returns ResultAsync that contains the repo root path when inside a git repository, or an AppError when not.
+ * @throws Never throws; errors are returned as AppError.
+ */
+const gitGetRepoRoot = () => {
+  if (cachedRepoRoot) return okAsync(cachedRepoRoot);
+
+  return gitRunRaw(['rev-parse', '--show-toplevel'])
+    .map((result) => {
+      cachedRepoRoot = result.stdout.trim();
+      return cachedRepoRoot;
+    })
+    .orElse((e) => {
+      if (e.code === 'GIT_COMMAND_FAILED' && /not a git repository/i.test(e.message)) {
+        return err(createAppError('GIT_NOT_REPO', 'Not inside a git repository', { originalError: e }));
+      }
+      return err(
+        createAppError('GIT_ERROR', `Unable to resolve git repository root: ${e.message}`, {
+          originalError: e,
+        }),
+      );
+    });
+};
+
 export const gitUtils: GitUtils = {
-  gitRun,
   gitFetchPrune,
   ensureInsideGitRepo,
   gitCheckBranchExists,
+  gitGetRepoRoot,
 };
