@@ -15,8 +15,8 @@
   "scripts": {
     "dev": "bun src/index.ts",
     "test": "vitest run",
-    "format": "prettier \"src/**/*.{ts,tsx,js,jsx,json,md}\" --write",
-    "format:check": "prettier \"src/**/*.{ts,tsx,js,jsx,json,md}\" --check"
+    "format": "prettier \"src/**/*.{ts,tsx,js,jsx,json,md}\" \"tests/**/*.{ts,tsx,js,jsx,json,md}\" --write",
+    "format:check": "prettier \"src/**/*.{ts,tsx,js,jsx,json,md}\" \"tests/**/*.{ts,tsx,js,jsx,json,md}\" --check"
   },
   "bin": {
     "bluprint": "src/index.ts"
