@@ -53,6 +53,9 @@ function init(argv: InitArgs): ResultAsync<SuccessInfo, AppError> {
     })
     .andThen(() => fsUtils.fsMove(specPath, path.resolve('.bluprint', 'spec.md')))
     .andThen(() => {
+      return ok(void 0); // Placeholder: validate spec file
+    })
+    .andThen(() => {
       const successInfo: SuccessInfo = {
         command: 'init',
         message: 'Bluprint configuration initialized successfully',
