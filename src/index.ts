@@ -29,9 +29,9 @@ yargs(hideBin(process.argv))
         () => {},
         (error) => {
           exitWithError(error.message);
-        }
+        },
       );
-    }
+    },
   )
   .strict()
   .demandCommand(1)
