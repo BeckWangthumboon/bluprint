@@ -78,7 +78,7 @@ const formatErrorMessage = (error: AppError): string => {
  * @returns void; never throws; exitCode is updated in place.
  * @throws Never throws. Errors are represented using AppError.
  */
-export const displayError = (error: AppError): void => {
+const displayError = (error: AppError): void => {
   console.error(formatErrorMessage(error));
   process.exitCode = getExitCode(error.code);
 };
@@ -97,7 +97,9 @@ export interface SuccessInfo {
  * @returns void; never throws; exitCode remains unchanged.
  * @throws Never throws. Errors are represented using AppError.
  */
-export const displaySuccess = (info: SuccessInfo): void => {
+const displaySuccess = (info: SuccessInfo): void => {
   const { command, message } = info;
   console.log(`Success: ${message} (command: ${command})`);
 };
+
+export { displayError, displaySuccess };
