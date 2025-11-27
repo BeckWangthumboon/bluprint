@@ -92,7 +92,7 @@ const fsMove = (from: string, to: string) =>
               to: normalizedTo,
             },
           ),
-        ),
+      ),
     ),
   );
 

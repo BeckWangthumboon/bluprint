@@ -5,14 +5,16 @@
   "private": true,
   "devDependencies": {
     "@types/bun": "latest",
+    "@types/yargs": "^17.0.35",
     "prettier": "^3.6.2",
-    "@types/yargs": "^17.0.35"
+    "vitest": "^4.0.14"
   },
   "peerDependencies": {
     "typescript": "^5"
   },
   "scripts": {
     "dev": "bun src/index.ts",
+    "test": "vitest run",
     "format": "prettier \"src/**/*.{ts,tsx,js,jsx,json,md}\" --write",
     "format:check": "prettier \"src/**/*.{ts,tsx,js,jsx,json,md}\" --check"
   },
