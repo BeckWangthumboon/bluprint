@@ -25,7 +25,7 @@ type MkdirOptions = MakeDirectoryOptions & {
  *
  * @param target - Path provided by caller. Accepts absolute or relative input.
  * @returns ResultAsync containing an absolute path inside the repo root when valid; AppError otherwise.
- * @throws Never throws; errors are returned as AppError.
+ * @throws Never throws. Errors flow via AppError in Result/ResultAsync.
  */
 const resolvePathWithinRepo = (target: string) =>
   gitUtils.gitGetRepoRoot().andThen((repoRoot) => {
@@ -46,6 +46,14 @@ const resolvePathWithinRepo = (target: string) =>
     return ok(candidate);
   });
 
+/**
+ * Creates a directory within the repository, ensuring traversal stays inside the repo root.
+ *
+ * @param target - Directory path to create; absolute or relative to repo root.
+ * @param options - Optional mkdir settings; recursive defaults to true.
+ * @returns ResultAsync resolving to void when creation succeeds; AppError when creation fails.
+ * @throws Never throws. Errors flow via AppError in Result/ResultAsync.
+ */
 const fsMkdir = (target: string, options: MkdirOptions = { recursive: true }) =>
   resolvePathWithinRepo(target).andThen((normalized) =>
     ResultAsync.fromPromise(
@@ -59,6 +67,14 @@ const fsMkdir = (target: string, options: MkdirOptions = { recursive: true }) =>
     ),
   );
 
+/**
+ * Moves a file or directory within the repository boundaries.
+ *
+ * @param from - Source path to move; validated against repo root.
+ * @param to - Destination path; parent directories are created as needed.
+ * @returns ResultAsync resolving to void on success; AppError on validation or move failure.
+ * @throws Never throws. Errors flow via AppError in Result/ResultAsync.
+ */
 const fsMove = (from: string, to: string) =>
   resolvePathWithinRepo(from).andThen((normalizedFrom) =>
     resolvePathWithinRepo(to).andThen((normalizedTo) =>
@@ -76,10 +92,17 @@ const fsMove = (from: string, to: string) =>
               to: normalizedTo,
             },
           ),
-      ),
+        ),
     ),
   );
 
+/**
+ * Checks whether a path exists and is accessible within the repository.
+ *
+ * @param path - Target path to validate; absolute or relative.
+ * @returns ResultAsync resolving to true when accessible; AppError when inaccessible or invalid.
+ * @throws Never throws. Errors flow via AppError in Result/ResultAsync.
+ */
 const fsCheckAccess = (path: string) =>
   resolvePathWithinRepo(path).andThen((normalized) =>
     ResultAsync.fromPromise(
@@ -95,6 +118,13 @@ const fsCheckAccess = (path: string) =>
     ),
   );
 
+/**
+ * Reads filesystem metadata for a path inside the repository.
+ *
+ * @param path - Target path to stat; absolute or relative.
+ * @returns ResultAsync resolving to Stats on success; AppError when stat fails.
+ * @throws Never throws. Errors flow via AppError in Result/ResultAsync.
+ */
 const fsStat = (path: string) =>
   resolvePathWithinRepo(path).andThen((normalized) =>
     ResultAsync.fromPromise(fs.stat(normalized), (err) =>
@@ -108,6 +138,13 @@ const fsStat = (path: string) =>
     ),
   );
 
+/**
+ * Reads a UTF-8 file within the repository.
+ *
+ * @param target - File path to read; absolute or relative.
+ * @returns ResultAsync resolving to file contents; AppError when read fails.
+ * @throws Never throws. Errors flow via AppError in Result/ResultAsync.
+ */
 const fsReadFile = (target: string) =>
   resolvePathWithinRepo(target).andThen((normalized) =>
     ResultAsync.fromPromise(fs.readFile(normalized, 'utf8'), (error) =>
@@ -119,6 +156,14 @@ const fsReadFile = (target: string) =>
     ),
   );
 
+/**
+ * Writes UTF-8 data to a file within the repository.
+ *
+ * @param target - Destination path to write; absolute or relative.
+ * @param data - Content to write.
+ * @returns ResultAsync resolving to void on success; AppError when write fails.
+ * @throws Never throws. Errors flow via AppError in Result/ResultAsync.
+ */
 const fsWriteFile = (target: string, data: string) =>
   resolvePathWithinRepo(target).andThen((normalized) =>
     ResultAsync.fromPromise(fs.writeFile(normalized, data, 'utf8'), (error) =>

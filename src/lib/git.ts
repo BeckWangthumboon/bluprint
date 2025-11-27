@@ -20,6 +20,14 @@ export type GitUtils = {
   gitGetRepoRoot: () => ResultAsync<string, AppError>;
 };
 
+/**
+ * Runs a git command with provided args and options, capturing stdout/stderr.
+ *
+ * @param args - Git arguments to execute; passed directly to the git CLI.
+ * @param options - Optional overrides for cwd/env; defaults to process context.
+ * @returns ResultAsync containing stdout/stderr/exitCode from the git invocation.
+ * @throws Never throws. Errors flow via AppError in Result/ResultAsync.
+ */
 const gitRunRaw = (args: string[], options?: GitRunOptions) =>
   ResultAsync.fromPromise<GitRunResult, AppError>(
     new Promise((resolve, reject) => {
@@ -80,7 +88,7 @@ let cachedRepoRoot: string | null = null;
  * @param args - Arguments passed to git.
  * @param options - Optional overrides; provided cwd wins over repo root.
  * @returns ResultAsync containing stdout/stderr/exitCode.
- * @throws Never throws; errors are returned as AppError.
+ * @throws Never throws. Errors flow via AppError in Result/ResultAsync.
  */
 const gitRun = (args: string[], options?: GitRunOptions) =>
   gitGetRepoRoot().andThen((repoRoot) =>
@@ -90,10 +98,29 @@ const gitRun = (args: string[], options?: GitRunOptions) =>
     }),
   );
 
+/**
+ * Fetches remote refs and prunes stale branches.
+ *
+ * @returns ResultAsync with git stdout/stderr/exitCode on success; AppError on failure.
+ * @throws Never throws. Errors flow via AppError in Result/ResultAsync.
+ */
 const gitFetchPrune = () => gitRun(['fetch', '--prune']);
 
+/**
+ * Confirms the current working directory resides inside a git repository.
+ *
+ * @returns ResultAsync resolving to true when inside a repository; AppError otherwise.
+ * @throws Never throws. Errors flow via AppError in Result/ResultAsync.
+ */
 const ensureInsideGitRepo = () => gitGetRepoRoot().map(() => true);
 
+/**
+ * Checks whether a given branch exists in the repository.
+ *
+ * @param branch - Branch name to verify.
+ * @returns ResultAsync resolving to true when the branch exists, false when it does not, or AppError on git failure.
+ * @throws Never throws. Errors flow via AppError in Result/ResultAsync.
+ */
 const gitCheckBranchExists = (branch: string) =>
   gitRun(['rev-parse', '--verify', '--quiet', branch])
     .map(() => true)
@@ -111,7 +138,7 @@ const gitCheckBranchExists = (branch: string) =>
  * Resolve the absolute path to the current git repository root.
  *
  * @returns ResultAsync that contains the repo root path when inside a git repository, or an AppError when not.
- * @throws Never throws; errors are returned as AppError.
+ * @throws Never throws. Errors flow via AppError in Result/ResultAsync.
  */
 const gitGetRepoRoot = () => {
   if (cachedRepoRoot) return okAsync(cachedRepoRoot);

@@ -16,6 +16,14 @@ export interface AppError {
   details?: unknown;
 }
 
+/**
+ * Creates a structured AppError for Result/ResultAsync flows.
+ *
+ * @param code - Stable application error code describing the failure category.
+ * @param message - Human-readable, actionable description of the error.
+ * @param details - Optional contextual payload to aid debugging and reporting.
+ * @returns AppError object used by callers to represent failures without throwing.
+ */
 export const createAppError = (
   code: AppErrorCode,
   message: string,

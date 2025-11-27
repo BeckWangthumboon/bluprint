@@ -9,9 +9,14 @@ import type { SuccessInfo } from '../lib/exit.js';
 /**
  * Creates the initial Bluprint configuration in the current git repository.
  *
+ * Flow: Checks that the spec path exists and is a file.
+ * Confirms the current directory is a git repo and the base branch exists.
+ * Then scaffolds the `.bluprint` directory with configuration and the spec file.
+ * Lastly, validates the spec file.
+ *
  * @param argv - CLI args containing spec path and base branch; spec must be a file; base branch must exist.
- * @returns ResultAsync containing success info on configuration creation, or AppError when validation or git/fs operations fail. Never throws.
- * @throws Never throws. Errors are represented using AppError.
+ * @returns ResultAsync containing success info on configuration creation, or AppError when validation or git/fs operations fail.
+ * @throws Never throws. Errors flow via AppError in Result/ResultAsync.
  */
 function init(argv: InitArgs): ResultAsync<SuccessInfo, AppError> {
   const { spec, base } = argv;
