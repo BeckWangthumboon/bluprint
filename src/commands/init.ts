@@ -3,6 +3,7 @@ import type { InitArgs } from '../types/commands.js';
 import { fsUtils } from '../lib/fs.js';
 import { gitUtils } from '../lib/git.js';
 import { err, ok, ResultAsync } from 'neverthrow';
+import { createAppError, type AppError } from '../types/errors.js';
 
 /**
  * Init Flow
@@ -19,7 +20,7 @@ import { err, ok, ResultAsync } from 'neverthrow';
  * 3. Validate feature spec
  *    - Load and parse the spec
  */
-function init(argv: InitArgs): ResultAsync<void, Error> {
+function init(argv: InitArgs): ResultAsync<void, AppError> {
   const { spec, base } = argv;
   const specPath = path.resolve(spec);
 
@@ -28,7 +29,7 @@ function init(argv: InitArgs): ResultAsync<void, Error> {
     .andThen(() => fsUtils.fsStat(specPath))
     .andThen((stat) => {
       if (!stat.isFile()) {
-        return err(new Error(`Spec file ${specPath} is not a file`));
+        return err(createAppError('FS_ERROR', `Spec file ${specPath} is not a file`, { specPath }));
       }
       return ok(void 0);
     })
@@ -36,7 +37,26 @@ function init(argv: InitArgs): ResultAsync<void, Error> {
       return gitUtils
         .gitFetchPrune()
         .andThen(() => gitUtils.ensureInsideGitRepo())
-        .andThen(() => gitUtils.gitCheckBranchExists(base));
+        .andThen((insideRepo) => {
+          if (!insideRepo) {
+            return err(
+              createAppError('GIT_NOT_REPO', 'Not inside a git repository', {
+                path: process.cwd(),
+              }),
+            );
+          }
+          return gitUtils.gitCheckBranchExists(base);
+        })
+        .andThen((branchExists) => {
+          if (!branchExists) {
+            return err(
+              createAppError('GIT_ERROR', `Base branch '${base}' does not exist`, {
+                branch: base,
+              }),
+            );
+          }
+          return ok(void 0);
+        });
     })
     .andThen(() => {
       return fsUtils.fsMkdir(path.resolve('.bluprint'));
