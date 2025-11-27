@@ -1,5 +1,11 @@
 import type { AppError, AppErrorCode } from '../types/errors.js';
 
+/**
+ * Maps AppError codes to deterministic CLI exit codes.
+ *
+ * @param errorCode - Stable application error code.
+ * @returns Numeric exit code aligned to user vs system vs git errors.
+ */
 const getExitCode = (errorCode: AppErrorCode): number => {
   switch (errorCode) {
     // User errors - exit code 1
@@ -27,6 +33,12 @@ const getExitCode = (errorCode: AppErrorCode): number => {
   }
 };
 
+/**
+ * Formats an AppError into user-facing CLI output with contextual hints.
+ *
+ * @param error - Application error including code and optional details payload.
+ * @returns Multi-line string suitable for stderr presentation.
+ */
 const formatErrorMessage = (error: AppError): string => {
   const { code, message, details } = error;
 
@@ -76,7 +88,6 @@ const formatErrorMessage = (error: AppError): string => {
  *
  * @param error - Application error to present; code determines exit status mapping.
  * @returns void; never throws; exitCode is updated in place.
- * @throws Never throws. Errors are represented using AppError.
  */
 const displayError = (error: AppError): void => {
   console.error(formatErrorMessage(error));
@@ -95,7 +106,6 @@ export interface SuccessInfo {
  *
  * @param info - Structured success payload describing the completed command.
  * @returns void; never throws; exitCode remains unchanged.
- * @throws Never throws. Errors are represented using AppError.
  */
 const displaySuccess = (info: SuccessInfo): void => {
   const { command, message } = info;
