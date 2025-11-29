@@ -1,50 +1,50 @@
-export type Overview = {
+type Overview = {
   summary: string;
   goals?: string[];
 };
 
-export type Motivation = {
+type Motivation = {
   problem?: string;
   context?: string[];
 };
 
-export type Constraints = string[];
+type Constraints = string[];
 
-export type Guidelines = string[];
+type Guidelines = string[];
 
-export type ImplementationExample = {
+type ImplementationExample = {
   description: string;
   path: string;
 };
 
-export type ImplementationPatterns = {
+type ImplementationPatterns = {
   guidelines?: Guidelines;
   examples?: ImplementationExample[];
 };
 
-export type AcceptanceCriteria = string[];
+type AcceptanceCriteria = string[];
 
-export type EdgeCase = {
+type EdgeCase = {
   name: string;
   result: string;
   handling: string;
 };
 
-export type EdgeCases = EdgeCase[];
+type EdgeCases = EdgeCase[];
 
-export type Scope = {
+type Scope = {
   include: string[];
   exclude?: string[];
 };
 
-export type RuleReference = {
+type RuleReference = {
   name: string;
   path: string;
 };
 
-export type Rules = RuleReference[];
+type Rules = RuleReference[];
 
-export type Specification = {
+type Specification = {
   overview: Overview;
   motivation?: Motivation;
   constraints?: Constraints;
@@ -53,4 +53,20 @@ export type Specification = {
   edge_cases?: EdgeCases;
   scope: Scope;
   rules?: Rules;
+};
+
+export type {
+  Overview,
+  Motivation,
+  Constraints,
+  Guidelines,
+  ImplementationExample,
+  ImplementationPatterns,
+  AcceptanceCriteria,
+  EdgeCase,
+  EdgeCases,
+  Scope,
+  RuleReference,
+  Rules,
+  Specification,
 };
