@@ -24,7 +24,7 @@ function init(argv: InitArgs): ResultAsync<SuccessInfo, AppError> {
 
   return gitUtils.gitGetRepoRoot().andThen((repoRoot) => {
     const bluprintDir = path.join(repoRoot, '.bluprint');
-    const finalSpecPath = path.join(bluprintDir, 'spec.md');
+    const finalSpecPath = path.join(bluprintDir, 'spec.yaml');
     const configPath = path.join(bluprintDir, 'config.json');
 
     return fsUtils

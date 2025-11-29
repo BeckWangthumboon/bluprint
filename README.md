@@ -27,7 +27,7 @@ Bluprint is a TypeScript CLI that evaluates feature branches against a spec and 
   ```
 - Initialize Bluprint in a repo:
   ```bash
-  bluprint init --spec ./feature-spec.md --base main
+  bluprint init --spec ./feature-spec.yaml --base main
   ```
 - Full command details live in `usage.md`.
 

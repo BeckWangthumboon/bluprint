@@ -25,7 +25,7 @@ export const initGitRepo = async (baseBranch = 'main'): Promise<string> => {
 
 export const writeSpecFile = async (
   repoRoot: string,
-  filename = 'feature.md',
+  filename = 'feature.yaml',
   contents = '# Spec',
 ): Promise<string> => {
   const specPath = path.join(repoRoot, filename);
