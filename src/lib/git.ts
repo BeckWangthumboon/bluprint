@@ -18,6 +18,7 @@ export type GitUtils = {
   ensureInsideGitRepo: () => ResultAsync<boolean, AppError>;
   gitCheckBranchExists: (branch: string) => ResultAsync<boolean, AppError>;
   gitGetRepoRoot: () => ResultAsync<string, AppError>;
+  gitGetDiffAgainst: (baseRef: string, headRef?: string) => ResultAsync<string, AppError>;
 };
 
 /**
@@ -162,9 +163,33 @@ const gitGetRepoRoot = () => {
     });
 };
 
+/**
+ * Collects a unified diff between the provided base ref and the current HEAD (or custom head).
+ *
+ * @param baseRef - Branch or commit to compare against; required.
+ * @param headRef - Optional head reference; defaults to HEAD to include working tree state.
+ * @returns ResultAsync containing the diff text; AppError when git fails.
+ * @throws Never throws. Errors flow via AppError in Result/ResultAsync.
+ */
+const gitGetDiffAgainst = (baseRef: string, headRef = 'HEAD') => {
+  if (!baseRef || !baseRef.trim()) {
+    return okAsync(null).andThen(() =>
+      err(createAppError('GIT_ERROR', 'Base reference is required to compute a diff', { baseRef })),
+    );
+  }
+
+  const normalizedBase = baseRef.trim();
+  const normalizedHead = headRef.trim() || 'HEAD';
+
+  return gitRun(['diff', '--no-color', '--unified=5', `${normalizedBase}...${normalizedHead}`]).map(
+    (result) => result.stdout,
+  );
+};
+
 export const gitUtils: GitUtils = {
   gitFetchPrune,
   ensureInsideGitRepo,
   gitCheckBranchExists,
   gitGetRepoRoot,
+  gitGetDiffAgainst,
 };
