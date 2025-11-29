@@ -84,3 +84,9 @@ const loadSpec = (specPath: string) =>
     }
     return error;
   });
+
+const writeConfig = (config: BluprintConfig): ResultAsync<void, AppError> =>
+  fsUtils.fsWriteFile(CONFIG_FILE_PATH, JSON.stringify(config, null, 2));
+
+export const configUtils = { parseConfig, loadConfig, loadSpec, writeConfig };
+export type { BluprintConfig };

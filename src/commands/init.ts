@@ -5,6 +5,7 @@ import { gitUtils } from '../lib/git.js';
 import { err, ok, ResultAsync } from 'neverthrow';
 import { createAppError, type AppError } from '../types/errors.js';
 import type { SuccessInfo } from '../lib/exit.js';
+import { configUtils } from '../lib/config.js';
 
 /**
  * Creates the initial Bluprint configuration in the current git repository.
@@ -25,7 +26,6 @@ function init(argv: InitArgs): ResultAsync<SuccessInfo, AppError> {
   return gitUtils.gitGetRepoRoot().andThen((repoRoot) => {
     const bluprintDir = path.join(repoRoot, '.bluprint');
     const finalSpecPath = path.join(bluprintDir, 'spec.yaml');
-    const configPath = path.join(bluprintDir, 'config.json');
 
     return fsUtils
       .fsCheckAccess(specPath)
@@ -55,10 +55,8 @@ function init(argv: InitArgs): ResultAsync<SuccessInfo, AppError> {
       })
       .andThen(() => fsUtils.fsMkdir(bluprintDir))
       .andThen(() => {
-        return fsUtils.fsWriteFile(
-          configPath,
-          JSON.stringify({ base, specPath: path.relative(repoRoot, finalSpecPath) }, null, 2),
-        );
+        const config = { base, specPath: path.relative(repoRoot, finalSpecPath) };
+        return configUtils.writeConfig(config);
       })
       .andThen(() => fsUtils.fsMove(specPath, finalSpecPath))
       .andThen(() => ok(void 0)) // Placeholder: validate spec file
