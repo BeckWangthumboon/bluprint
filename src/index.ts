@@ -39,6 +39,27 @@ yargs(hideBin(process.argv))
       );
     },
   )
+  /*
+  .command<CheckArgs>(
+    'check',
+    'Evaluate the current branch against the Bluprint spec',
+    (cmd) => cmd,
+    async (argv) => {
+      const result = await check(argv);
+
+      result.match(
+        (successInfo) => {
+          if (successInfo) {
+            displaySuccess(successInfo);
+          }
+        },
+        (error) => {
+          displayError(error);
+        },
+      );
+    },
+  )
+    */
   .strict()
   .demandCommand(1)
   .version('0.0.1')
