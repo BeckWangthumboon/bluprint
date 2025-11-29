@@ -1,15 +1,18 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import path from 'path';
+import { writeFile } from 'fs/promises';
 import { okAsync } from 'neverthrow';
-import { initGitRepo, createTempDir } from '../../helpers/tempRepo.js';
+import { initGitRepo, createTempDir, runGit } from '../../helpers/tempRepo.js';
+import { resetRepoRootCache } from '../../helpers/gitCache.js';
 
 let gitUtils: (typeof import('../../../src/lib/git.js'))['gitUtils'];
 let repoRoot: string;
 let originalEnv: NodeJS.ProcessEnv;
+const baseBranch = 'main';
 
 beforeEach(async () => {
-  vi.resetModules();
   ({ gitUtils } = await import('../../../src/lib/git.js'));
+  resetRepoRootCache();
   repoRoot = await initGitRepo('main');
   originalEnv = { ...process.env };
   vi.restoreAllMocks();
@@ -68,6 +71,36 @@ describe('gitUtils', () => {
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
       expect(['GIT_NOT_REPO', 'GIT_ERROR']).toContain(result.error.code);
+    }
+  });
+
+  it('returns a diff between the base branch and HEAD', async () => {
+    const repoRoot = await initGitRepo(baseBranch);
+    await runGit(repoRoot, ['checkout', '-b', 'feature/check-diff']);
+    const filePath = path.join(repoRoot, 'README.md');
+    await writeFile(filePath, '# updated\n', 'utf8');
+    await runGit(repoRoot, ['add', 'README.md']);
+    await runGit(repoRoot, ['commit', '-m', 'docs: update readme']);
+
+    process.env.GIT_DIR = path.join(repoRoot, '.git');
+    process.env.GIT_WORK_TREE = repoRoot;
+    resetRepoRootCache();
+
+    const diffResult = await gitUtils.gitGetDiffAgainst(baseBranch);
+
+    expect(diffResult.isOk()).toBe(true);
+    if (diffResult.isOk()) {
+      expect(diffResult.value).toContain('# updated');
+      expect(diffResult.value).toContain('README.md');
+    }
+  });
+
+  it('fails when base reference is missing', async () => {
+    const result = await gitUtils.gitGetDiffAgainst('  ');
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.code).toBe('GIT_ERROR');
     }
   });
 });
