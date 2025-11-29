@@ -22,7 +22,8 @@
     "bluprint": "src/index.ts"
   },
   "dependencies": {
-    "yargs": "^18.0.0",
-    "neverthrow": "^8.2.0"
+    "neverthrow": "^8.2.0",
+    "yaml": "^2.8.1",
+    "yargs": "^18.0.0"
   }
 }
