@@ -13,7 +13,7 @@ Bluprint evaluates feature work against a spec and architecture rules. The CLI i
   1) Resolve repo root via git.
   2) Verify the spec path exists and is a file.
   3) Fetch/prune remotes and confirm the base branch exists.
-  4) Create `.bluprint/`, write `config.json` with `base` and `specPath`, and move the spec to `.bluprint/spec.yaml`.
+  4) Create `.bluprint/`, write `config.json` with `base` and `specPath` via `configUtils`, and move the spec to `.bluprint/spec.yaml`.
   5) (Placeholder) validate the spec file contents.
 - Example usage:
 - `bluprint init --spec ./feature-spec.yaml --base main`
