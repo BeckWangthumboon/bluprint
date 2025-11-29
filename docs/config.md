@@ -4,8 +4,8 @@ This document describes the configuration stored under `.bluprint/`.
 
 ## File Locations
 
-- `.bluprint/config.json` – primary configuration file. Written by `bluprint init`.
-- `.bluprint/spec.yaml` – feature spec file moved in by `bluprint init` (spec format is not yet defined).
+- `.bluprint/config.json` – primary configuration file. Written by `bluprint init` via `configUtils.writeConfig`.
+- `.bluprint/spec.yaml` – feature spec file moved in by `bluprint init` (format defined in `docs/spec-format.md`).
 
 ## `config.json` Schema
 
