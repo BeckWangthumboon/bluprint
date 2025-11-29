@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { okAsync, errAsync } from 'neverthrow';
 import { parseSpecification, loadSpecification } from '../../../src/lib/spec.js';
 import { fsUtils } from '../../../src/lib/fs.js';
-import type { AppError } from '../../../src/types/errors.js';
+import { createAppError } from '../../../worktree/src/types/errors.js';
 
 const minimalSpecYaml = `
 overview:
@@ -142,9 +142,7 @@ describe('loadSpecification', () => {
   });
 
   it('returns an error when fsUtils fails', async () => {
-    vi.spyOn(fsUtils, 'fsReadFile').mockReturnValue(
-      errAsync<AppError>({ code: 'FS_ERROR', message: 'boom' }),
-    );
+    vi.spyOn(fsUtils, 'fsReadFile').mockReturnValue(errAsync(createAppError('FS_ERROR', 'boom')));
 
     const result = await loadSpecification('spec.yaml');
 
