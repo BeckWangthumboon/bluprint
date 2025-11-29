@@ -15,7 +15,7 @@ yargs(hideBin(process.argv))
     (cmd) => {
       cmd.option('spec', {
         type: 'string',
-        description: 'Path to the spec markdown file',
+        description: 'Path to the spec YAML file',
         demandOption: true,
       });
       cmd.option('base', {

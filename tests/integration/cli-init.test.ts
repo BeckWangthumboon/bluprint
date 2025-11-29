@@ -20,7 +20,7 @@ afterEach(() => {
 describe('init command (integration)', () => {
   it('scaffolds .bluprint with config and moved spec on success', async () => {
     const repoRoot = await initGitRepo(baseBranch);
-    const specPath = await writeSpecFile(repoRoot, 'spec.md', '# Spec');
+    const specPath = await writeSpecFile(repoRoot, 'spec.yaml', '# Spec');
 
     vi.spyOn(gitUtils, 'gitGetRepoRoot').mockReturnValue(okAsync(repoRoot));
     vi.spyOn(gitUtils, 'gitFetchPrune').mockReturnValue(
@@ -34,11 +34,11 @@ describe('init command (integration)', () => {
 
     const bluprintDir = path.join(repoRoot, '.bluprint');
     const configPath = path.join(bluprintDir, 'config.json');
-    const movedSpecPath = path.join(bluprintDir, 'spec.md');
+    const movedSpecPath = path.join(bluprintDir, 'spec.yaml');
 
     const config = await readJsonFile<{ base: string; specPath: string }>(configPath);
     expect(config.base).toBe(baseBranch);
-    expect(config.specPath).toBe('.bluprint/spec.md');
+    expect(config.specPath).toBe('.bluprint/spec.yaml');
 
     const movedSpec = await readFile(movedSpecPath, 'utf8');
     expect(movedSpec).toContain('# Spec');
@@ -53,7 +53,7 @@ describe('init command (integration)', () => {
     );
     vi.spyOn(gitUtils, 'gitCheckBranchExists').mockReturnValue(okAsync(true));
 
-    const result = await init({ spec: path.join(repoRoot, 'missing.md'), base: baseBranch });
+    const result = await init({ spec: path.join(repoRoot, 'missing.yaml'), base: baseBranch });
 
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
@@ -63,7 +63,7 @@ describe('init command (integration)', () => {
 
   it('fails when the base branch is missing', async () => {
     const repoRoot = await initGitRepo(baseBranch);
-    const specPath = await writeSpecFile(repoRoot, 'spec.md', '# Spec');
+    const specPath = await writeSpecFile(repoRoot, 'spec.yaml', '# Spec');
 
     vi.spyOn(gitUtils, 'gitGetRepoRoot').mockReturnValue(okAsync(repoRoot));
     vi.spyOn(gitUtils, 'gitFetchPrune').mockReturnValue(
@@ -81,7 +81,7 @@ describe('init command (integration)', () => {
 
   it('fails when not inside a git repository', async () => {
     const repoRoot = await initGitRepo(baseBranch);
-    const specPath = await writeSpecFile(repoRoot, 'spec.md', '# Spec');
+    const specPath = await writeSpecFile(repoRoot, 'spec.yaml', '# Spec');
 
     vi.spyOn(gitUtils, 'gitGetRepoRoot').mockReturnValue(
       errAsync(createAppError('GIT_NOT_REPO', 'Not inside a git repository')),
