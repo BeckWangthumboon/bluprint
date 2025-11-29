@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { okAsync, errAsync } from 'neverthrow';
 import { parseSpecification, loadSpecification } from '../../../src/lib/spec.js';
 import { fsUtils } from '../../../src/lib/fs.js';
-import { createAppError } from '../../../worktree/src/types/errors.js';
+import { createAppError } from '../../../src/types/errors.js';
 
 const minimalSpecYaml = `
 overview:
