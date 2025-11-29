@@ -173,7 +173,7 @@ const gitGetRepoRoot = () => {
  */
 const gitGetDiffAgainst = (baseRef: string, headRef = 'HEAD') => {
   if (!baseRef || !baseRef.trim()) {
-    return okAsync(null).andThen(() =>
+    return okAsync('').andThen(() =>
       err(createAppError('GIT_ERROR', 'Base reference is required to compute a diff', { baseRef })),
     );
   }

@@ -21,7 +21,7 @@ yargs(hideBin(process.argv))
       cmd.option('base', {
         type: 'string',
         description: 'Base git branch to work from',
-        demandOption: true,
+        default: 'main',
       });
     },
     async (argv) => {
