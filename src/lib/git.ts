@@ -193,3 +193,14 @@ export const gitUtils: GitUtils = {
   gitGetRepoRoot,
   gitGetDiffAgainst,
 };
+
+/**
+ * Internal helper exposed for tests to reset cached git state.
+ */
+const resetRepoRootCache = () => {
+  cachedRepoRoot = null;
+};
+
+export const gitTestHelpers = {
+  resetRepoRootCache,
+};
