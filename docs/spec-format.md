@@ -268,7 +268,7 @@ implementation_patterns:
     - description: Existing CLI pattern for reporting derived state.
       path: src/commands/status.ts
     - description: Established error shape for user-facing messages.
-      path: docs/rules/rules.md
+      path: .agents/
 acceptance_criteria:
   - Status command reports one of: in_sync, stale, or unknown.
   - Output follows existing CLI formatting for info messages.
@@ -293,7 +293,7 @@ scope:
     - CLI argument parsing in unrelated commands
 rules:
   - name: Bluprint Agent Rules
-    path: docs/rules/rules.md
+    path: .agents/
   - name: AGENTS overview
     path: AGENTS.md
 ```
@@ -337,7 +337,7 @@ rules:
       },
       {
         description: 'Established error shape for user-facing messages.',
-        path: 'docs/rules/rules.md',
+        path: '.agents/',
       },
     ],
   },
@@ -371,7 +371,7 @@ rules:
   rules: [
     {
       name: 'Bluprint Agent Rules',
-      path: 'docs/rules/rules.md',
+      path: '.agents/',
     },
     {
       name: 'AGENTS overview',
