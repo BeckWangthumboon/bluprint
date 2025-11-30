@@ -43,4 +43,4 @@ Bluprint is a TypeScript CLI that evaluates feature branches against a spec and 
 - `errors.md` – error model and exit mapping.
 - `docs/config.md` – `.bluprint` config schema and path expectations.
 - `docs/testing.md` – how to run tests and coverage notes.
-- `docs/rules/rules.md` – contributor rules and coding standards.
+- `.agents/` – agent rules
