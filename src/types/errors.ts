@@ -6,6 +6,7 @@ export type AppErrorCode =
   | 'GIT_ERROR'
   | 'GIT_NOT_REPO'
   | 'GIT_COMMAND_FAILED'
+  | 'SHELL_ERROR'
   | 'LLM_ERROR'
   | 'VALIDATION_ERROR'
   | 'UNKNOWN';
