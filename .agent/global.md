@@ -1,5 +1,14 @@
 # Bluprint Global Rules
 
+## Read This First (Routing — Required)
+- Before any change, you must read the relevant rule file(s):
+  - Library/runtime code: `.agent/lib.md`
+  - Tests: `.agent/tests.md`
+  - Docs/guides: `.agent/docs.md`
+  - Project structure/scaffolding: `.agent/project-structure.md`
+  - Types/shared contracts: `.agent/types.md`
+  - CLI commands/operational runbooks: `.agent/commands.md`
+
 This document defines the essential constraints that all code—automated or manual—must follow when working on the **Bluprint** CLI project.
 
 ## Guide to Rules
@@ -53,6 +62,7 @@ Rules:
 - Raw `Error` objects must never propagate.
 - All errors must flow through the unified `AppError` system.
 - Result/ResultAsync must be specified in return types when used.
+- Do not nest error handling or wrap an existing `AppError` in another error. Return the existing `AppError` as-is, or construct a single `AppError` directly. Avoid patterns like `okAsync(null).andThen(() => err(createAppError(...)))`; use `errAsync(createAppError(...))` instead.
 
 ---
 
