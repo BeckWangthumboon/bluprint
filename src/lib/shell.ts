@@ -1,5 +1,5 @@
 import { spawn } from 'child_process';
-import { err, okAsync, ResultAsync } from 'neverthrow';
+import { err, errAsync, ResultAsync } from 'neverthrow';
 import { createAppError, type AppError } from '../types/errors.js';
 import { gitUtils } from './git.js';
 
@@ -15,8 +15,17 @@ interface ShellRunResult {
 }
 
 export type ShellUtils = {
-  findByName: (fileName: string, targetType?: 'file' | 'directory' | 'both') => ResultAsync<string[], AppError>;
+  findByName: (
+    fileName: string,
+    targetType?: 'file' | 'directory' | 'both',
+    options?: FindByNameOptions,
+  ) => ResultAsync<string[], AppError>;
 };
+
+interface FindByNameOptions {
+  includeHidden?: boolean;
+  includeIgnored?: boolean;
+}
 
 /**
  * Executes a shell command while capturing stdout/stderr and exit code.
@@ -85,58 +94,83 @@ const runShellRaw = (
   );
 
 /**
- * Finds files by name starting from the repository root.
+ * Finds files by name using fd from the repository root while honoring gitignore by default.
  *
  * @param fileName - Target file name to locate; rejects path segments to keep the search scoped to the repo.
- * @param targetType - Restricts results to files, directories, or both; defaults to both to mirror the raw find behavior.
- * @returns ResultAsync containing matching paths from the repo root; AppError when find fails or input is invalid.
- * @throws Never throws. Errors flow via AppError in Result/ResultAsync.
+ * @param targetType - Restricts results to files, directories, or both; defaults to both to mirror fd's default.
+ * @param options - includeHidden toggles hidden search (-H); includeIgnored toggles ignored search (-I).
+ * @returns ResultAsync containing matching paths from the repo root; AppError when fd is missing, fd fails, or input is invalid. Never throws; errors flow via AppError.
  */
 const findByName = (
   fileName: string,
   targetType: 'file' | 'directory' | 'both' = 'both',
+  options: FindByNameOptions = {},
 ): ResultAsync<string[], AppError> => {
   const normalized = fileName.trim();
   if (!normalized) {
-    return okAsync<string[]>([]).andThen(() =>
-      err(createAppError('SHELL_ERROR', 'File name is required to run find', { fileName })),
+    return errAsync(
+      createAppError('SHELL_ERROR', 'File name is required to run find', { fileName }),
     );
   }
 
   if (normalized.includes('/') || normalized.includes('\\')) {
-    return okAsync<string[]>([]).andThen(() =>
-      err(
-        createAppError('SHELL_ERROR', 'findByName accepts only file names without path segments', {
-          fileName,
-        }),
-      ),
+    return errAsync(
+      createAppError('SHELL_ERROR', 'findByName accepts only file names without path segments', {
+        fileName,
+      }),
     );
   }
 
   if (!['file', 'directory', 'both'].includes(targetType)) {
-    return okAsync<string[]>([]).andThen(() =>
-      err(
-        createAppError('SHELL_ERROR', 'Invalid target type for findByName', {
-          targetType,
-        }),
-      ),
+    return errAsync(
+      createAppError('SHELL_ERROR', 'Invalid target type for findByName', {
+        targetType,
+      }),
     );
   }
 
+  const includeHidden = options.includeHidden ?? false;
+  const includeIgnored = options.includeIgnored ?? false;
+
   const typeArgs =
-    targetType === 'file'
-      ? ['-type', 'f']
-      : targetType === 'directory'
-        ? ['-type', 'd']
-        : [];
+    targetType === 'file' ? ['-t', 'f'] : targetType === 'directory' ? ['-t', 'd'] : [];
 
   return gitUtils.gitGetRepoRoot().andThen((repoRoot) =>
-    runShellRaw('find', [repoRoot, ...typeArgs, '-name', normalized], { cwd: repoRoot }).map((result) =>
-      result.stdout
-        .split('\n')
-        .map((line) => line.trim())
-        .filter(Boolean),
-    ),
+    runShellRaw('fd', ['--version'], { cwd: repoRoot })
+      .map(() => repoRoot)
+      .orElse((error) => {
+        if (/ENOENT|not found/i.test(error.message)) {
+          return err(
+            createAppError(
+              'SHELL_ERROR',
+              'fd is required for findByName; install fd (https://github.com/sharkdp/fd) and retry.',
+              { originalError: error },
+            ),
+          );
+        }
+        return err(error);
+      })
+      .andThen((validatedRepoRoot) =>
+        runShellRaw(
+          'fd',
+          [
+            ...typeArgs,
+            ...(includeHidden ? ['-H'] : []),
+            ...(includeIgnored ? ['-I'] : []),
+            '--glob',
+            `**/${normalized}`,
+            '--base-directory',
+            validatedRepoRoot,
+            '.',
+          ],
+          { cwd: validatedRepoRoot },
+        ).map((result) =>
+          result.stdout
+            .split('\n')
+            .map((line) => line.trim())
+            .filter(Boolean),
+        ),
+      ),
   );
 };
 
