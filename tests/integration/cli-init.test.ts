@@ -34,11 +34,18 @@ describe('init command (integration)', () => {
 
     const bluprintDir = path.join(repoRoot, '.bluprint');
     const configPath = path.join(bluprintDir, 'config.json');
-    const movedSpecPath = path.join(bluprintDir, 'spec.yaml');
+    const movedSpecPath = path.join(bluprintDir, 'spec', 'spec.yaml');
 
-    const config = await readJsonFile<{ base: string; specPath: string }>(configPath);
+    const config = await readJsonFile<{
+      base: string;
+      version: string;
+      workspace: { specPath: string; rules: { indexPath: string }; state: { planPath: string } };
+    }>(configPath);
     expect(config.base).toBe(baseBranch);
-    expect(config.specPath).toBe('.bluprint/spec.yaml');
+    expect(config.version).toBe('0.0.0');
+    expect(config.workspace.specPath).toBe('.bluprint/spec/spec.yaml');
+    expect(config.workspace.rules.indexPath).toBe('.bluprint/rules/index.json');
+    expect(config.workspace.state.planPath).toBe('.bluprint/state/plan.json');
 
     const movedSpec = await readFile(movedSpecPath, 'utf8');
     expect(movedSpec).toContain('# Spec');
