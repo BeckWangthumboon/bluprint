@@ -5,7 +5,7 @@ import { gitUtils } from '../lib/git.js';
 import { err, ok, ResultAsync } from 'neverthrow';
 import { createAppError, type AppError } from '../types/errors.js';
 import type { SuccessInfo } from '../lib/exit.js';
-import { configUtils } from '../lib/config.js';
+import { configUtils } from '../lib/workspace/config.js';
 
 /**
  * Creates the initial Bluprint configuration in the current git repository.
@@ -24,8 +24,8 @@ function init(argv: InitArgs): ResultAsync<SuccessInfo, AppError> {
   const specPath = path.resolve(spec);
 
   return gitUtils.gitGetRepoRoot().andThen((repoRoot) => {
-    const bluprintDir = path.join(repoRoot, '.bluprint');
-    const finalSpecPath = path.join(bluprintDir, 'spec.yaml');
+    const config = configUtils.createDefaultConfig(base, repoRoot);
+    const finalSpecPath = config.workspace.specPath;
 
     return fsUtils
       .fsCheckAccess(specPath)
@@ -53,11 +53,8 @@ function init(argv: InitArgs): ResultAsync<SuccessInfo, AppError> {
             return ok(void 0);
           });
       })
-      .andThen(() => fsUtils.fsMkdir(bluprintDir))
-      .andThen(() => {
-        const config = { base, specPath: path.relative(repoRoot, finalSpecPath) };
-        return configUtils.writeConfig(config);
-      })
+      .andThen(() => configUtils.ensureWorkspace(config))
+      .andThen(() => configUtils.writeConfig(config))
       .andThen(() => fsUtils.fsMove(specPath, finalSpecPath))
       .andThen(() => ok(void 0)) // Placeholder: validate spec file
       .andThen(() => {
