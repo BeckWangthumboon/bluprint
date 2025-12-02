@@ -85,12 +85,7 @@ const runShellRaw = (
         );
       });
     }),
-    (error) =>
-      createAppError(
-        'SHELL_ERROR',
-        `Command failed (${command} ${args.join(' ')}): ${(error as Error).message}`,
-        { command, args, options },
-      ),
+    (error) => error as AppError,
   );
 
 /**

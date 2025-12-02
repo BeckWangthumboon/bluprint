@@ -106,7 +106,14 @@ const listWorkspaceFiles = (options: WorkspaceFileOptions = {}) => {
           );
         });
       }),
-      (error) => error as AppError,
+      (error) =>
+        error && typeof error === 'object' && 'code' in error
+          ? (error as AppError)
+          : createAppError('GIT_ERROR', `git ls-files failed: ${(error as Error).message}`, {
+              args,
+              repoRoot,
+              options,
+            }),
     );
   });
 };
