@@ -14,6 +14,7 @@ export type FsUtils = {
   fsStat: (path: string) => ResultAsync<Stats, AppError>;
   fsReadFile: (target: string) => ResultAsync<string, AppError>;
   fsWriteFile: (target: string, data: string) => ResultAsync<void, AppError>;
+  fsListFilesRecursive: (targetDir: string) => ResultAsync<string[], AppError>;
 };
 
 type MkdirOptions = MakeDirectoryOptions & {
@@ -177,6 +178,45 @@ const fsWriteFile = (target: string, data: string) =>
     ),
   );
 
+/**
+ * Recursively lists all files under a directory within the repository.
+ *
+ * @param targetDir - Directory to walk; absolute or relative to the repo root.
+ * @returns ResultAsync resolving to absolute file paths discovered under the directory; AppError when traversal fails or escapes the repo root. Never throws; errors flow via AppError.
+ */
+const fsListFilesRecursive = (targetDir: string) =>
+  resolvePathWithinRepo(targetDir).andThen((normalizedRoot) =>
+    ResultAsync.fromPromise(
+      (async () => {
+        const files: string[] = [];
+        const pending: string[] = [normalizedRoot];
+
+        while (pending.length > 0) {
+          const currentDir = pending.pop();
+          if (!currentDir) continue;
+
+          const entries = await fs.readdir(currentDir, { withFileTypes: true });
+          entries.forEach((entry) => {
+            const fullPath = path.join(currentDir, entry.name);
+            if (entry.isDirectory()) {
+              pending.push(fullPath);
+            } else if (entry.isFile()) {
+              files.push(fullPath);
+            }
+          });
+        }
+
+        return files;
+      })(),
+      (error) =>
+        createAppError(
+          'FS_ERROR',
+          `Unable to list files under ${normalizedRoot}: ${(error as Error).message}`,
+          { path: normalizedRoot },
+        ),
+    ),
+  );
+
 export const fsUtils: FsUtils = {
   fsMkdir,
   fsMove,
@@ -184,4 +224,5 @@ export const fsUtils: FsUtils = {
   fsStat,
   fsReadFile,
   fsWriteFile,
+  fsListFilesRecursive,
 };

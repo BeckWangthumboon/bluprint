@@ -68,4 +68,32 @@ describe('fsUtils', () => {
       expect(result.error.code).toBe('FS_NOT_FOUND');
     }
   });
+
+  it('lists files recursively within the repo root', async () => {
+    await fsUtils.fsMkdir(path.join('rules', 'nested'));
+    await fsUtils.fsWriteFile(path.join('rules', 'root.md'), 'root');
+    await fsUtils.fsWriteFile(path.join('rules', 'nested', 'child.yml'), 'child');
+
+    const result = await fsUtils.fsListFilesRecursive('rules');
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value).toHaveLength(2);
+      expect(result.value).toEqual(
+        expect.arrayContaining([
+          path.join(repoRoot, 'rules', 'root.md'),
+          path.join(repoRoot, 'rules', 'nested', 'child.yml'),
+        ]),
+      );
+    }
+  });
+
+  it('rejects directory traversal outside the repo root', async () => {
+    const result = await fsUtils.fsListFilesRecursive('../outside');
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.code).toBe('FS_ERROR');
+    }
+  });
 });
