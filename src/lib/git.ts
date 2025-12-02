@@ -1,5 +1,5 @@
 import { spawn } from 'child_process';
-import { err, ok, okAsync, ResultAsync } from 'neverthrow';
+import { err, errAsync, ok, okAsync, ResultAsync } from 'neverthrow';
 import { createAppError, type AppError } from '../types/errors.js';
 
 interface GitRunOptions {
@@ -74,11 +74,13 @@ const gitRunRaw = (args: string[], options?: GitRunOptions) =>
       });
     }),
     (error) =>
-      createAppError(
-        'GIT_ERROR',
-        `Git command failed (git ${args.join(' ')}): ${(error as Error).message}`,
-        { args },
-      ),
+      error && typeof error === 'object' && 'code' in error
+        ? (error as AppError)
+        : createAppError(
+            'GIT_ERROR',
+            `Git command failed (git ${args.join(' ')}): ${(error as Error).message}`,
+            { args },
+          ),
   );
 
 let cachedRepoRoot: string | null = null;
@@ -173,8 +175,8 @@ const gitGetRepoRoot = () => {
  */
 const gitGetDiffAgainst = (baseRef: string, headRef = 'HEAD') => {
   if (!baseRef || !baseRef.trim()) {
-    return okAsync('').andThen(() =>
-      err(createAppError('GIT_ERROR', 'Base reference is required to compute a diff', { baseRef })),
+    return errAsync(
+      createAppError('GIT_ERROR', 'Base reference is required to compute a diff', { baseRef }),
     );
   }
 
