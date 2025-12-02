@@ -37,13 +37,6 @@ type Scope = {
   exclude?: string[];
 };
 
-type RuleReference = {
-  name: string;
-  path: string;
-};
-
-type Rules = RuleReference[];
-
 type Specification = {
   overview: Overview;
   motivation?: Motivation;
@@ -52,7 +45,6 @@ type Specification = {
   acceptance_criteria: AcceptanceCriteria;
   edge_cases?: EdgeCases;
   scope: Scope;
-  rules?: Rules;
 };
 
 export type {
@@ -66,7 +58,5 @@ export type {
   EdgeCase,
   EdgeCases,
   Scope,
-  RuleReference,
-  Rules,
   Specification,
 };
