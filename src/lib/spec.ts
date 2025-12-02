@@ -10,7 +10,6 @@ import type {
   ImplementationPatterns,
   Motivation,
   Overview,
-  Rules,
   Scope,
   Specification,
 } from '../types/spec.js';
@@ -249,36 +248,6 @@ const parseScope = (input: unknown): Result<Scope, AppError> => {
   });
 };
 
-const parseRules = (input: unknown): Result<Rules | undefined, AppError> => {
-  if (input === undefined) {
-    return ok(undefined);
-  }
-
-  if (!Array.isArray(input)) {
-    return err(createAppError('VALIDATION_ERROR', 'rules must be an array when provided'));
-  }
-
-  const rules = [];
-
-  for (const item of input) {
-    if (!isRecord(item) || !isNonEmptyString(item.name) || !isNonEmptyString(item.path)) {
-      return err(
-        createAppError(
-          'VALIDATION_ERROR',
-          'Each rules entry must include non-empty name and path strings',
-        ),
-      );
-    }
-
-    rules.push({
-      name: item.name.trim(),
-      path: item.path.trim(),
-    });
-  }
-
-  return ok(rules.length > 0 ? rules : undefined);
-};
-
 const ensureGuardrails = (
   constraints: Constraints | undefined,
   patterns: ImplementationPatterns | undefined,
@@ -347,9 +316,6 @@ const parseSpecification = (yamlContent: string): Result<Specification, AppError
   const scopeResult = parseScope(parsed.scope);
   if (scopeResult.isErr()) return err(scopeResult.error);
 
-  const rulesResult = parseRules(parsed.rules);
-  if (rulesResult.isErr()) return err(rulesResult.error);
-
   return ok({
     overview: overviewResult.value,
     motivation: motivationResult.value,
@@ -358,7 +324,6 @@ const parseSpecification = (yamlContent: string): Result<Specification, AppError
     acceptance_criteria: acceptanceResult.value,
     edge_cases: edgeCasesResult.value,
     scope: scopeResult.value,
-    rules: rulesResult.value,
   });
 };
 

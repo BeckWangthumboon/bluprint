@@ -291,11 +291,6 @@ scope:
   exclude:
     - network-fetch code paths
     - CLI argument parsing in unrelated commands
-rules:
-  - name: Bluprint Agent Rules
-    path: .agents/
-  - name: AGENTS overview
-    path: AGENTS.md
 ```
 
 ### JSON/TypeScript
@@ -368,16 +363,6 @@ rules:
     include: ['src/commands/status.ts', 'src/lib/specs/**'],
     exclude: ['network-fetch code paths', 'CLI argument parsing in unrelated commands'],
   },
-  rules: [
-    {
-      name: 'Bluprint Agent Rules',
-      path: '.agents/',
-    },
-    {
-      name: 'AGENTS overview',
-      path: 'AGENTS.md',
-    },
-  ],
 };
 ```
 
