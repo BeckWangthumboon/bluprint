@@ -68,37 +68,51 @@ const parseRulesIndex = (raw: string, sourcePath: string): Result<RulesIndex, Ap
       );
     }
 
-    const hasName = entry.name !== undefined;
-    if (hasName && typeof entry.name !== 'string') {
+    if (!Array.isArray(entry.tags)) {
       return err(
         createAppError(
           'CONFIG_PARSE_ERROR',
-          `${sourcePath} entries must include a string name when provided`,
+          `${sourcePath} entries must include a tags array of strings`,
           { path: sourcePath },
         ),
       );
+    }
+
+    const tags: string[] = [];
+    for (const tag of entry.tags) {
+      if (typeof tag !== 'string') {
+        return err(
+          createAppError(
+            'CONFIG_PARSE_ERROR',
+            `${sourcePath} tags must be strings when provided`,
+            { path: sourcePath },
+          ),
+        );
+      }
+
+      const trimmedTag = tag.trim();
+      if (!trimmedTag) {
+        return err(
+          createAppError(
+            'CONFIG_PARSE_ERROR',
+            `${sourcePath} tags must not include empty values`,
+            { path: sourcePath },
+          ),
+        );
+      }
+
+      tags.push(trimmedTag);
     }
 
     const id = entry.id.trim();
     const description = entry.description.trim();
     const rulePath = entry.path.trim();
-    const name = hasName ? (entry.name as string).trim() : undefined;
-
-    if (name !== undefined && name.length === 0) {
-      return err(
-        createAppError(
-          'CONFIG_PARSE_ERROR',
-          `${sourcePath} entries must not include empty name values`,
-          { path: sourcePath },
-        ),
-      );
-    }
 
     rules.push({
       id,
       description,
       path: rulePath,
-      name,
+      tags,
     });
   }
 
