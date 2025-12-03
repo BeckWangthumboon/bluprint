@@ -11,8 +11,13 @@ describe('workspaceRules.parseRulesIndex', () => {
   it('parses and trims rule references', () => {
     const raw = JSON.stringify({
       rules: [
-        { id: ' rule-1 ', name: ' Example ', description: ' desc ', path: ' rules/r1.md ' },
-        { id: ' rule-2 ', description: ' desc2 ', path: ' rules/r2.md ' },
+        {
+          id: ' rule-1 ',
+          description: ' desc ',
+          path: ' rules/r1.md ',
+          tags: [' foo ', 'bar'],
+        },
+        { id: ' rule-2 ', description: ' desc2 ', path: ' rules/r2.md ', tags: ['baz'] },
       ],
     });
 
@@ -21,14 +26,14 @@ describe('workspaceRules.parseRulesIndex', () => {
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
       expect(result.value.rules).toEqual([
-        { id: 'rule-1', name: 'Example', description: 'desc', path: 'rules/r1.md' },
-        { id: 'rule-2', name: undefined, description: 'desc2', path: 'rules/r2.md' },
+        { id: 'rule-1', description: 'desc', path: 'rules/r1.md', tags: ['foo', 'bar'] },
+        { id: 'rule-2', description: 'desc2', path: 'rules/r2.md', tags: ['baz'] },
       ]);
     }
   });
 
   it('fails when rules are missing required fields', () => {
-    const raw = JSON.stringify({ rules: [{ id: 'a', description: '', path: 'x' }] });
+    const raw = JSON.stringify({ rules: [{ id: 'a', description: '', path: 'x', tags: [] }] });
 
     const result = workspaceRules.parseRulesIndex(raw, 'index.json');
 
@@ -73,7 +78,7 @@ describe('workspaceRules.loadRulesIndex', () => {
     await fs.writeFile(
       indexPath,
       JSON.stringify({
-        rules: [{ id: 'id-1', description: 'desc', path: 'rules/r1.md', name: 'Rule 1' }],
+        rules: [{ id: 'id-1', description: 'desc', path: 'rules/r1.md', tags: ['core'] }],
       }),
       'utf8',
     );
@@ -86,7 +91,7 @@ describe('workspaceRules.loadRulesIndex', () => {
         id: 'id-1',
         description: 'desc',
         path: 'rules/r1.md',
-        name: 'Rule 1',
+        tags: ['core'],
       });
     }
   });
