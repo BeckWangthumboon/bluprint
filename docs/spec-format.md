@@ -206,32 +206,6 @@ type Scope = {
 };
 ```
 
-## 8. Rules
-
-Point to external agent rule systems so the master agent can use them.
-
-Examples:
-
-- See CLAUDE.md for general agent instructions
-- See .cursor/rules/ for Cursor-specific behavior
-- See AGENTS.md if present
-- See docs/architecture.md for broader system context
-
-Optional; include when external rule sets apply.
-
-Data shape (TypeScript):
-
-```ts
-type RuleReference = {
-  name: string;
-  path: string;
-};
-
-type Rules = RuleReference[];
-```
-
----
-
 ## Example Structures
 
 ### YAML
