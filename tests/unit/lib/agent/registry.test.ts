@@ -30,7 +30,7 @@ const defaultProviderRegistry = {
   languageModel: vi.fn((modelId: string) => stubLanguageModel(modelId)),
 };
 
-const importGetModel = async () => (await import('../../../../src/lib/agent/registry.js')).getModel;
+const importGetModel = async () => (await import('../../../../src/agent/llm/registry.js')).getModel;
 
 describe('getModel', () => {
   let originalEnv: NodeJS.ProcessEnv;
