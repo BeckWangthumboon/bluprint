@@ -31,16 +31,16 @@ describe('rules command (integration-ish)', () => {
 
   it('discovers rules from a directory source and writes the index', async () => {
     // mock repo root
-    vi.spyOn(gitUtils, 'gitGetRepoRoot').mockReturnValue(okAsync(repoRoot));
+    vi.spyOn(gitUtils, 'gitGetRepoRoot').mockReturnValue(okAsync(repoRoot!));
 
     // scaffold workspace config
-    const config = configUtils.createDefaultConfig(baseBranch, repoRoot);
+    const config = configUtils.createDefaultConfig(baseBranch, repoRoot!);
     await configUtils.ensureWorkspace(config);
     const writeConfigResult = await configUtils.writeConfig(config);
     expect(writeConfigResult.isOk()).toBe(true);
 
     // create a rule file under a directory
-    const rulesDir = path.join(repoRoot, '.agent');
+    const rulesDir = path.join(repoRoot!, '.agent');
     await fs.mkdir(rulesDir, { recursive: true });
     const rulePath = path.join(rulesDir, 'AGENTS.md');
     await fs.writeFile(rulePath, '# agent rules', 'utf8');
@@ -63,7 +63,7 @@ describe('rules command (integration-ish)', () => {
     if (result.isErr()) return;
 
     const index: RulesIndex = JSON.parse(
-      await fs.readFile(path.join(repoRoot, config.workspace.rules.indexPath), 'utf8'),
+      await fs.readFile(path.join(repoRoot!, config.workspace.rules.indexPath), 'utf8'),
     );
 
     expect(index.rules).toEqual([
