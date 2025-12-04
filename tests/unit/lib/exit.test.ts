@@ -2,10 +2,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { displayError, displaySuccess } from '../../../src/lib/exit.js';
 import type { AppError } from '../../../src/types/errors.js';
 
-let originalExitCode: number | undefined;
+let originalExitCode: number | undefined = undefined;
 
 beforeEach(() => {
-  originalExitCode = process.exitCode;
+  originalExitCode = (process.exitCode as number | undefined) ?? undefined;
   process.exitCode = undefined;
   vi.restoreAllMocks();
 });

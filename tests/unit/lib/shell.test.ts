@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'vite
 import { EventEmitter } from 'events';
 import { okAsync } from 'neverthrow';
 import { createTempDir } from '../../helpers/tempRepo.js';
+import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 
 let shellUtils: (typeof import('../../../src/lib/shell.js'))['shellUtils'];
 let shellTestHelpers: (typeof import('../../../src/lib/shell.js'))['shellTestHelpers'];
@@ -22,7 +23,7 @@ const mockSpawnSequence = (
     const invocation = runs.shift();
     if (!invocation) throw new Error('Unexpected spawn invocation');
 
-    const proc = new EventEmitter() as childProcess.ChildProcessWithoutNullStreams;
+    const proc = new EventEmitter() as ChildProcessWithoutNullStreams;
     const stdout = new EventEmitter();
     const stderr = new EventEmitter();
     (proc as { stdout?: EventEmitter }).stdout = stdout;
