@@ -18,20 +18,19 @@ vi.mock('ai', () => ({
 }));
 
 const stubLanguageModel = (modelId: string): LanguageModelV2 =>
-  ({ id: modelId } as unknown as LanguageModelV2);
+  ({ id: modelId }) as unknown as LanguageModelV2;
 
 const stubTextEmbeddingModel = (modelId: string): any =>
-  ({ id: modelId, specificationVersion: 'v2', provider: 'test', modelId } as any);
+  ({ id: modelId, specificationVersion: 'v2', provider: 'test', modelId }) as any;
 
 const stubImageModel = (modelId: string): any =>
-  ({ id: modelId, specificationVersion: 'v2', provider: 'test', modelId } as any);
+  ({ id: modelId, specificationVersion: 'v2', provider: 'test', modelId }) as any;
 
 const defaultProviderRegistry = {
   languageModel: vi.fn((modelId: string) => stubLanguageModel(modelId)),
 };
 
-const importGetModel = async () =>
-  (await import('../../../../src/lib/agent/registry.js')).getModel;
+const importGetModel = async () => (await import('../../../../src/lib/agent/registry.js')).getModel;
 
 describe('getModel', () => {
   let originalEnv: NodeJS.ProcessEnv;
