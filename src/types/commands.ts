@@ -3,4 +3,11 @@ interface InitArgs {
   base: string;
 }
 
-export type { InitArgs };
+interface RulesArgs {
+  rulesSource: 'embedded' | 'directory';
+  rulesEmbeddedFile?: string;
+  rulesDir?: string;
+  json?: boolean;
+}
+
+export type { InitArgs, RulesArgs };
