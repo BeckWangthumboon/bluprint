@@ -21,3 +21,22 @@ Bluprint evaluates feature work against a spec and architecture rules. The CLI i
 - Expected output:
   - Success: `Success: Bluprint configuration initialized successfully (command: init)`
   - Errors are printed with a code and hint, and the process sets a non-zero exit code without throwing.
+
+### `rules`
+- Purpose: discover rule files and write `.bluprint/rules/index.json` with summaries (id/description/tags/path).
+- Options:
+  - `--rules-source <embedded|directory>` (required) – choose embedded file search vs directory scan.
+  - `--rules-embedded-file <name>` – required when `--rules-source=embedded`; file name to find anywhere in the repo (e.g., `AGENTS.md`).
+  - `--rules-dir <path>` – required when `--rules-source=directory`; directory to scan recursively for rule files.
+  - `--json` – output JSON-only mode; otherwise prints a brief success message.
+- Behavior:
+  1) Load `.bluprint/config.json`.
+  2) Discover rule files (embedded: `findByName` for the given filename; directory: recursive scan). Filters `.md/.mdc/.yaml/.yml` and dedupes repo-relative paths.
+  3) Summarize each rule via the agent runtime (LLM) into description + tags; tolerate fenced JSON responses.
+  4) Write `.bluprint/rules/index.json` with RuleReferences.
+- Example:
+  - Embedded: `bluprint rules --rules-source=embedded --rules-embedded-file=AGENTS.md`
+  - Directory: `bluprint rules --rules-source=directory --rules-dir=.agent`
+- Validation:
+  - Requires exactly one source mode; missing mode-specific flag fails with `VALIDATION_ERROR`.
+  - Errors are emitted via AppError codes; no throws.
