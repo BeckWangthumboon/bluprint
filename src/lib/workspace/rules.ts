@@ -82,22 +82,18 @@ const parseRulesIndex = (raw: string, sourcePath: string): Result<RulesIndex, Ap
     for (const tag of entry.tags) {
       if (typeof tag !== 'string') {
         return err(
-          createAppError(
-            'CONFIG_PARSE_ERROR',
-            `${sourcePath} tags must be strings when provided`,
-            { path: sourcePath },
-          ),
+          createAppError('CONFIG_PARSE_ERROR', `${sourcePath} tags must be strings when provided`, {
+            path: sourcePath,
+          }),
         );
       }
 
       const trimmedTag = tag.trim();
       if (!trimmedTag) {
         return err(
-          createAppError(
-            'CONFIG_PARSE_ERROR',
-            `${sourcePath} tags must not include empty values`,
-            { path: sourcePath },
-          ),
+          createAppError('CONFIG_PARSE_ERROR', `${sourcePath} tags must not include empty values`, {
+            path: sourcePath,
+          }),
         );
       }
 

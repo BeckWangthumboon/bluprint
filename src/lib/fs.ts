@@ -15,6 +15,7 @@ export type FsUtils = {
   fsReadFile: (target: string) => ResultAsync<string, AppError>;
   fsWriteFile: (target: string, data: string) => ResultAsync<void, AppError>;
   fsListFilesRecursive: (targetDir: string) => ResultAsync<string[], AppError>;
+  fsToRepoRelativePath: (target: string) => ResultAsync<string, AppError>;
 };
 
 type MkdirOptions = MakeDirectoryOptions & {
@@ -45,6 +46,33 @@ const resolvePathWithinRepo = (target: string) =>
     }
 
     return ok(candidate);
+  });
+
+/**
+ * Normalizes an input path to a repo-relative path, rejecting traversal outside the repo.
+ *
+ * @param target - Path provided by caller. Accepts absolute or relative input.
+ * @returns ResultAsync containing a repo-relative path when valid; AppError otherwise.
+ * @throws Never throws. Errors flow via AppError in Result/ResultAsync.
+ */
+const fsToRepoRelativePath = (target: string) =>
+  gitUtils.gitGetRepoRoot().andThen((repoRoot) => {
+    const resolved = path.isAbsolute(target)
+      ? path.normalize(target)
+      : path.resolve(repoRoot, target.trim());
+    const relative = path.relative(repoRoot, resolved);
+
+    if (relative.startsWith('..') || path.isAbsolute(relative)) {
+      return err(
+        createAppError(
+          'VALIDATION_ERROR',
+          `Path ${target} is outside the repository root and cannot be used`,
+          { repoRoot, target, resolved },
+        ),
+      );
+    }
+
+    return ok(path.normalize(relative));
   });
 
 /**
@@ -225,4 +253,5 @@ export const fsUtils: FsUtils = {
   fsReadFile,
   fsWriteFile,
   fsListFilesRecursive,
+  fsToRepoRelativePath,
 };

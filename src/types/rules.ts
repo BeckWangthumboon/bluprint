@@ -6,3 +6,7 @@ export type RuleReference = {
 };
 
 export type RulesIndex = { rules: RuleReference[] };
+
+export type RuleSource = {
+  path: string;
+};
