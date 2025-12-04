@@ -63,11 +63,21 @@ const validateGeneratedDescription = (
   return ok(trimmed);
 };
 
+const unwrapCodeFence = (raw: string): string => {
+  const trimmed = raw.trim();
+  const fenceMatch = /^```[a-zA-Z]*\s*([\s\S]*?)\s*```$/m.exec(trimmed);
+  if (fenceMatch && fenceMatch[1]) {
+    return fenceMatch[1];
+  }
+  return trimmed;
+};
+
 const validateModelResponse = (raw: string, rulePath: string): Result<RuleSummary, AppError> => {
+  const normalized = unwrapCodeFence(raw);
   let parsed: unknown;
 
   try {
-    parsed = JSON.parse(raw);
+    parsed = JSON.parse(normalized);
   } catch (error) {
     return err(
       createAppError(
