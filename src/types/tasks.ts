@@ -13,10 +13,11 @@ interface TodoTask {
   title: string;
   instructions: string;
   kind?: TaskKind;
-  scope: TaskScope;
+  scope?: TaskScope;
   rules: RuleReference[];
-  acceptanceCriteria: string[];
+  acceptanceCriteria?: string[];
   dependencies?: string[];
+  metaData?: Record<string, unknown>;
 }
 
 interface Plan {
