@@ -1,14 +1,7 @@
 import type { ResultAsync } from 'neverthrow';
 import { errAsync } from 'neverthrow';
 import { type ZodType, z } from 'zod';
-
-type ToolErrorCode = 'INVALID_ARGS' | 'NOT_FOUND' | 'IO_ERROR' | 'INTERNAL';
-
-type ToolError = {
-  code: ToolErrorCode;
-  message: string;
-  details?: unknown;
-};
+import type { ToolError, ToolErrorCode } from './errors.js';
 
 type Tool<TArgs = unknown, TResult = unknown> = {
   name: string;
