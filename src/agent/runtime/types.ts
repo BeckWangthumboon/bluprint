@@ -1,5 +1,6 @@
 import { ResultAsync } from 'neverthrow';
 import type { AppError } from '../../types/errors.js';
+import type { Tool } from '../tools/types.js';
 
 export type AgentRole = 'system' | 'user' | 'assistant';
 
@@ -13,6 +14,6 @@ export interface AgentRuntime {
     messages: AgentMessage[];
     temperature?: number;
     maxTokens?: number;
-    tools?: string[];
+    tools?: Tool[];
   }): ResultAsync<string, AppError>;
 }
