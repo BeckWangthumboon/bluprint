@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { okAsync, errAsync } from 'neverthrow';
 import { z } from 'zod';
-import { makeTool } from '../../../../src/agent/tools/types.js';
+import { createToolRegistry, makeTool } from '../../../../src/agent/tools/types.js';
 import { formatToolError, type ToolError } from '../../../../src/agent/tools/errors.js';
 
 describe('makeTool', () => {
@@ -68,5 +68,30 @@ describe('formatToolError', () => {
 
     expect(formatted).toContain('NOT_FOUND');
     expect(formatted).toContain('sample');
+  });
+});
+
+describe('createToolRegistry', () => {
+  it('gets and picks tools by name', async () => {
+    const toolA = makeTool({
+      name: 'a',
+      inputSchema: z.string(),
+      handler: (value) => okAsync(`a:${value}`),
+    });
+    const toolB = makeTool({
+      name: 'b',
+      inputSchema: z.string(),
+      handler: (value) => okAsync(`b:${value}`),
+    });
+    const registry = createToolRegistry([toolA, toolB]);
+
+    expect(registry.getTool('a')).toBe(toolA);
+    expect(registry.getTool('missing')).toBeUndefined();
+
+    const picked = registry.pick(['a', 'missing', 'b']);
+    expect(picked).toEqual([toolA, toolB]);
+
+    const callResult = await registry.pick(['a'])[0]?.call('value');
+    expect(callResult?.isOk()).toBe(true);
   });
 });
