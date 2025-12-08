@@ -17,6 +17,34 @@ interface ToolRegistry {
 }
 
 /**
+ * Creates a registry for looking up tools by name.
+ *
+ * @param tools - Collection of tools to expose through the registry; names must be unique to be discoverable.
+ * @returns ToolRegistry supporting single lookup and picking multiple by name.
+ */
+function createToolRegistry(tools: Tool[]): ToolRegistry {
+  const toolMap = new Map<string, Tool>();
+  tools.forEach((tool) => {
+    toolMap.set(tool.name, tool);
+  });
+
+  return {
+    getTool(name: string): Tool | undefined {
+      return toolMap.get(name);
+    },
+    pick(names: string[]): Tool[] {
+      return names.reduce<Tool[]>((acc, name) => {
+        const tool = toolMap.get(name);
+        if (tool) {
+          acc.push(tool);
+        }
+        return acc;
+      }, []);
+    },
+  };
+}
+
+/**
  * Creates a Tool wrapper that validates inputs with Zod before invoking a handler.
  *
  * @param config - Name, description, schemas, and handler to wrap; input schema defines accepted args shape.
@@ -55,4 +83,4 @@ function makeTool<TArgs, TResult>(config: {
 }
 
 export type { Tool, ToolRegistry, ToolError, ToolErrorCode };
-export { makeTool };
+export { makeTool, createToolRegistry };
