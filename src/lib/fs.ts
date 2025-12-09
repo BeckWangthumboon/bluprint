@@ -14,12 +14,18 @@ export type FsUtils = {
   fsStat: (path: string) => ResultAsync<Stats, AppError>;
   fsReadFile: (target: string) => ResultAsync<string, AppError>;
   fsWriteFile: (target: string, data: string) => ResultAsync<void, AppError>;
+  fsRemove: (target: string, options?: RemoveOptions) => ResultAsync<void, AppError>;
   fsListFilesRecursive: (targetDir: string) => ResultAsync<string[], AppError>;
   fsToRepoRelativePath: (target: string) => ResultAsync<string, AppError>;
 };
 
 type MkdirOptions = MakeDirectoryOptions & {
   recursive?: boolean;
+};
+
+type RemoveOptions = {
+  recursive?: boolean;
+  force?: boolean;
 };
 
 /**
@@ -186,6 +192,35 @@ const fsReadFile = (target: string) =>
   );
 
 /**
+ * Removes a file or directory within the repository boundaries.
+ *
+ * @param target - File or directory path to remove; absolute or repo-relative.
+ * @param options - Optional removal settings; defaults to recursive removal while surfacing missing-path errors.
+ * @returns ResultAsync resolving to void on success; AppError when removal fails.
+ * @throws Never throws. Errors flow via AppError in Result/ResultAsync.
+ */
+const fsRemove = (target: string, options: RemoveOptions = { recursive: true, force: false }) =>
+  resolvePathWithinRepo(target).andThen((normalized) =>
+    ResultAsync.fromPromise(
+      fs.rm(normalized, { recursive: true, force: false, ...options }).then(() => undefined),
+      (error) => {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+          return createAppError(
+            'FS_NOT_FOUND',
+            `Unable to remove ${normalized}: ${(error as Error).message}`,
+            { path: normalized },
+          );
+        }
+        return createAppError(
+          'FS_ERROR',
+          `Unable to remove ${normalized}: ${(error as Error).message}`,
+          { path: normalized },
+        );
+      },
+    ),
+  );
+
+/**
  * Writes UTF-8 data to a file within the repository.
  *
  * @param target - Destination path to write; absolute or relative.
@@ -252,6 +287,7 @@ export const fsUtils: FsUtils = {
   fsStat,
   fsReadFile,
   fsWriteFile,
+  fsRemove,
   fsListFilesRecursive,
   fsToRepoRelativePath,
 };
