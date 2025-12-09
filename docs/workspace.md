@@ -47,3 +47,5 @@ Configuration lives under `.bluprint/` and anchors the local workspace cache for
 - `bluprint init` is the source of truth for writing/updating this file; other commands should read but not mutate it directly.
 - `configUtils.ensureWorkspace` scaffolds the workspace tree and placeholder files (rules index, plan, latest evaluation) without overwriting existing content.
 - `workspaceRules` APIs manage reads/writes for `rules/index.json`; rule bodies should be stored outside the `.bluprint` workspace.
+- `workspacePlan` APIs manage reads/writes for `state/plan.json`:
+
