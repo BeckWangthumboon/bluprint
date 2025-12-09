@@ -15,7 +15,7 @@ import { ResultAsync } from 'neverthrow';
 const writeDiscoveredRules = (
   config: BluprintConfig,
   rules: RuleReference[],
-): ResultAsync<void, AppError> => workspaceRules.writeRulesIndex(config, { rules });
+): ResultAsync<void, AppError> => workspaceRules.writeRulesIndex({ rules }, config);
 
 export const ruleManifest = {
   writeDiscoveredRules,
