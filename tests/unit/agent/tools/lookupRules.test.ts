@@ -1,4 +1,3 @@
-import fs from 'fs/promises';
 import path from 'path';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { okAsync } from 'neverthrow';
@@ -6,6 +5,7 @@ import { lookupRulesTool } from '../../../../src/agent/tools/lookupRules.js';
 import { gitUtils, gitTestHelpers } from '../../../../src/lib/git.js';
 import { configUtils } from '../../../../src/lib/workspace/config.js';
 import { workspaceRules } from '../../../../src/lib/workspace/rules.js';
+import { fsUtils } from '../../../../src/lib/fs.js';
 import type { RuleReference } from '../../../../src/types/rules.js';
 import { createTempDir } from '../../../helpers/tempRepo.js';
 
@@ -39,9 +39,9 @@ describe('lookupRules tool', () => {
   });
 
   afterEach(async () => {
+    await fsUtils.fsRemove(repoRoot, { recursive: true, force: true });
     vi.restoreAllMocks();
     gitTestHelpers.resetRepoRootCache();
-    await fs.rm(repoRoot, { recursive: true, force: true });
   });
 
   it('returns the matching rule when present in the index', async () => {
@@ -73,7 +73,7 @@ describe('lookupRules tool', () => {
   });
 
   it('returns IO_ERROR when the config file is missing', async () => {
-    await fs.rm(path.join(repoRoot, '.bluprint'), { recursive: true, force: true });
+    await fsUtils.fsRemove(path.join(repoRoot, '.bluprint'), { recursive: true, force: true });
 
     const result = await lookupRulesTool.call({ ruleId: 'anything' });
 
