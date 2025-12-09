@@ -96,4 +96,28 @@ describe('fsUtils', () => {
       expect(result.error.code).toBe('FS_ERROR');
     }
   });
+
+  it('removes files or directories within the repo root', async () => {
+    await fsUtils.fsMkdir(path.join('tmp', 'remove'));
+    await fsUtils.fsWriteFile(path.join('tmp', 'remove', 'file.txt'), 'content');
+
+    const removeResult = await fsUtils.fsRemove(path.join('tmp', 'remove'));
+
+    expect(removeResult.isOk()).toBe(true);
+
+    const accessResult = await fsUtils.fsCheckAccess(path.join('tmp', 'remove'));
+    expect(accessResult.isErr()).toBe(true);
+    if (accessResult.isErr()) {
+      expect(accessResult.error.code).toBe('FS_NOT_FOUND');
+    }
+  });
+
+  it('returns not found when removing a missing path', async () => {
+    const result = await fsUtils.fsRemove('missing.txt');
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.code).toBe('FS_NOT_FOUND');
+    }
+  });
 });

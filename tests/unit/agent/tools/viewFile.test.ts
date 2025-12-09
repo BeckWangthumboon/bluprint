@@ -1,9 +1,9 @@
-import fs from 'fs/promises';
 import path from 'path';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { okAsync } from 'neverthrow';
 import { viewFileTool } from '../../../../src/agent/tools/viewFile.js';
 import { gitUtils, gitTestHelpers } from '../../../../src/lib/git.js';
+import { fsUtils } from '../../../../src/lib/fs.js';
 import { createTempDir } from '../../../helpers/tempRepo.js';
 
 describe('viewFile tool', () => {
@@ -17,15 +17,15 @@ describe('viewFile tool', () => {
   });
 
   afterEach(async () => {
+    await fsUtils.fsRemove(repoRoot, { recursive: true, force: true });
     vi.restoreAllMocks();
     gitTestHelpers.resetRepoRootCache();
-    await fs.rm(repoRoot, { recursive: true, force: true });
   });
 
   it('returns repo-relative path and file contents on success', async () => {
     const targetPath = path.join(repoRoot, 'docs', 'note.txt');
-    await fs.mkdir(path.dirname(targetPath), { recursive: true });
-    await fs.writeFile(targetPath, 'hello world', 'utf8');
+    await fsUtils.fsMkdir(path.dirname(targetPath));
+    await fsUtils.fsWriteFile(targetPath, 'hello world');
 
     const result = await viewFileTool.call({ path: targetPath });
 
