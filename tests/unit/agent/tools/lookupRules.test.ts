@@ -22,7 +22,7 @@ const writeConfigAndRules = async (repoRoot: string, rules: RuleReference[]) => 
     throw new Error(`Failed to write config: ${writeConfigResult.error.message}`);
   }
 
-  const writeRulesResult = await workspaceRules.writeRulesIndex(config, { rules });
+  const writeRulesResult = await workspaceRules.writeRulesIndex({ rules }, config);
   if (writeRulesResult.isErr()) {
     throw new Error(`Failed to write rules index: ${writeRulesResult.error.message}`);
   }

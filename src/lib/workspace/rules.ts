@@ -1,8 +1,9 @@
-import { err, ok, Result, ResultAsync } from 'neverthrow';
+import { err, ok, Result, ResultAsync, okAsync } from 'neverthrow';
 import { fsUtils } from '../fs.js';
 import { createAppError, type AppError } from '../../types/errors.js';
 import type { RuleReference, RulesIndex } from '../../types/rules.js';
 import type { BluprintConfig } from './config.js';
+import { configUtils } from './config.js';
 import { isRecord } from '../utils.js';
 
 /**
@@ -114,43 +115,52 @@ const parseRulesIndex = (raw: string, sourcePath: string): Result<RulesIndex, Ap
 };
 
 /**
- * Reads and parses the workspace rules index according to the provided configuration.
+ * Reads and parses the workspace rules index according to the provided or loaded configuration.
  *
- * @param config - Parsed Bluprint configuration supplying the rules index location.
+ * @param config - Optional Bluprint configuration. If not provided, loads from workspace.
  * @returns ResultAsync containing the parsed RulesIndex; AppError when missing or invalid.
  * @throws Never throws. Errors flow via AppError in Result/ResultAsync.
  */
-const loadRulesIndex = (config: BluprintConfig): ResultAsync<RulesIndex, AppError> => {
-  const indexPath = config.workspace.rules.indexPath;
+const loadRulesIndex = (config?: BluprintConfig): ResultAsync<RulesIndex, AppError> => {
+  const configResult = config ? okAsync(config) : configUtils.loadConfig();
 
-  return fsUtils
-    .fsReadFile(indexPath)
-    .mapErr((error) => {
-      if (error.code === 'FS_NOT_FOUND') {
-        return createAppError(
-          'CONFIG_NOT_FOUND',
-          `Rules index missing at ${indexPath}. Run 'bluprint init' or recreate the workspace.`,
-          { path: indexPath },
-        );
-      }
-      return error;
-    })
-    .andThen((contents) => parseRulesIndex(contents, indexPath));
+  return configResult.andThen((cfg) => {
+    const indexPath = cfg.workspace.rules.indexPath;
+
+    return fsUtils
+      .fsReadFile(indexPath)
+      .mapErr((error) => {
+        if (error.code === 'FS_NOT_FOUND') {
+          return createAppError(
+            'CONFIG_NOT_FOUND',
+            `Rules index missing at ${indexPath}. Run 'bluprint init' or recreate the workspace.`,
+            { path: indexPath },
+          );
+        }
+        return error;
+      })
+      .andThen((contents) => parseRulesIndex(contents, indexPath));
+  });
 };
 
 /**
  * Writes the workspace rules index JSON with stable formatting.
  *
- * @param config - Parsed Bluprint configuration supplying the rules index location.
  * @param rulesIndex - RulesIndex payload to serialize.
+ * @param config - Optional Bluprint configuration. If not provided, loads from workspace.
  * @returns ResultAsync resolving to void on success; AppError when write fails.
  * @throws Never throws. Errors flow via AppError in Result/ResultAsync.
  */
 const writeRulesIndex = (
-  config: BluprintConfig,
   rulesIndex: RulesIndex,
-): ResultAsync<void, AppError> =>
-  fsUtils.fsWriteFile(config.workspace.rules.indexPath, JSON.stringify(rulesIndex, null, 2));
+  config?: BluprintConfig,
+): ResultAsync<void, AppError> => {
+  const configResult = config ? okAsync(config) : configUtils.loadConfig();
+
+  return configResult.andThen((cfg) =>
+    fsUtils.fsWriteFile(cfg.workspace.rules.indexPath, JSON.stringify(rulesIndex, null, 2)),
+  );
+};
 
 export const workspaceRules = {
   loadRulesIndex,
