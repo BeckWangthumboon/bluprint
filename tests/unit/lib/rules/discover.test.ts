@@ -1,4 +1,3 @@
-import fs from 'fs/promises';
 import path from 'path';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { okAsync } from 'neverthrow';
@@ -6,28 +5,28 @@ import { ruleDiscovery } from '../../../../src/lib/rules/discover.js';
 import { gitUtils } from '../../../../src/lib/git.js';
 import { shellUtils } from '../../../../src/lib/shell.js';
 import { configUtils } from '../../../../src/lib/workspace/config.js';
+import { fsUtils } from '../../../../src/lib/fs.js';
 import { createTempDir } from '../../../helpers/tempRepo.js';
 
 describe('ruleDiscovery.discoverRules', () => {
   let repoRoot: string;
 
   beforeEach(async () => {
-    vi.restoreAllMocks();
     repoRoot = await createTempDir('rules-disc-');
     vi.spyOn(gitUtils, 'gitGetRepoRoot').mockReturnValue(okAsync(repoRoot));
     vi.spyOn(shellUtils, 'findByName').mockReturnValue(okAsync([]));
   });
 
   afterEach(async () => {
+    await fsUtils.fsRemove(repoRoot, { recursive: true, force: true });
     vi.restoreAllMocks();
-    await fs.rm(repoRoot, { recursive: true, force: true });
   });
 
   it('discovers rules from provided embedded files only', async () => {
     const config = configUtils.createDefaultConfig('main', repoRoot);
 
-    const embeddedPath = path.join(repoRoot, 'AGENTS.md');
-    await fs.writeFile(embeddedPath, '# agents\n', 'utf8');
+    const embeddedPath = path.join('AGENTS.md');
+    await fsUtils.fsWriteFile(embeddedPath, '# agents\n');
     (shellUtils.findByName as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
       okAsync(['AGENTS.md']),
     );
@@ -45,10 +44,10 @@ describe('ruleDiscovery.discoverRules', () => {
   it('discovers rules from provided centralized directories only', async () => {
     const config = configUtils.createDefaultConfig('main', repoRoot);
 
-    const rulesDir = path.join(repoRoot, '.cursor', 'rules');
-    await fs.mkdir(rulesDir, { recursive: true });
-    await fs.writeFile(path.join(rulesDir, 'rule-a.md'), '# rule a\n', 'utf8');
-    await fs.writeFile(path.join(rulesDir, 'rule-b.mdc'), '# rule b\n', 'utf8');
+    const rulesDir = path.join('.cursor', 'rules');
+    await fsUtils.fsMkdir(rulesDir);
+    await fsUtils.fsWriteFile(path.join(rulesDir, 'rule-a.md'), '# rule a\n');
+    await fsUtils.fsWriteFile(path.join(rulesDir, 'rule-b.mdc'), '# rule b\n');
     (shellUtils.findByName as unknown as ReturnType<typeof vi.fn>).mockReturnValue(okAsync([]));
 
     const result = await ruleDiscovery.discoverRules(config, {

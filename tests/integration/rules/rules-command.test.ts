@@ -1,8 +1,8 @@
-import fs from 'fs/promises';
 import path from 'path';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ok, okAsync } from 'neverthrow';
 import { gitUtils } from '../../../src/lib/git.js';
+import { fsUtils } from '../../../src/lib/fs.js';
 import { createTempDir } from '../../helpers/tempRepo.js';
 import { configUtils } from '../../../src/lib/workspace/config.js';
 import type { RulesIndex } from '../../../src/types/rules.js';
@@ -20,19 +20,17 @@ describe('rules command (integration-ish)', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     repoRoot = await createTempDir('rules-integration-');
+    vi.spyOn(gitUtils, 'gitGetRepoRoot').mockReturnValue(okAsync(repoRoot));
   });
 
   afterEach(async () => {
-    vi.restoreAllMocks();
     if (repoRoot) {
-      await fs.rm(repoRoot, { recursive: true, force: true });
+      await fsUtils.fsRemove(repoRoot, { recursive: true, force: true });
     }
+    vi.restoreAllMocks();
   });
 
   it('discovers rules from a directory source and writes the index', async () => {
-    // mock repo root
-    vi.spyOn(gitUtils, 'gitGetRepoRoot').mockReturnValue(okAsync(repoRoot!));
-
     // scaffold workspace config
     const config = configUtils.createDefaultConfig(baseBranch, repoRoot!);
     await configUtils.ensureWorkspace(config);
@@ -40,10 +38,10 @@ describe('rules command (integration-ish)', () => {
     expect(writeConfigResult.isOk()).toBe(true);
 
     // create a rule file under a directory
-    const rulesDir = path.join(repoRoot!, '.agent');
-    await fs.mkdir(rulesDir, { recursive: true });
+    const rulesDir = '.agent';
+    await fsUtils.fsMkdir(rulesDir);
     const rulePath = path.join(rulesDir, 'AGENTS.md');
-    await fs.writeFile(rulePath, '# agent rules', 'utf8');
+    await fsUtils.fsWriteFile(rulePath, '# agent rules');
 
     // stub summarizer to avoid network/LLM
     const summarizerModule = await import('../../../src/agent/agents/ruleSummarizer.js');
@@ -62,9 +60,10 @@ describe('rules command (integration-ish)', () => {
     expect(result.isOk()).toBe(true);
     if (result.isErr()) return;
 
-    const index: RulesIndex = JSON.parse(
-      await fs.readFile(path.join(repoRoot!, config.workspace.rules.indexPath), 'utf8'),
-    );
+    const indexContent = await fsUtils.fsReadFile(config.workspace.rules.indexPath);
+    expect(indexContent.isOk()).toBe(true);
+    if (indexContent.isErr()) return;
+    const index: RulesIndex = JSON.parse(indexContent.value);
 
     expect(index.rules).toEqual([
       {
