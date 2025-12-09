@@ -1,10 +1,10 @@
-import fs from 'fs/promises';
 import path from 'path';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { okAsync } from 'neverthrow';
 import { workspaceRules } from '../../../../src/lib/workspace/rules.js';
 import { gitUtils } from '../../../../src/lib/git.js';
 import { configUtils } from '../../../../src/lib/workspace/config.js';
+import { fsUtils } from '../../../../src/lib/fs.js';
 import { createTempDir } from '../../../helpers/tempRepo.js';
 
 describe('workspaceRules.parseRulesIndex', () => {
@@ -59,28 +59,26 @@ describe('workspaceRules.loadRulesIndex', () => {
   let repoRoot: string;
 
   beforeEach(async () => {
-    vi.restoreAllMocks();
     repoRoot = await createTempDir('rules-index-');
     vi.spyOn(gitUtils, 'gitGetRepoRoot').mockReturnValue(okAsync(repoRoot));
   });
 
   afterEach(async () => {
+    await fsUtils.fsRemove(repoRoot, { recursive: true, force: true });
     vi.restoreAllMocks();
-    await fs.rm(repoRoot, { recursive: true, force: true });
   });
 
   it('loads a rules index from disk', async () => {
     const config = configUtils.createDefaultConfig('main', repoRoot);
     await configUtils.ensureWorkspace(config);
 
-    const indexPath = path.join(repoRoot, config.workspace.rules.indexPath);
-    await fs.mkdir(path.dirname(indexPath), { recursive: true });
-    await fs.writeFile(
+    const indexPath = config.workspace.rules.indexPath;
+    await fsUtils.fsMkdir(path.dirname(indexPath));
+    await fsUtils.fsWriteFile(
       indexPath,
       JSON.stringify({
         rules: [{ id: 'id-1', description: 'desc', path: 'rules/r1.md', tags: ['core'] }],
       }),
-      'utf8',
     );
 
     const result = await workspaceRules.loadRulesIndex(config);
