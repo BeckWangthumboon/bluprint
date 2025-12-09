@@ -3,6 +3,7 @@ import { Result, ResultAsync, err, errAsync, ok, okAsync } from 'neverthrow';
 import type { AppError } from '../../types/errors.js';
 import { createAppError } from '../../types/errors.js';
 import { fsUtils } from '../fs.js';
+import { isRecord } from '../utils.js';
 
 const DEFAULT_WORKSPACE_ROOT = '.bluprint';
 const CONFIG_FILE_PATH = path.join(DEFAULT_WORKSPACE_ROOT, 'config.json');
@@ -32,9 +33,6 @@ type BluprintConfig = {
   version: string;
   workspace: WorkspacePaths;
 };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
 // Validates a required string field and returns its trimmed value.
 const parseRequiredStringField = (value: unknown, fieldName: string): Result<string, AppError> => {

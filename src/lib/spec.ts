@@ -14,11 +14,7 @@ import type {
   Specification,
 } from '../types/spec.js';
 import { fsUtils } from './fs.js';
-
-type UnknownRecord = Record<string, unknown>;
-
-const isRecord = (value: unknown): value is UnknownRecord =>
-  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+import { isRecord } from './utils.js';
 
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === 'string' && value.trim().length > 0;

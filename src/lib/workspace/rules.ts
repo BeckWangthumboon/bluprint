@@ -3,9 +3,7 @@ import { fsUtils } from '../fs.js';
 import { createAppError, type AppError } from '../../types/errors.js';
 import type { RuleReference, RulesIndex } from '../../types/rules.js';
 import type { BluprintConfig } from './config.js';
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+import { isRecord } from '../utils.js';
 
 /**
  * Parses the workspace rules index JSON into a structured RulesIndex without throwing.
