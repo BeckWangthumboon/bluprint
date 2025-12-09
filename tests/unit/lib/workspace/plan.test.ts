@@ -150,7 +150,7 @@ describe('workspacePlan.writePlan', () => {
       ],
     };
 
-    const writeResult = await workspacePlan.writePlan(config, plan);
+    const writeResult = await workspacePlan.writePlan(plan, config);
     expect(writeResult.isOk()).toBe(true);
 
     // Verify it was written correctly
