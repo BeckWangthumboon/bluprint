@@ -1,6 +1,6 @@
 import type { ResultAsync } from 'neverthrow';
 import { errAsync } from 'neverthrow';
-import { type ZodType, z } from 'zod';
+import { type ZodType } from 'zod';
 import type { ToolError, ToolErrorCode } from './errors.js';
 
 type Tool<TArgs = unknown, TResult = unknown> = {
@@ -74,7 +74,6 @@ function makeTool<TArgs, TResult>(config: {
         return errAsync({
           code: 'INVALID_ARGS',
           message: `Invalid arguments for tool "${name}". Expected ${schemaType}. Issues: ${issueSummary}`,
-          details: z.treeifyError(parsed.error),
         });
       }
       return handler(parsed.data);

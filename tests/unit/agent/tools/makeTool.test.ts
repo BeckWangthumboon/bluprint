@@ -35,7 +35,6 @@ describe('makeTool', () => {
     if (result.isErr()) {
       expect(result.error.code).toBe('INVALID_ARGS');
       expect(result.error.message).toContain('validate');
-      expect(result.error.details).toBeDefined();
     }
   });
 
