@@ -1,7 +1,7 @@
 import type { ResultAsync } from 'neverthrow';
 import { errAsync } from 'neverthrow';
 import { type ZodType } from 'zod';
-import type { ToolError, ToolErrorCode } from './errors.js';
+import { createToolError, type ToolError, type ToolErrorCode } from './errors.js';
 
 type Tool<TArgs = unknown, TResult = unknown> = {
   name: string;
@@ -71,10 +71,13 @@ function makeTool<TArgs, TResult>(config: {
         const issueSummary =
           parsed.error.issues.map((issue) => issue.message).join('; ') ||
           'Invalid arguments received.';
-        return errAsync({
-          code: 'INVALID_ARGS',
-          message: `Invalid arguments for tool "${name}". Expected ${schemaType}. Issues: ${issueSummary}`,
-        });
+        return errAsync(
+          createToolError(
+            'INVALID_ARGS',
+            `Invalid arguments for tool "${name}". Expected ${schemaType}. Issues: ${issueSummary}`,
+            { issues: parsed.error.issues },
+          ),
+        );
       }
       return handler(parsed.data);
     },
