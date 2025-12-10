@@ -24,15 +24,14 @@ const plan = (args: PlanArgs): ResultAsync<SuccessInfo, AppError> =>
       const planAgentResult = planAgent.createPlanAgent();
       if (planAgentResult.isErr()) return errAsync(planAgentResult.error);
 
-      return planAgentResult.value({ spec, rulesIndex })
-          .andThen((generatedPlan) =>
-            workspacePlan.writePlan(generatedPlan).map(() => generatedPlan),
-          )
-          .map((generatedPlan) => ({
-            command: 'plan',
-            message: `Generated plan with ${generatedPlan.tasks.length} task(s).`,
-            details: args.json ? undefined : generatedPlan.tasks.map((t) => t.title),
-          }));
+      return planAgentResult
+        .value({ spec, rulesIndex })
+        .andThen((generatedPlan) => workspacePlan.writePlan(generatedPlan).map(() => generatedPlan))
+        .map((generatedPlan) => ({
+          command: 'plan',
+          message: `Generated plan with ${generatedPlan.tasks.length} task(s).`,
+          details: args.json ? undefined : generatedPlan.tasks.map((t) => t.title),
+        }));
     }),
   );
 

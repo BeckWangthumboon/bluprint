@@ -21,9 +21,7 @@ const rules = (args: RulesArgs): ResultAsync<SuccessInfo, AppError> => {
 
       return ruleNormalize.buildRuleReferences(sources, summarizerResult.value);
     })
-    .andThen((references) =>
-      ruleManifest.writeDiscoveredRules(references).map(() => references),
-    )
+    .andThen((references) => ruleManifest.writeDiscoveredRules(references).map(() => references))
     .map((references) => ({
       command: 'rules',
       message: `Discovered and indexed ${references.length} rule(s).`,
