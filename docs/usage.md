@@ -40,3 +40,28 @@ Bluprint evaluates feature work against a spec and architecture rules. The CLI i
 - Validation:
   - Requires exactly one source mode; missing mode-specific flag fails with `VALIDATION_ERROR`.
   - Errors are emitted via AppError codes; no throws.
+
+### `plan`
+- Purpose: generate an execution plan from the workspace specification by breaking it down into actionable tasks with assigned rules.
+- Options:
+  - `--json` – output JSON-only mode; otherwise prints task titles in the success message.
+- Behavior:
+  1) Load `.bluprint/config.json`.
+  2) Load workspace specification from `.bluprint/spec/spec.yaml`.
+  3) Load rules index from `.bluprint/rules/index.json`.
+  4) Invoke the plan agent (LLM) to break down the specification into tasks, where each task:
+     - Has a unique ID, title, and detailed instructions
+     - Is assigned at least one rule from the rules index for context
+     - May include scope (files/globs), acceptance criteria, and dependencies
+  5) Write the generated plan to `.bluprint/state/plan.json`.
+- Example:
+  - Standard output: `bluprint plan`
+  - JSON output: `bluprint plan --json`
+- Expected output:
+  - Success: `Generated plan with N task(s).` (plus task titles unless `--json` is used)
+  - Errors if workspace spec or rules index is missing/invalid
+- Validation:
+  - Specification must include either `constraints` or `implementation_patterns.guidelines` to provide guardrails
+  - Rules index must exist and contain at least one rule
+  - Errors are emitted via AppError codes; no throws.
+
