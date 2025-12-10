@@ -6,7 +6,7 @@ import type { Specification } from '../../types/spec.js';
 import type { RulesIndex, RuleReference } from '../../types/rules.js';
 import type { AppError } from '../../types/errors.js';
 import { createAppError } from '../../types/errors.js';
-import { isRecord, safeJsonParse } from '../../lib/utils.js';
+import { isRecord, safeJsonParse, unwrapCodeFence } from '../../lib/utils.js';
 
 type PlanAgentInput = {
   spec: Specification;
@@ -112,18 +112,6 @@ ${spec.scope.exclude ? `Exclude: ${spec.scope.exclude.join(', ')}` : ''}`;
 ${rulesIndex.rules.map((r) => `- [${r.id}] ${r.description} (tags: ${r.tags.join(', ')}) - path: ${r.path}`).join('\n')}`;
 
   return `${specSection}\n\n${rulesSection}`;
-};
-
-/**
- * Unwraps code fence from LLM response if present.
- */
-const unwrapCodeFence = (raw: string): string => {
-  const trimmed = raw.trim();
-  const fenceMatch = /^```(?:json)?\s*([\s\S]*?)\s*```$/m.exec(trimmed);
-  if (fenceMatch && fenceMatch[1]) {
-    return fenceMatch[1];
-  }
-  return trimmed;
 };
 
 /**

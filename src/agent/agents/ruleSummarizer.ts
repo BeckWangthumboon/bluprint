@@ -2,6 +2,7 @@ import { err, ok, Result } from 'neverthrow';
 import { createAppError, type AppError } from '../../types/errors.js';
 import type { RuleSummarizer, RuleSummary } from '../../lib/rules/normalize.js';
 import { createAgentRuntime } from '../runtime/index.js';
+import { unwrapCodeFence } from '../../lib/utils.js';
 
 const validateGeneratedTags = (value: unknown, rulePath: string): Result<string[], AppError> => {
   if (!Array.isArray(value)) {
@@ -61,15 +62,6 @@ const validateGeneratedDescription = (
   }
 
   return ok(trimmed);
-};
-
-const unwrapCodeFence = (raw: string): string => {
-  const trimmed = raw.trim();
-  const fenceMatch = /^```[a-zA-Z]*\s*([\s\S]*?)\s*```$/m.exec(trimmed);
-  if (fenceMatch && fenceMatch[1]) {
-    return fenceMatch[1];
-  }
-  return trimmed;
 };
 
 const validateModelResponse = (raw: string, rulePath: string): Result<RuleSummary, AppError> => {
