@@ -5,33 +5,31 @@ import { ruleDiscovery } from '../lib/rules/discover.js';
 import { ruleNormalize } from '../lib/rules/normalize.js';
 import { ruleSummarizer } from '../agent/agents/ruleSummarizer.js';
 import { ruleManifest } from '../lib/rules/manifest.js';
-import { configUtils } from '../lib/workspace/config.js';
 import { createAppError, type AppError } from '../types/errors.js';
 
-const rules = (args: RulesArgs): ResultAsync<SuccessInfo, AppError> =>
-  configUtils.loadConfig().andThen((config) => {
-    const discoveryInput =
-      args.rulesSource === 'embedded'
-        ? { embeddedRuleFile: args.rulesEmbeddedFile }
-        : { centralizedRuleDir: args.rulesDir };
+const rules = (args: RulesArgs): ResultAsync<SuccessInfo, AppError> => {
+  const discoveryInput =
+    args.rulesSource === 'embedded'
+      ? { embeddedRuleFile: args.rulesEmbeddedFile }
+      : { centralizedRuleDir: args.rulesDir };
 
-    return ruleDiscovery
-      .discoverRules(config, discoveryInput)
-      .andThen((sources) => {
-        const summarizerResult = ruleSummarizer.createModelSummarizer();
-        if (summarizerResult.isErr()) return errAsync(summarizerResult.error);
+  return ruleDiscovery
+    .discoverRules(discoveryInput)
+    .andThen((sources) => {
+      const summarizerResult = ruleSummarizer.createModelSummarizer();
+      if (summarizerResult.isErr()) return errAsync(summarizerResult.error);
 
-        return ruleNormalize.buildRuleReferences(sources, summarizerResult.value);
-      })
-      .andThen((references) =>
-        ruleManifest.writeDiscoveredRules(config, references).map(() => references),
-      )
-      .map((references) => ({
-        command: 'rules',
-        message: `Discovered and indexed ${references.length} rule(s).`,
-        details: args.json ? undefined : references.map((r) => r.path),
-      }));
-  });
+      return ruleNormalize.buildRuleReferences(sources, summarizerResult.value);
+    })
+    .andThen((references) =>
+      ruleManifest.writeDiscoveredRules(references).map(() => references),
+    )
+    .map((references) => ({
+      command: 'rules',
+      message: `Discovered and indexed ${references.length} rule(s).`,
+      details: args.json ? undefined : references.map((r) => r.path),
+    }));
+};
 
 const validateRulesArgs = (argv: unknown): Result<RulesArgs, AppError> => {
   const source = (argv as Record<string, unknown>)['rules-source'];

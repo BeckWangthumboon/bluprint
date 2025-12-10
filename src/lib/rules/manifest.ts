@@ -7,14 +7,14 @@ import { ResultAsync } from 'neverthrow';
 /**
  * Writes discovered rule references to the configured workspace rules index.
  *
- * @param config - Parsed Bluprint configuration supplying the index path.
  * @param rules - Rule references to persist.
+ * @param config - Optional Bluprint configuration. If not provided, loads from workspace.
  * @returns ResultAsync resolving when the manifest is written; AppError on write failure.
  * @throws Never throws. Errors flow via AppError in Result/ResultAsync.
  */
 const writeDiscoveredRules = (
-  config: BluprintConfig,
   rules: RuleReference[],
+  config?: BluprintConfig,
 ): ResultAsync<void, AppError> => workspaceRules.writeRulesIndex({ rules }, config);
 
 export const ruleManifest = {
