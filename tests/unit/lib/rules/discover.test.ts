@@ -31,7 +31,7 @@ describe('ruleDiscovery.discoverRules', () => {
       okAsync(['AGENTS.md']),
     );
 
-    const result = await ruleDiscovery.discoverRules(config, {
+    const result = await ruleDiscovery.discoverRules({
       embeddedRuleFile: 'AGENTS.md',
     });
 
@@ -50,7 +50,7 @@ describe('ruleDiscovery.discoverRules', () => {
     await fsUtils.fsWriteFile(path.join(rulesDir, 'rule-b.mdc'), '# rule b\n');
     (shellUtils.findByName as unknown as ReturnType<typeof vi.fn>).mockReturnValue(okAsync([]));
 
-    const result = await ruleDiscovery.discoverRules(config, {
+    const result = await ruleDiscovery.discoverRules({
       centralizedRuleDir: rulesDir,
     });
 
@@ -67,9 +67,7 @@ describe('ruleDiscovery.discoverRules', () => {
   });
 
   it('errors when both modes are provided', async () => {
-    const config = configUtils.createDefaultConfig('main', repoRoot);
-
-    const result = await ruleDiscovery.discoverRules(config, {
+    const result = await ruleDiscovery.discoverRules({
       embeddedRuleFile: 'AGENTS.md',
       centralizedRuleDir: '.cursor/rules',
     });
@@ -83,7 +81,7 @@ describe('ruleDiscovery.discoverRules', () => {
   it('errors when no inputs are provided', async () => {
     const config = configUtils.createDefaultConfig('main', repoRoot);
 
-    const result = await ruleDiscovery.discoverRules(config, {
+    const result = await ruleDiscovery.discoverRules({
       embeddedRuleFile: undefined,
       centralizedRuleDir: undefined,
     });
