@@ -60,13 +60,11 @@ const collectCentralizedRules = (dir: string): ResultAsync<RuleSource[], AppErro
 /**
  * Discovers rule file paths from user-supplied embedded files and centralized directories.
  *
- * @param config - Parsed Bluprint configuration.
  * @param input - User-provided rule file paths and directories to scan.
  * @returns ResultAsync containing repo-relative RuleSource entries; AppError when inputs are invalid or no rules found.
  * @throws Never throws. Errors flow via AppError in Result/ResultAsync.
  */
 const discoverRules = (
-  _config: BluprintConfig,
   input: RuleDiscoveryInput,
 ): ResultAsync<RuleSource[], AppError> => {
   const hasEmbedded = Boolean(input.embeddedRuleFile);
