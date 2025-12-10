@@ -64,9 +64,7 @@ const collectCentralizedRules = (dir: string): ResultAsync<RuleSource[], AppErro
  * @returns ResultAsync containing repo-relative RuleSource entries; AppError when inputs are invalid or no rules found.
  * @throws Never throws. Errors flow via AppError in Result/ResultAsync.
  */
-const discoverRules = (
-  input: RuleDiscoveryInput,
-): ResultAsync<RuleSource[], AppError> => {
+const discoverRules = (input: RuleDiscoveryInput): ResultAsync<RuleSource[], AppError> => {
   const hasEmbedded = Boolean(input.embeddedRuleFile);
   const hasCentralized = Boolean(input.centralizedRuleDir);
 
