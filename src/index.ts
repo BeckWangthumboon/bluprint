@@ -4,7 +4,8 @@ import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import { init } from './commands/init.js';
 import { rules, validateRulesArgs } from './commands/rules.js';
-import type { InitArgs, RulesArgs } from './types/commands.js';
+import { plan } from './commands/plan.js';
+import type { InitArgs, RulesArgs, PlanArgs } from './types/commands.js';
 import { displayError, displaySuccess } from './lib/exit.js';
 
 yargs(hideBin(process.argv))
@@ -72,6 +73,31 @@ yargs(hideBin(process.argv))
       }
 
       const result = await rules(validationResult.value);
+
+      result.match(
+        (successInfo) => {
+          if (successInfo) {
+            displaySuccess(successInfo);
+          }
+        },
+        (error) => {
+          displayError(error);
+        },
+      );
+    },
+  )
+  .command<PlanArgs>(
+    'plan',
+    'Generate an execution plan from the workspace specification',
+    (cmd) => {
+      cmd.option('json', {
+        type: 'boolean',
+        description: 'Output JSON only',
+        default: false,
+      });
+    },
+    async (argv) => {
+      const result = await plan(argv);
 
       result.match(
         (successInfo) => {

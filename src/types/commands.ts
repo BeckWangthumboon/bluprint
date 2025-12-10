@@ -10,4 +10,8 @@ interface RulesArgs {
   json?: boolean;
 }
 
-export type { InitArgs, RulesArgs };
+interface PlanArgs {
+  json?: boolean;
+}
+
+export type { InitArgs, RulesArgs, PlanArgs };
