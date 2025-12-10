@@ -11,8 +11,11 @@
   - `src/lib/fs.ts` path normalization, read/write/move behavior, and rejection of paths outside the repo.
   - `src/lib/git.ts` branch existence checks and repo root resolution with git environment variables.
   - `src/lib/exit.ts` formatting and exit code mapping for success/error output.
+  - `src/agent/agents/planAgent.ts` spec ID generation for deterministic plan identification.
+  - `src/commands/plan.ts` argument handling for the plan command.
 - Integration tests:
   - `src/commands/init.ts` end-to-end behavior against a temporary git repo, including config creation, spec relocation, and error cases for missing specs, missing branches, and non-repo execution.
+  - `src/commands/plan.ts` plan generation from workspace spec and rules index, json flag behavior, and error handling for missing workspace files.
 
 ## Gotchas
 - Git binary required: tests spawn real `git` commands when setting up temp repos.

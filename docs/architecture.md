@@ -5,8 +5,8 @@ Bluprint is a TypeScript CLI that layers responsibilities to keep the entrypoint
 ## Source Layout
 
 - `src/index.ts` – CLI entrypoint using Yargs. Registers commands, wires argument definitions, and delegates execution to command handlers. Handles success/error display via `displaySuccess` and `displayError`.
-- `src/commands/**` – Command implementations (`init`, `rules`, etc.). Each validates CLI arguments, checks relevant Git state, prepares required files or directories, coordinates with library and agent layers, and returns structured results for success or error.
-- `src/agent/**` – Agent layer for LLM access (runtime factories, provider registry, agent helpers like rule summarization). Keeps LLM calls out of `src/lib/**`.
+- `src/commands/**` – Command implementations (`init`, `rules`, `plan`, etc.). Each validates CLI arguments, checks relevant Git state, prepares required files or directories, coordinates with library and agent layers, and returns structured results for success or error.
+- `src/agent/**` – Agent layer for LLM access (runtime factories, provider registry, agent helpers like rule summarization and plan generation). Keeps LLM calls out of `src/lib/**`.
 
 ## Library Layer (`src/lib`)
 

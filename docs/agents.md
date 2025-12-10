@@ -29,6 +29,14 @@
   3. Strip code fences if present, parse JSON, and validate shape. Descriptions are trimmed to 160 characters; tags must be non-empty strings. Validation failures return `LLM_ERROR`.
 - Output feeds directly into `ruleNormalize.buildRuleReferences`, which writes `.bluprint/rules/index.json`.
 
+- `agents/planAgent.ts` exposes `createPlanAgent`, which returns a function that breaks down a specification into an actionable plan with tasks.
+- Prompt: system role instructs the model to generate tasks in JSON format with IDs, titles, instructions, assigned rules, and optional scope/criteria/dependencies; user role provides the specification and rules index.
+- Execution path:
+  1. Acquire a runtime via `createAgentRuntime`; if unavailable, return the `AppError`.
+  2. Call `runtime.generateText` with `temperature: 0.3` and tools (`lookupRules`, `viewFile`) for context gathering.
+  3. Strip code fences if present, parse JSON, and validate the plan structure. Each task must have at least one rule assigned. Validation failures return `LLM_ERROR`.
+- Output is written to `.bluprint/state/plan.json` via `workspacePlan.writePlan`.
+
 ## Tools
 
 - Tool definitions live in `src/agent/tools/types.ts` as typed `Tool` contracts and are adapted to the AI SDK in `aiSdkRuntime`.
@@ -40,6 +48,7 @@
 ## How Commands Use It
 
 - `bluprint rules` (`src/commands/rules.ts`) loads config, discovers rule files, requests a model-backed summarizer from `ruleSummarizer`, then builds and persists rule references. Human-facing output is handled in the command layer; the agent layer only returns structured data or `AppError`.
+- `bluprint plan` (`src/commands/plan.ts`) loads config, workspace spec, and rules index, then requests a plan agent from `planAgent` to generate actionable tasks from the specification. The plan is written to the workspace and task titles are displayed to the user.
 
 ## Extending the Layer
 
