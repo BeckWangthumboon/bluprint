@@ -14,4 +14,9 @@ interface PlanArgs {
   json?: boolean;
 }
 
-export type { InitArgs, RulesArgs, PlanArgs };
+interface IndexArgs {
+  json?: boolean;
+  directory?: string;
+}
+
+export type { InitArgs, RulesArgs, PlanArgs, IndexArgs };
