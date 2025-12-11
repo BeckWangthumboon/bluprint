@@ -7,6 +7,7 @@ Configuration lives under `.bluprint/` and anchors the local workspace cache for
 - `.bluprint/config.json` – primary configuration file. Written by `bluprint init` via `configUtils.writeConfig`.
 - `.bluprint/spec/spec.yaml` – feature spec file moved in by `bluprint init` (format defined in `docs/spec-format.md`).
 - `.bluprint/rules/index.json` – machine-readable rules index (rule content lives outside `.bluprint`).
+- `.bluprint/codebase/semantic_index.json` – LLM-generated file descriptions index (see `docs/codebase-index.md`).
 - `.bluprint/state/plan.json` – persisted plan output from `bluprint plan`.
 - `.bluprint/state/evaluations/last.json` – latest evaluation output.
 
@@ -22,6 +23,10 @@ Configuration lives under `.bluprint/` and anchors the local workspace cache for
     "rules": {
       "root": ".bluprint/rules",
       "indexPath": ".bluprint/rules/index.json"
+    },
+    "codebase": {
+      "root": ".bluprint/codebase",
+      "semanticIndexPath": ".bluprint/codebase/semantic_index.json"
     },
     "state": {
       "root": ".bluprint/state",
@@ -39,6 +44,7 @@ Configuration lives under `.bluprint/` and anchors the local workspace cache for
   - `root` – workspace root (defaults to `.bluprint`).
   - `specPath` – spec file location inside the workspace.
   - `rules` – rules storage layout (`root`, `indexPath`).
+  - `codebase` – codebase index storage (`root`, `semanticIndexPath`).
   - `state` – task/evaluation storage layout (`planPath`, `evaluationsRoot`, `latestEvaluationPath`).
 
 ## Rules and Assumptions
@@ -48,4 +54,3 @@ Configuration lives under `.bluprint/` and anchors the local workspace cache for
 - `configUtils.ensureWorkspace` scaffolds the workspace tree and placeholder files (rules index, plan, latest evaluation) without overwriting existing content.
 - `workspaceRules` APIs manage reads/writes for `rules/index.json`; rule bodies should be stored outside the `.bluprint` workspace.
 - `workspacePlan` APIs manage reads/writes for `state/plan.json`:
-
