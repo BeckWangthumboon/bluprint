@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { ok, okAsync, err } from 'neverthrow';
+import { ok, okAsync, err, errAsync } from 'neverthrow';
 import { codeSummarizer } from '../../../src/agent/agents/codeSummarizer.js';
 import type { AgentRuntime } from '../../../src/agent/runtime/types.js';
 import type { AppError } from '../../../src/types/errors.js';
@@ -64,7 +64,7 @@ describe('codeSummarizer.createModelSummarizer', () => {
       message: 'Model unavailable',
     };
     const runtime: AgentRuntime = {
-      generateText: () => ({ isOk: () => false, isErr: () => true, error }),
+      generateText: () => errAsync(error),
     };
     createAgentRuntimeMock.mockReturnValue(ok(runtime));
 

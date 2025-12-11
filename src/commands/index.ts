@@ -3,7 +3,7 @@ import type { IndexArgs } from '../types/commands.js';
 import type { SuccessInfo } from '../lib/exit.js';
 import type { AppError } from '../types/errors.js';
 import { configUtils } from '../lib/workspace/config.js';
-import { codebaseIndexer } from '../lib/codebase/build.js';
+import { codebaseIndexer } from '../lib/codebase/index.js';
 import { workspaceCodebase } from '../lib/workspace/codebase.js';
 
 /**
@@ -18,7 +18,7 @@ import { workspaceCodebase } from '../lib/workspace/codebase.js';
  */
 const index = (args: IndexArgs): ResultAsync<SuccessInfo, AppError> =>
   configUtils.loadConfig().andThen(() =>
-    codebaseIndexer
+    codebaseIndexer.indexer
       .buildCodebaseIndex(args.directory)
       .andThen((codebaseIndex) => {
         if (args.json) {
