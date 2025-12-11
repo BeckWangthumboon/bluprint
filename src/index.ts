@@ -113,17 +113,18 @@ yargs(hideBin(process.argv))
     },
   )
   .command<IndexArgs>(
-    'index',
+    'index [directory]',
     'Generate a semantic index of codebase files',
     (cmd) => {
+      cmd.positional('directory', {
+        type: 'string',
+        description: 'Directory to index (defaults to entire repo)',
+        default: '.',
+      });
       cmd.option('json', {
         type: 'boolean',
         description: 'Output json only',
         default: false,
-      });
-      cmd.option('directory', {
-        type: 'string',
-        description: 'Limit indexing to a specific subdirectory',
       });
     },
     async (argv) => {

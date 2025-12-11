@@ -12,14 +12,14 @@ import { workspaceCodebase } from '../lib/workspace/codebase.js';
  * Flow: Validates config exists, builds the index by discovering files and generating descriptions,
  * then either outputs to stdout (--json) or writes to the workspace codebase index file.
  *
- * @param args - CLI args containing optional json and directory flags.
+ * @param args - CLI args containing json flag and directory path (defaults to '.' for entire repo).
  * @returns ResultAsync containing success info on index generation, or AppError when generation fails.
  * @throws Never throws. Errors flow via AppError in ResultAsync.
  */
 const index = (args: IndexArgs): ResultAsync<SuccessInfo, AppError> =>
   configUtils.loadConfig().andThen(() =>
     codebaseIndexer.indexer
-      .buildCodebaseIndex(args.directory)
+      .buildCodebaseIndex(args.directory === '.' ? undefined : args.directory)
       .andThen((codebaseIndex) => {
         if (args.json) {
           console.log(JSON.stringify(codebaseIndex, null, 2));

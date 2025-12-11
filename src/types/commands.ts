@@ -16,7 +16,7 @@ interface PlanArgs {
 
 interface IndexArgs {
   json?: boolean;
-  directory?: string;
+  directory: string;
 }
 
 export type { InitArgs, RulesArgs, PlanArgs, IndexArgs };
