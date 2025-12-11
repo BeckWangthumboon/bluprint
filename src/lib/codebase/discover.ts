@@ -1,45 +1,123 @@
 import path from 'path';
-import { errAsync, ResultAsync } from 'neverthrow';
-import { fsUtils } from '../fs.js';
+import { ResultAsync } from 'neverthrow';
 import { gitUtils } from '../git.js';
-import { createAppError, type AppError } from '../../types/errors.js';
+import { type AppError } from '../../types/errors.js';
+
+// Binary and non-text file extensions that should not be indexed.
+const HARD_EXCLUDED_EXTENSIONS = new Set([
+  // Images
+  'jpg',
+  'jpeg',
+  'png',
+  'gif',
+  'bmp',
+  'tiff',
+  'tif',
+  'webp',
+  'ico',
+  'svg',
+  'psd',
+  'apng',
+  'avif',
+  // Video
+  'mp4',
+  'mkv',
+  'avi',
+  'mov',
+  'wmv',
+  'flv',
+  'webm',
+  'm4v',
+  'mpg',
+  'mpeg',
+  'vob',
+  'avchd',
+  // Audio
+  'mp3',
+  'wav',
+  'flac',
+  'aac',
+  'ogg',
+  'wma',
+  'm4a',
+  'aiff',
+  'ape',
+  // Documents
+  'pdf',
+  'doc',
+  'docx',
+  'xls',
+  'xlsx',
+  'ppt',
+  'pptx',
+  'odt',
+  'ods',
+  'odp',
+  // Archives
+  'zip',
+  'rar',
+  '7z',
+  'tar',
+  'gz',
+  'bz2',
+  'xz',
+  'iso',
+  'dmg',
+  'pkg',
+  'deb',
+  'rpm',
+  // Executables/Binary
+  'exe',
+  'dll',
+  'so',
+  'dylib',
+  'bin',
+  'dat',
+  'class',
+  'o',
+  'pyc',
+  'pyo',
+  'wasm',
+  // Database
+  'db',
+  'sqlite',
+  'mdb',
+  'accdb',
+  // Other Binary
+  'ttf',
+  'otf',
+  'woff',
+  'woff2',
+  'eot',
+]);
 
 /**
- * Discovers all files within the workspace or a specific directory, respecting gitignore rules.
+ * Discovers all files within the workspace or a specific directory, respecting gitignore rules
+ * and excluding binary/non-text files.
  *
  * @param targetDir - Optional directory to limit file discovery; defaults to entire repo.
- * @returns ResultAsync containing deduplicated repo-relative file paths; AppError when targetDir is invalid.
+ * @returns ResultAsync containing deduplicated repo-relative file paths; AppError when git fails.
  * @throws Never throws. Errors flow via AppError in Result/ResultAsync.
  */
 const discoverFiles = (targetDir?: string): ResultAsync<string[], AppError> => {
-  return gitUtils.gitGetRepoRoot().andThen((repoRoot) => {
-    const scanRoot = targetDir ?? repoRoot;
+  const scanRoot = targetDir ?? '.';
 
-    return fsUtils.fsToRepoRelativePath(scanRoot).andThen((normalizedDir) =>
-      fsUtils.fsStat(normalizedDir).andThen((stat) => {
-        if (!stat.isDirectory()) {
-          return errAsync(
-            createAppError('VALIDATION_ERROR', `Target path '${targetDir}' is not a directory`, {
-              targetDir,
-            }),
-          );
-        }
+  return gitUtils.gitListTrackedFiles(scanRoot).map((files) => {
+    const filteredFiles = files.filter((file) => {
+      const ext = path.extname(file).slice(1).toLowerCase();
+      return !HARD_EXCLUDED_EXTENSIONS.has(ext);
+    });
 
-        return fsUtils.fsListFilesRecursive(normalizedDir).map((files) => {
-          const relativeFiles = files.map((file) => path.relative(repoRoot, file));
-          const seen = new Set<string>();
-          const deduped: string[] = [];
+    const seen = new Set<string>();
+    const deduped: string[] = [];
 
-          relativeFiles.forEach((file) => {
-            if (seen.has(file)) return;
-            seen.add(file);
-            deduped.push(file);
-          });
+    filteredFiles.forEach((file) => {
+      if (seen.has(file)) return;
+      seen.add(file);
+      deduped.push(file);
+    });
 
-          return deduped;
-        });
-      }),
-    );
+    return deduped;
   });
 };
 

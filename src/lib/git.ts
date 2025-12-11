@@ -19,6 +19,7 @@ export type GitUtils = {
   gitCheckBranchExists: (branch: string) => ResultAsync<boolean, AppError>;
   gitGetRepoRoot: () => ResultAsync<string, AppError>;
   gitGetDiffAgainst: (baseRef: string, headRef?: string) => ResultAsync<string, AppError>;
+  gitListTrackedFiles: (targetDir?: string) => ResultAsync<string[], AppError>;
 };
 
 /**
@@ -188,12 +189,36 @@ const gitGetDiffAgainst = (baseRef: string, headRef = 'HEAD') => {
   );
 };
 
+/**
+ * Lists all files tracked by git (not ignored) within the repository or a specific directory.
+ *
+ * @param targetDir - Optional directory to filter results; defaults to entire repo.
+ * @returns ResultAsync containing array of repo-relative file paths; AppError when git fails.
+ * @throws Never throws. Errors flow via AppError in Result/ResultAsync.
+ */
+const gitListTrackedFiles = (targetDir?: string): ResultAsync<string[], AppError> => {
+  const args = ['ls-files'];
+  if (targetDir) {
+    args.push(targetDir);
+  }
+
+  return gitRun(args).map((result) => {
+    const files = result.stdout
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+
+    return files;
+  });
+};
+
 export const gitUtils: GitUtils = {
   gitFetchPrune,
   ensureInsideGitRepo,
   gitCheckBranchExists,
   gitGetRepoRoot,
   gitGetDiffAgainst,
+  gitListTrackedFiles,
 };
 
 /**
