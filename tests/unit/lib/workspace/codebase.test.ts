@@ -39,9 +39,10 @@ describe('workspaceCodebase.parseCodebaseIndex', () => {
 
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
+      expect(result.value.files).toHaveLength(1);
       expect(result.value.generatedAt).toBe('2025-12-10T00:00:00.000Z');
-      expect(result.value.files[0].path).toBe('src/index.ts');
-      expect(result.value.files[0].description).toBe('Main entry point');
+      expect(result.value.files[0]?.path).toBe('src/index.ts');
+      expect(result.value.files[0]?.description).toBe('Main entry point');
     }
   });
 
