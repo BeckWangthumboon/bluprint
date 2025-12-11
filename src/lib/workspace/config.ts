@@ -14,6 +14,11 @@ type WorkspaceRulesPaths = {
   indexPath: string;
 };
 
+type WorkspaceCodebasePaths = {
+  root: string;
+  semanticIndexPath: string;
+};
+
 type WorkspaceStatePaths = {
   root: string;
   planPath: string;
@@ -25,6 +30,7 @@ type WorkspacePaths = {
   root: string;
   specPath: string;
   rules: WorkspaceRulesPaths;
+  codebase: WorkspaceCodebasePaths;
   state: WorkspaceStatePaths;
 };
 
@@ -87,6 +93,7 @@ const parsePathField = (value: unknown, fieldName: string): Result<string, AppEr
 // Derives default workspace-relative paths for rules, state, and spec storage.
 const deriveWorkspaceDefaults = (root: string): WorkspacePaths => {
   const rulesRoot = path.join(root, 'rules');
+  const codebaseRoot = path.join(root, 'codebase');
   const stateRoot = path.join(root, 'state');
   const evaluationsRoot = path.join(stateRoot, 'evaluations');
   const specPath = path.join(root, 'spec', 'spec.yaml');
@@ -97,6 +104,10 @@ const deriveWorkspaceDefaults = (root: string): WorkspacePaths => {
     rules: {
       root: rulesRoot,
       indexPath: path.join(rulesRoot, 'index.json'),
+    },
+    codebase: {
+      root: codebaseRoot,
+      semanticIndexPath: path.join(codebaseRoot, 'semantic_index.json'),
     },
     state: {
       root: stateRoot,
@@ -134,6 +145,39 @@ const parseWorkspaceRules = (
   return ok({
     root: root.value,
     indexPath: indexPath.value,
+  });
+};
+
+// Parses the workspace.codebase section with defaults applied.
+const parseWorkspaceCodebase = (
+  input: unknown,
+  defaults: WorkspaceCodebasePaths,
+): Result<WorkspaceCodebasePaths, AppError> => {
+  if (input !== undefined && !isRecord(input)) {
+    return err(
+      createAppError(
+        'CONFIG_PARSE_ERROR',
+        `${CONFIG_FILE_PATH} workspace.codebase must be an object`,
+      ),
+    );
+  }
+
+  const data = isRecord(input) ? input : {};
+  const root = data.root ? parsePathField(data.root, 'workspace.codebase.root') : ok(defaults.root);
+  if (root.isErr()) {
+    return err(root.error);
+  }
+
+  const indexPath = data.indexPath
+    ? parsePathField(data.indexPath, 'workspace.codebase.indexPath')
+    : ok(path.join(root.value, 'semantic_index.json'));
+  if (indexPath.isErr()) {
+    return err(indexPath.error);
+  }
+
+  return ok({
+    root: root.value,
+    semanticIndexPath: indexPath.value,
   });
 };
 
@@ -215,6 +259,11 @@ const parseWorkspaceSection = (workspace: unknown): Result<WorkspacePaths, AppEr
     return err(rulesResult.error);
   }
 
+  const codebaseResult = parseWorkspaceCodebase(workspaceData.codebase, defaults.codebase);
+  if (codebaseResult.isErr()) {
+    return err(codebaseResult.error);
+  }
+
   const stateResult = parseWorkspaceState(workspaceData.state, defaults.state);
   if (stateResult.isErr()) {
     return err(stateResult.error);
@@ -224,6 +273,7 @@ const parseWorkspaceSection = (workspace: unknown): Result<WorkspacePaths, AppEr
     root,
     specPath: specPathResult.value,
     rules: rulesResult.value,
+    codebase: codebaseResult.value,
     state: stateResult.value,
   });
 };
@@ -374,6 +424,7 @@ const ensureWorkspace = (config: BluprintConfig): ResultAsync<WorkspacePaths, Ap
     .fsMkdir(workspace.root)
     .andThen(() => fsUtils.fsMkdir(path.dirname(workspace.specPath)))
     .andThen(() => fsUtils.fsMkdir(workspace.rules.root))
+    .andThen(() => fsUtils.fsMkdir(workspace.codebase.root))
     .andThen(() => fsUtils.fsMkdir(workspace.state.root))
     .andThen(() => fsUtils.fsMkdir(workspace.state.evaluationsRoot))
     .andThen(() => ensureFile(workspace.rules.indexPath, JSON.stringify({ rules: [] }, null, 2)))
@@ -398,4 +449,10 @@ export const configUtils = {
   loadConfig,
   writeConfig,
 };
-export type { BluprintConfig, WorkspacePaths, WorkspaceRulesPaths, WorkspaceStatePaths };
+export type {
+  BluprintConfig,
+  WorkspacePaths,
+  WorkspaceRulesPaths,
+  WorkspaceCodebasePaths,
+  WorkspaceStatePaths,
+};
