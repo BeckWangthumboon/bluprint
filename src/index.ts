@@ -5,7 +5,8 @@ import { hideBin } from 'yargs/helpers';
 import { init } from './commands/init.js';
 import { rules, validateRulesArgs } from './commands/rules.js';
 import { plan } from './commands/plan.js';
-import type { InitArgs, RulesArgs, PlanArgs } from './types/commands.js';
+import { index } from './commands/index.js';
+import type { InitArgs, RulesArgs, PlanArgs, IndexArgs } from './types/commands.js';
 import { displayError, displaySuccess } from './lib/exit.js';
 
 yargs(hideBin(process.argv))
@@ -111,13 +112,22 @@ yargs(hideBin(process.argv))
       );
     },
   )
-  /*
-  .command<CheckArgs>(
-    'check',
-    'Evaluate the current branch against the Bluprint spec',
-    (cmd) => cmd,
+  .command<IndexArgs>(
+    'index',
+    'Generate a semantic index of codebase files',
+    (cmd) => {
+      cmd.option('json', {
+        type: 'boolean',
+        description: 'Output json only',
+        default: false,
+      });
+      cmd.option('directory', {
+        type: 'string',
+        description: 'Limit indexing to a specific subdirectory',
+      });
+    },
     async (argv) => {
-      const result = await check(argv);
+      const result = await index(argv);
 
       result.match(
         (successInfo) => {
@@ -131,7 +141,6 @@ yargs(hideBin(process.argv))
       );
     },
   )
-    */
   .strict()
   .demandCommand(1)
   .version('0.0.1')
