@@ -22,7 +22,7 @@ const createModelSummarizer = () =>
           {
             role: 'system',
             content:
-              'Analyze the source code file and provide a concise summary paragraph highlighting its key exports, responsibilities, and purpose. Focus on what the code does and what it provides to other parts of the system. Be specific about exported functions, classes, or constants.',
+              'Generate a brief 1-2 sentence summary (max 200 characters) of this code file. Focus on its primary purpose and key exports. Be concise and specific.',
           },
           {
             role: 'user',
