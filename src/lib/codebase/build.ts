@@ -1,4 +1,4 @@
-import { errAsync, ResultAsync, okAsync } from 'neverthrow';
+import { errAsync, ResultAsync } from 'neverthrow';
 import type { CodebaseIndex, CodebaseFileEntry } from '../../types/codebase.js';
 import { fileDiscovery } from './discover.js';
 import { fileDescriber } from './describe.js';
