@@ -22,7 +22,7 @@ const generateFileDescription = (
         path: filePath,
         content: fileContent,
       })
-        .map((text) => text.slice(0, 2000))
+        .map((text) => text.trim().slice(0, 200))
         .orElse(() => okAsync('')),
     )
     .orElse(() => okAsync(''));
