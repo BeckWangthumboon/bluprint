@@ -11,12 +11,12 @@ Bluprint is a TypeScript CLI that layers responsibilities to keep the entrypoint
 ## Library Layer (`src/lib`)
 
 - `fs.ts` – Repository-scoped filesystem helpers (`fsMkdir`, `fsMove`, `fsCheckAccess`, `fsStat`, `fsReadFile`, `fsWriteFile`). All paths are normalized to the repo root and wrapped in `ResultAsync` with `AppError` mapping.
-- `git.ts` – Safe Git wrappers (`gitFetchPrune`, `gitCheckBranchExists`, `gitGetRepoRoot`, `ensureInsideGitRepo`). Uses child processes, caches the repo root, and returns `ResultAsync` errors with stable codes.
+- `git.ts` – Safe Git wrappers (`gitFetchPrune`, `gitCheckBranchExists`, `gitGetRepoRoot`, `gitListTrackedFiles`, `ensureInsideGitRepo`). Uses child processes, caches the repo root, and returns `ResultAsync` errors with stable codes.
 - `exit.ts` – Presentation helpers for CLI output. Maps `AppErrorCode` values to deterministic exit codes and formats success/error messages for stdout/stderr.
 - `utils.ts` – Shared utilities: `isRecord` (type guard for plain objects), `safeJsonParse` (neverthrow wrapper for JSON.parse).
+- `codebase/**`: discover.ts (git-aware file discovery with binary exclusion), describe.ts (LLM file descriptions), build.ts (index orchestration).
 - `rules/**`: discover.ts (find/filter rule files), normalize.ts (build/summarize RuleReferences), manifest.ts (write rules index manifest).
-- `workspace/**`: config.ts (load/write workspace config), spec.ts (load workspace spec), rules.ts (load/write rules index), plan.ts (load/write plan file).
-
+- `workspace/**`: config.ts (load/write workspace config), spec.ts (load workspace spec), rules.ts (load/write rules index), plan.ts (load/write plan file), codebase.ts (load/write codebase index).
 
 ## Shared Types (`src/types`)
 
