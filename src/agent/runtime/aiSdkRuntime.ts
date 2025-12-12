@@ -1,4 +1,4 @@
-import { ResultAsync, type Result } from 'neverthrow';
+import { errAsync, ResultAsync, type Result } from 'neverthrow';
 import {
   generateText,
   type LanguageModel,
@@ -10,7 +10,14 @@ import { getModel } from '../llm/registry.js';
 import { createAppError, type AppError } from '../../types/errors.js';
 import type { Tool } from '../tools/types.js';
 import { formatToolError } from '../tools/errors.js';
-import type { AgentRuntime, AgentMessage } from './types.js';
+import type {
+  AgentRuntime,
+  AgentMessage,
+  AgentStep,
+  AgentToolCall,
+  GenerateTextResult,
+  GenerateObjectResult,
+} from './types.js';
 
 class AiSdkRuntime implements AgentRuntime {
   private readonly model: LanguageModel;
@@ -21,23 +28,99 @@ class AiSdkRuntime implements AgentRuntime {
 
   generateText(args: {
     messages: AgentMessage[];
+    tools?: Tool[];
     temperature?: number;
     maxTokens?: number;
-    tools?: Tool[];
-  }): ResultAsync<string, AppError> {
+    stop?: { maxSteps?: number };
+    onStepFinish?: (step: AgentStep) =>Promise<void> | void;
+  }): ResultAsync<GenerateTextResult, AppError> {
     const aiMessages = this.mapMessages(args.messages);
     const aiSdkTools = args.tools && args.tools.length > 0 ? this.mapTools(args.tools) : undefined;
 
+    // Track steps for our result
+    const steps: AgentStep[] = [];
+
     return ResultAsync.fromPromise(
-      generateText({
-        model: this.model,
-        messages: aiMessages,
-        temperature: args.temperature,
-        maxOutputTokens: args.maxTokens,
-        tools: aiSdkTools,
-      }),
+      (async (): Promise<GenerateTextResult> => {
+        const result = await generateText({
+          model: this.model,
+          messages: aiMessages,
+          temperature: args.temperature,
+          maxOutputTokens: args.maxTokens,
+          tools: aiSdkTools,
+          // TODO: Add step limiting when AI SDK version supports it
+          // Adapt each AI SDK step to our format and invoke callback
+          onStepFinish: async (aiStep) => {
+            const adaptedStep = this.adaptStep(aiStep, steps.length);
+            steps.push(adaptedStep);
+            await args.onStepFinish?.(adaptedStep);
+          },
+        });
+
+        return {
+          text: result.text,
+          steps,
+          finishReason: result.finishReason,
+          usage: result.usage as
+            | {
+                promptTokens?: number;
+                completionTokens?: number;
+                totalTokens?: number;
+              }
+            | undefined,
+        };
+      })(),
       (error) => this.toAppError(error, aiMessages),
-    ).map((result) => result.text);
+    );
+  }
+
+  generateObject<TObject>(args: {
+    messages: AgentMessage[];
+    schema: unknown;
+    temperature?: number;
+    maxTokens?: number;
+  }): ResultAsync<GenerateObjectResult<TObject>, AppError> {
+    // Stub for future implementation
+    return errAsync(
+      createAppError(
+        'LLM_ERROR',
+        'generateObject is not yet implemented. Use generateText with tools for now.',
+      ),
+    );
+  }
+
+  /**
+   * Adapts an AI SDK step to our AgentStep format.
+   */
+  private adaptStep(aiStep: any, index: number): AgentStep {
+    // Extract tool calls from the AI SDK step
+    const toolCalls: AgentToolCall[] = [];
+
+    if (aiStep.toolCalls && Array.isArray(aiStep.toolCalls)) {
+      for (const call of aiStep.toolCalls) {
+        toolCalls.push({
+          id: call.toolCallId || String(toolCalls.length),
+          name: call.toolName,
+          args: call.args,
+        });
+      }
+    }
+
+    // Extract messages from the AI SDK step
+    const messages: AgentMessage[] = [];
+    if (aiStep.text) {
+      messages.push({
+        role: 'assistant',
+        content: aiStep.text,
+      });
+    }
+
+    return {
+      index,
+      messages,
+      toolCalls,
+      finishReason: aiStep.finishReason,
+    };
   }
 
   private mapMessages(messages: AgentMessage[]): ModelMessage[] {
