@@ -127,7 +127,7 @@ const createModelSummarizer = (): Result<RuleSummarizer, AppError> =>
           ],
           temperature: 0.2,
         })
-        .andThen((text) => validateModelResponse(text, input.path)),
+        .andThen((result) => validateModelResponse(result.text, input.path)),
   );
 
 export const ruleSummarizer = {
