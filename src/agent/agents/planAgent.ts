@@ -1,12 +1,12 @@
-import { err, ok, Result, ResultAsync } from 'neverthrow';
+import { errAsync, ok, Result, ResultAsync } from 'neverthrow';
 import { createAgentRuntime } from '../runtime/index.js';
 import { toolRegistry } from '../tools/index.js';
-import type { Plan, TodoTask } from '../../types/tasks.js';
+import { createSubmitPlanTool, planSchema } from '../tools/submitPlan.js';
+import type { Plan } from '../../types/tasks.js';
 import type { Specification } from '../../types/spec.js';
-import type { RulesIndex, RuleReference } from '../../types/rules.js';
+import type { RulesIndex } from '../../types/rules.js';
 import type { AppError } from '../../types/errors.js';
 import { createAppError } from '../../types/errors.js';
-import { isRecord, safeJsonParse, unwrapCodeFence } from '../../lib/utils.js';
 
 type PlanAgentInput = {
   spec: Specification;
@@ -35,18 +35,24 @@ const generateSpecId = (spec: Specification): string => {
 const buildSystemPrompt =
   (): string => `You are a technical planning agent that breaks down specifications into actionable tasks.
 
-AVAILABLE TOOLS:
-- viewFile: Use this FIRST to scan the codebase and understand the current state before planning. Read relevant files to understand the architecture.
-- lookupRules: Use this only when the rules index description is ambiguous and you need more detail about a specific rule.
+WORKFLOW:
+1. First, use the viewFile tool to explore the codebase and understand the current architecture.
+2. Review the specification and rules index provided in the user message.
+3. Use lookupRules only if a rule's description is ambiguous and you need more detail.
+4. When you are ready to submit your final plan, use the submitPlan tool.
 
-YOUR TASK:
-1. Review the specification and rules index provided.
-2. Use viewFile to understand the current codebase structure relevant to the specification.
-3. Break down the specification into actionable tasks in the format below.
-4. Each task MUST have at least one rule assigned from the rules index. Rules serve as "context engineering" for downstream coding agents.
+IMPORTANT - TOOL USAGE:
+- Use viewFile and lookupRules freely to gather context before planning.
+- The submitPlan tool is ONLY for your FINAL answer. Do not call it until you have fully analyzed the codebase and are ready to submit your complete plan.
 
-OUTPUT FORMAT:
-Respond with a JSON object matching the Plan schema:
+PLAN REQUIREMENTS:
+- Every task MUST have at least one rule assigned from the rules index.
+- Rules serve as "context engineering" for downstream coding agents.
+- Rules should be copied exactly from the rules index (id, description, path, tags).
+- Tasks should be ordered by dependencies (independent tasks first).
+- Each task needs: id, title, instructions, and at least one rule.
+
+PLAN SCHEMA (for submitPlan):
 {
   "id": "<generated-id>",
   "summary": "Brief description of what the plan accomplishes",
@@ -74,13 +80,7 @@ Respond with a JSON object matching the Plan schema:
       "dependencies": ["optional-task-id-this-depends-on"]
     }
   ]
-}
-
-IMPORTANT:
-- Every task MUST have at least one rule assigned
-- Rules should be copied exactly from the rules index
-- Tasks should be ordered by dependencies (independent tasks first)
-- Return ONLY valid JSON, no markdown code fences`;
+}`;
 
 /**
  * Formats the specification and rules index into a structured message for the LLM.
@@ -115,148 +115,26 @@ ${rulesIndex.rules.map((r) => `- [${r.id}] ${r.description} (tags: ${r.tags.join
 };
 
 /**
- * Validates a single task from the LLM response.
- */
-const validateTask = (entry: unknown, index: number): Result<TodoTask, AppError> => {
-  if (!isRecord(entry)) {
-    return err(createAppError('LLM_ERROR', `Task at index ${index} must be an object`));
-  }
-
-  if (typeof entry.id !== 'string' || !entry.id.trim()) {
-    return err(createAppError('LLM_ERROR', `Task at index ${index} must have a non-empty id`));
-  }
-
-  if (typeof entry.title !== 'string' || !entry.title.trim()) {
-    return err(createAppError('LLM_ERROR', `Task at index ${index} must have a non-empty title`));
-  }
-
-  if (typeof entry.instructions !== 'string' || !entry.instructions.trim()) {
-    return err(
-      createAppError('LLM_ERROR', `Task at index ${index} must have non-empty instructions`),
-    );
-  }
-
-  if (!Array.isArray(entry.rules) || entry.rules.length === 0) {
-    return err(
-      createAppError('LLM_ERROR', `Task at index ${index} must have at least one rule assigned`),
-    );
-  }
-
-  const rules: RuleReference[] = [];
-  for (const rule of entry.rules) {
-    if (
-      !isRecord(rule) ||
-      typeof rule.id !== 'string' ||
-      typeof rule.description !== 'string' ||
-      typeof rule.path !== 'string' ||
-      !Array.isArray(rule.tags)
-    ) {
-      return err(createAppError('LLM_ERROR', `Invalid rule in task at index ${index}`));
-    }
-    rules.push({
-      id: rule.id,
-      description: rule.description,
-      path: rule.path,
-      tags: rule.tags as string[],
-    });
-  }
-
-  const task: TodoTask = {
-    id: entry.id.trim(),
-    title: entry.title.trim(),
-    instructions: entry.instructions.trim(),
-    rules,
-  };
-
-  if (entry.kind && typeof entry.kind === 'string') {
-    task.kind = entry.kind as TodoTask['kind'];
-  }
-
-  if (isRecord(entry.scope)) {
-    task.scope = {};
-    if (Array.isArray(entry.scope.files)) {
-      task.scope.files = entry.scope.files as string[];
-    }
-    if (Array.isArray(entry.scope.includeGlobs)) {
-      task.scope.includeGlobs = entry.scope.includeGlobs as string[];
-    }
-    if (Array.isArray(entry.scope.excludeGlobs)) {
-      task.scope.excludeGlobs = entry.scope.excludeGlobs as string[];
-    }
-  }
-
-  if (Array.isArray(entry.acceptanceCriteria)) {
-    task.acceptanceCriteria = entry.acceptanceCriteria as string[];
-  }
-
-  if (Array.isArray(entry.dependencies)) {
-    task.dependencies = entry.dependencies as string[];
-  }
-
-  if (isRecord(entry.metaData)) {
-    task.metaData = entry.metaData as Record<string, unknown>;
-  }
-
-  return ok(task);
-};
-
-/**
- * Validates and parses the LLM response into a Plan object.
- */
-const validatePlanResponse = (raw: string, specId: string): Result<Plan, AppError> => {
-  const normalized = unwrapCodeFence(raw);
-  const parseResult = safeJsonParse(normalized);
-
-  if (parseResult.isErr()) {
-    return err(
-      createAppError('LLM_ERROR', `Model response is not valid JSON: ${parseResult.error.message}`),
-    );
-  }
-
-  const parsed = parseResult.value;
-
-  if (!isRecord(parsed)) {
-    return err(createAppError('LLM_ERROR', 'Model response must be a JSON object'));
-  }
-
-  if (!Array.isArray(parsed.tasks)) {
-    return err(createAppError('LLM_ERROR', 'Model response must include a tasks array'));
-  }
-
-  const tasks: TodoTask[] = [];
-  for (let i = 0; i < parsed.tasks.length; i++) {
-    const taskResult = validateTask(parsed.tasks[i], i);
-    if (taskResult.isErr()) {
-      return err(taskResult.error);
-    }
-    tasks.push(taskResult.value);
-  }
-
-  const plan: Plan = {
-    id: typeof parsed.id === 'string' && parsed.id.trim() ? parsed.id.trim() : specId,
-    tasks,
-  };
-
-  if (typeof parsed.summary === 'string' && parsed.summary.trim()) {
-    plan.summary = parsed.summary.trim();
-  }
-
-  if (Array.isArray(parsed.notes)) {
-    plan.notes = parsed.notes.filter((n): n is string => typeof n === 'string' && n.trim() !== '');
-  }
-
-  return ok(plan);
-};
-
-/**
  * Creates a plan generation agent that uses LLM with tools to break down specifications.
+ *
+ * The agent uses step-based detection to capture when the model calls submitPlan.
  *
  * @returns Result containing a PlanAgent function or AppError when runtime creation fails.
  */
 const createPlanAgent = (): Result<PlanAgent, AppError> =>
   createAgentRuntime().map((runtime) => (input) => {
-    const tools = toolRegistry.pick(['lookupRules', 'viewFile']);
-    const specId = generateSpecId(input.spec);
+    // Track submitted plan
+    let submittedPlan: Plan | null = null;
+
+    // Get exploration tools
+    const explorationTools = toolRegistry.pick(['lookupRules', 'viewFile']);
+    
+    // Create submitPlan tool (no callback needed anymore)
+    const submitPlanTool = createSubmitPlanTool(() => {
+      // This callback is never called with the new approach
+    });
+
+    const tools = [...explorationTools, submitPlanTool];
 
     return runtime
       .generateText({
@@ -272,8 +150,32 @@ const createPlanAgent = (): Result<PlanAgent, AppError> =>
         ],
         temperature: 0.3,
         tools,
+        // No maxSteps limit - let the model explore as needed
+        onStepFinish: (step) => {
+          // Check each tool call in this step
+          for (const toolCall of step.toolCalls) {
+            if (toolCall.name === 'submitPlan') {
+              // Validate and extract the plan from tool call args
+              const validation = planSchema.safeParse(toolCall.args);
+              if (validation.success) {
+                submittedPlan = validation.data as Plan;
+              }
+            }
+          }
+        },
       })
-      .andThen((text) => validatePlanResponse(text, specId));
+      .andThen((result) => {
+        if (submittedPlan === null) {
+          return errAsync(
+            createAppError(
+              'LLM_ERROR',
+              `Plan agent did not submit a plan within ${result.steps.length} step(s). The model should call submitPlan with the final plan.`,
+            ),
+          );
+        }
+
+        return ResultAsync.fromSafePromise(Promise.resolve(submittedPlan));
+      });
   });
 
 export const planAgent = {
