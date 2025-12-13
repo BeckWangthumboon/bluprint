@@ -29,7 +29,7 @@ describe('index command', () => {
     vi.spyOn(codebaseIndexer, 'buildCodebaseIndex').mockReturnValue(okAsync(mockIndex));
     vi.spyOn(workspaceCodebase, 'writeCodebaseIndex').mockReturnValue(okAsync(undefined));
 
-    const result = await index({ json: false });
+    const result = await index({ directory: '.', json: false });
 
     expect(result.isOk()).toBe(true);
     expect(workspaceCodebase.writeCodebaseIndex).toHaveBeenCalledWith(mockIndex);
@@ -47,7 +47,7 @@ describe('index command', () => {
     vi.spyOn(configUtils, 'loadConfig').mockReturnValue(okAsync(mockConfig as any));
     vi.spyOn(codebaseIndexer, 'buildCodebaseIndex').mockReturnValue(okAsync(mockIndex));
 
-    const result = await index({ json: true });
+    const result = await index({ directory: '.', json: true });
 
     expect(result.isOk()).toBe(true);
     expect(console.log).toHaveBeenCalledWith(JSON.stringify(mockIndex, null, 2));
@@ -76,7 +76,7 @@ describe('index command', () => {
     const { errAsync } = require('neverthrow');
     vi.spyOn(configUtils, 'loadConfig').mockReturnValue(errAsync(error));
 
-    const result = await index({ json: false });
+    const result = await index({ directory: '.', json: false });
 
     expect(result.isErr()).toBe(true);
   });
