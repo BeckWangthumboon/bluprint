@@ -57,8 +57,6 @@ const buildRuleReference = (
 /**
  * Generates RuleReferences for a list of sources using the provided summarizer.
  *
- * Processes rules sequentially to avoid overwhelming the LLM API with parallel requests.
- *
  * @param sources - Discovered rule sources to summarize.
  * @param summarize - Function that generates a description and tags from path/content.
  * @returns ResultAsync containing all RuleReferences; AppError when any summarization or read fails.
@@ -68,7 +66,6 @@ const buildRuleReferences = (
   sources: RuleSource[],
   summarize: RuleSummarizer,
 ): ResultAsync<RuleReference[], AppError> => {
-  // Process rules sequentially to avoid API rate limits and connection issues
   let chain: ResultAsync<RuleReference[], AppError> = okAsync([]);
 
   for (const source of sources) {
