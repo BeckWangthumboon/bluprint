@@ -1,30 +1,33 @@
-import { ResultAsync, type Result } from 'neverthrow';
+import { ResultAsync } from 'neverthrow';
 import {
   generateText,
+  generateObject,
   type LanguageModel,
   type ModelMessage,
   type Tool as AiSdkTool,
   type ToolSet,
+  stepCountIs,
+  type StepResult,
 } from 'ai';
-import { getModel } from '../llm/registry.js';
 import { createAppError, type AppError } from '../../types/errors.js';
 import type { Tool } from '../tools/types.js';
 import { formatToolError } from '../tools/errors.js';
-import type { AgentRuntime, AgentMessage } from './types.js';
+import type {
+  AgentRuntime,
+  AgentMessage,
+  GenerateObjectArgs,
+  GenerateTextArgs,
+  RuntimeStep,
+} from './core.js';
 
 class AiSdkRuntime implements AgentRuntime {
   private readonly model: LanguageModel;
 
-  constructor(model: LanguageModel) {
+  constructor(model: LanguageModel, _config: Config) {
     this.model = model;
   }
 
-  generateText(args: {
-    messages: AgentMessage[];
-    temperature?: number;
-    maxTokens?: number;
-    tools?: Tool[];
-  }): ResultAsync<string, AppError> {
+  generateText(args: GenerateTextArgs) {
     const aiMessages = this.mapMessages(args.messages);
     const aiSdkTools = args.tools && args.tools.length > 0 ? this.mapTools(args.tools) : undefined;
 
@@ -35,9 +38,40 @@ class AiSdkRuntime implements AgentRuntime {
         temperature: args.temperature,
         maxOutputTokens: args.maxTokens,
         tools: aiSdkTools,
+        stopWhen: args.maxSteps ? stepCountIs(args.maxSteps) : undefined,
       }),
       (error) => this.toAppError(error, aiMessages),
-    ).map((result) => result.text);
+    ).map((result) => ({
+      text: result.text,
+      steps: this.mapSteps(result.steps),
+      usage: {
+        inputTokens: result.totalUsage.inputTokens,
+        outputTokens: result.totalUsage.outputTokens,
+      },
+    }));
+  }
+
+  generateObject<T>(args: GenerateObjectArgs<T>) {
+    const aiMessages = this.mapMessages(args.messages);
+    return ResultAsync.fromPromise(
+      (async () => {
+        const res = await generateObject({
+          model: this.model,
+          messages: aiMessages,
+          schema: args.schema,
+          temperature: args.temperature,
+          maxOutputTokens: args.maxTokens,
+        });
+        return {
+          object: res.object as T,
+          usage: {
+            inputTokens: res.usage.inputTokens,
+            outputTokens: res.usage.outputTokens,
+          },
+        };
+      })(),
+      (error) => this.toAppError(error, aiMessages),
+    );
   }
 
   private mapMessages(messages: AgentMessage[]): ModelMessage[] {
@@ -58,18 +92,34 @@ class AiSdkRuntime implements AgentRuntime {
         description: tool.description,
         inputSchema: tool.inputSchema,
         outputSchema: tool.outputSchema,
-        execute: (input) =>
-          tool
-            .call(input)
-            .map((value) => value)
-            .mapErr((error) => formatToolError(tool.name, error))
-            .match(
-              (value) => value,
-              (formattedError) => formattedError,
-            ),
+        execute: async (input) => {
+          return await tool.call(input).mapErr((error) => formatToolError(tool.name, error));
+        },
       };
       return acc;
     }, {});
+  }
+
+  private mapSteps(steps: StepResult<any>[]): RuntimeStep[] {
+    return steps.map((step, index) => ({
+      stepNumber: index + 1,
+      text: step.text,
+      finishReason: step.finishReason,
+      usage: step.usage
+        ? {
+            inputTokens: step.usage.inputTokens,
+            outputTokens: step.usage.outputTokens,
+          }
+        : undefined,
+      toolCalls: step.toolCalls?.map((tc) => ({
+        toolName: tc.toolName,
+        args: tc.input,
+      })),
+      toolResults: step.toolResults?.map((tr) => ({
+        toolName: tr.toolName,
+        result: tr.output,
+      })),
+    }));
   }
 
   // TODO: move this to utils file
@@ -87,17 +137,12 @@ class AiSdkRuntime implements AgentRuntime {
         typeof error === 'object' &&
         'code' in error &&
         'message' in error &&
+        typeof (error as { code: unknown }).code === 'string' &&
         typeof (error as { message: unknown }).message === 'string',
     );
   }
 }
 
-/**
- * Creates an AgentRuntime backed by the AI SDK for text generation.
- *
- * @returns Result containing a ready runtime instance or AppError when model resolution fails. Never throws; errors flow via AppError in Result.
- */
-const createAiSdkRuntime = (): Result<AgentRuntime, AppError> =>
-  getModel().map((model) => new AiSdkRuntime(model));
+type Config = {};
 
-export { createAiSdkRuntime };
+export { AiSdkRuntime, type Config };
