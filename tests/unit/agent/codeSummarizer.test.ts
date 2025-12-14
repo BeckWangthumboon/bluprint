@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ok, okAsync, err, errAsync } from 'neverthrow';
 import { codeSummarizer } from '../../../src/agent/agents/codeSummarizer.js';
-import type { AgentRuntime } from '../../../src/agent/runtime/types.js';
+import type { AgentRuntime } from '../../../src/agent/runtime/core.js';
 import type { AppError } from '../../../src/types/errors.js';
 
 vi.mock('../../../src/agent/runtime/index.js', () => ({
@@ -24,7 +24,13 @@ describe('codeSummarizer.createModelSummarizer', () => {
 
   it('builds a summarizer when runtime is available', async () => {
     const runtime: AgentRuntime = {
-      generateText: () => okAsync('This file exports utility functions for string manipulation.'),
+      generateText: () =>
+        okAsync({
+          text: 'This file exports utility functions for string manipulation.',
+          steps: [],
+          usage: { inputTokens: 100, outputTokens: 50 },
+        }),
+      generateObject: (() => okAsync({ object: {}, usage: {} })) as any,
     };
     createAgentRuntimeMock.mockReturnValue(ok(runtime));
 
@@ -65,6 +71,7 @@ describe('codeSummarizer.createModelSummarizer', () => {
     };
     const runtime: AgentRuntime = {
       generateText: () => errAsync(error),
+      generateObject: (() => okAsync({ object: {}, usage: {} })) as any,
     };
     createAgentRuntimeMock.mockReturnValue(ok(runtime));
 

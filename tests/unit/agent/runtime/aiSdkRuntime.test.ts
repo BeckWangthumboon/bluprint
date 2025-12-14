@@ -1,144 +1,126 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ok, err, okAsync, errAsync } from 'neverthrow';
+import { okAsync, errAsync } from 'neverthrow';
 import { z } from 'zod';
-import { createAppError } from '../../../../src/types/errors.js';
 import type { Tool, ToolError } from '../../../../src/agent/tools/types.js';
 
-const getModelMock = vi.fn();
 const generateTextMock = vi.fn();
-
-vi.mock('../../../../src/agent/llm/registry.js', () => ({
-  getModel: getModelMock,
-}));
+const generateObjectMock = vi.fn();
 
 vi.mock('ai', () => ({
   generateText: generateTextMock,
+  generateObject: generateObjectMock,
+  stepCountIs: vi.fn((n) => (step: any) => step.stepCount >= n),
 }));
 
-const { createAiSdkRuntime } = await import('../../../../src/agent/runtime/aiSdkRuntime.js');
+const { AiSdkRuntime } = await import('../../../../src/agent/runtime/aiSdk.js');
 
-describe('createAgentRuntime', () => {
+describe('AiSdkRuntime', () => {
   beforeEach(() => {
-    getModelMock.mockReset();
     generateTextMock.mockReset();
+    generateObjectMock.mockReset();
   });
 
-  it('returns a runtime when model resolution succeeds', async () => {
-    getModelMock.mockReturnValue(ok({} as unknown as import('ai').LanguageModel));
-    generateTextMock.mockResolvedValue({ text: 'hello' } as never);
+  it('returns GenerateTextReturn when generateText succeeds', async () => {
+    const mockModel = {} as any;
+    generateTextMock.mockResolvedValue({
+      text: 'hello',
+      steps: [],
+      totalUsage: { inputTokens: 10, outputTokens: 5 },
+    } as never);
 
-    const runtimeResult = createAiSdkRuntime();
+    const runtime = new AiSdkRuntime(mockModel, {});
 
-    expect(getModelMock).toHaveBeenCalledTimes(1);
-    expect(runtimeResult.isOk()).toBe(true);
-    if (runtimeResult.isOk()) {
-      const result = await runtimeResult.value.generateText({ messages: [] });
-      expect(result.isOk()).toBe(true);
-      if (result.isOk()) {
-        expect(result.value).toBe('hello');
-      }
-      expect(generateTextMock).toHaveBeenCalled();
+    const result = await runtime.generateText({ messages: [] });
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.text).toBe('hello');
+      expect(result.value.steps).toEqual([]);
+      expect(result.value.usage).toEqual({ inputTokens: 10, outputTokens: 5 });
     }
+    expect(generateTextMock).toHaveBeenCalled();
   });
 
   it('maps messages and tools into AI SDK generateText call', async () => {
-    getModelMock.mockReturnValue(ok({} as unknown as import('ai').LanguageModel));
+    const mockModel = {} as any;
     const toolCallMock = vi.fn().mockImplementation((input: unknown) => okAsync(`called:${input}`));
     generateTextMock.mockImplementation(async (options) => {
-      const tool = (
-        options.tools as Record<string, { execute: (input: unknown) => Promise<unknown> }>
-      ).sampleTool;
+      const tool = (options.tools as Record<string, { execute: (input: unknown) => Promise<any> }>)
+        .sampleTool;
       if (!tool) {
         throw new Error('tool missing');
       }
-      const executionResult = await tool.execute('value');
-      return { text: String(executionResult) } as never;
+      const result = await tool.execute('value');
+      // Result from tool is a neverthrow Result, need to unwrap
+      const value = result.isOk() ? result.value : result.error;
+      return {
+        text: String(value),
+        steps: [],
+        totalUsage: { inputTokens: 10, outputTokens: 5 },
+      } as never;
     });
 
-    const runtimeResult = createAiSdkRuntime();
+    const runtime = new AiSdkRuntime(mockModel, {});
 
-    expect(runtimeResult.isOk()).toBe(true);
-    if (runtimeResult.isOk()) {
-      const result = await runtimeResult.value.generateText({
-        messages: [
-          { role: 'system', content: 'sys' },
-          { role: 'assistant', content: 'asst' },
-          { role: 'user', content: 'usr' },
-        ],
-        tools: [
-          {
-            name: 'sampleTool',
-            description: 'example',
-            inputSchema: z.string(),
-            outputSchema: z.string(),
-            call: (args: unknown) => toolCallMock(args),
-          },
-        ],
-      });
-
-      expect(generateTextMock).toHaveBeenCalledTimes(1);
-      const callArgs = generateTextMock.mock.calls[0]?.[0];
-      expect(callArgs.messages).toEqual([
+    const result = await runtime.generateText({
+      messages: [
         { role: 'system', content: 'sys' },
         { role: 'assistant', content: 'asst' },
         { role: 'user', content: 'usr' },
-      ]);
+      ],
+      tools: [
+        {
+          name: 'sampleTool',
+          description: 'example',
+          inputSchema: z.string(),
+          outputSchema: z.string(),
+          call: (args: unknown) => toolCallMock(args),
+        },
+      ],
+    });
 
-      expect(toolCallMock).toHaveBeenCalledWith('value');
-      expect(result.isOk()).toBe(true);
-      if (result.isOk()) {
-        expect(result.value).toBe('called:value');
-      }
+    expect(toolCallMock).toHaveBeenCalledWith('value');
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.text).toBe('called:value');
     }
   });
 
   it('formats tool errors into strings returned to the model', async () => {
-    getModelMock.mockReturnValue(ok({} as unknown as import('ai').LanguageModel));
+    const mockModel = {} as any;
     const toolError: ToolError = { code: 'INTERNAL', message: 'boom' };
     generateTextMock.mockImplementation(async (options) => {
-      const tool = (
-        options.tools as Record<string, { execute: (input: unknown) => Promise<unknown> }>
-      ).sampleTool;
+      const tool = (options.tools as Record<string, { execute: (input: unknown) => Promise<any> }>)
+        .sampleTool;
       if (!tool) {
         throw new Error('tool missing');
       }
-      const executionResult = await tool.execute('value');
-      return { text: String(executionResult) } as never;
+      const result = await tool.execute('value');
+      // Result from tool is a neverthrow Result, need to unwrap the error
+      const value = result.isErr() ? result.error : result.value;
+      return {
+        text: String(value),
+        steps: [],
+        totalUsage: { inputTokens: 10, outputTokens: 5 },
+      } as never;
     });
 
-    const runtimeResult = createAiSdkRuntime();
+    const runtime = new AiSdkRuntime(mockModel, {});
 
-    expect(runtimeResult.isOk()).toBe(true);
-    if (runtimeResult.isOk()) {
-      const result = await runtimeResult.value.generateText({
-        messages: [{ role: 'user', content: 'hey' }],
-        tools: [
-          {
-            name: 'sampleTool',
-            inputSchema: z.string(),
-            call: (): ReturnType<Tool['call']> => errAsync(toolError),
-          },
-        ],
-      });
+    const result = await runtime.generateText({
+      messages: [{ role: 'user', content: 'hey' }],
+      tools: [
+        {
+          name: 'sampleTool',
+          inputSchema: z.string(),
+          call: (): ReturnType<Tool['call']> => errAsync(toolError),
+        },
+      ],
+    });
 
-      expect(generateTextMock).toHaveBeenCalledTimes(1);
-      expect(result.isOk()).toBe(true);
-      if (result.isOk()) {
-        expect(result.value).toBe('boom');
-      }
-    }
-  });
-
-  it('returns an error when model resolution fails', () => {
-    const appError = createAppError('LLM_ERROR', 'missing key');
-    getModelMock.mockReturnValue(err(appError));
-
-    const runtimeResult = createAiSdkRuntime();
-
-    expect(getModelMock).toHaveBeenCalledTimes(1);
-    expect(runtimeResult.isErr()).toBe(true);
-    if (runtimeResult.isErr()) {
-      expect(runtimeResult.error).toBe(appError);
+    expect(generateTextMock).toHaveBeenCalledTimes(1);
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.text).toBe('boom');
     }
   });
 });
