@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ok, okAsync } from 'neverthrow';
 import { ruleSummarizer } from '../../../src/agent/agents/ruleSummarizer.js';
-import type { AgentRuntime } from '../../../src/agent/runtime/types.js';
+import type { AgentRuntime } from '../../../src/agent/runtime/core.js';
 import type { AppError } from '../../../src/types/errors.js';
 
 vi.mock('../../../src/agent/runtime/index.js', () => ({
@@ -24,7 +24,13 @@ describe('ruleSummarizer.createModelSummarizer', () => {
 
   it('builds a summarizer when runtime is available', async () => {
     const runtime: AgentRuntime = {
-      generateText: () => okAsync('{"description":"desc","tags":["auth"]}'),
+      generateText: () =>
+        okAsync({
+          text: '{"description":"desc","tags":["auth"]}',
+          steps: [],
+          usage: { inputTokens: 100, outputTokens: 50 },
+        }),
+      generateObject: (() => okAsync({ object: {}, usage: {} })) as any,
     };
     createAgentRuntimeMock.mockReturnValue(ok(runtime));
 
@@ -45,7 +51,13 @@ describe('ruleSummarizer.createModelSummarizer', () => {
 
   it('returns error when runtime generateText yields invalid JSON', async () => {
     const runtime: AgentRuntime = {
-      generateText: () => okAsync('not-json'),
+      generateText: () =>
+        okAsync({
+          text: 'not-json',
+          steps: [],
+          usage: { inputTokens: 100, outputTokens: 50 },
+        }),
+      generateObject: (() => okAsync({ object: {}, usage: {} })) as any,
     };
     createAgentRuntimeMock.mockReturnValue(ok(runtime));
 

@@ -17,20 +17,22 @@ export type CodeSummarizer = (input: CodeSummarizerInput) => ResultAsync<string,
 const createModelSummarizer = () =>
   createAgentRuntime().map(
     (runtime) => (input: CodeSummarizerInput) =>
-      runtime.generateText({
-        messages: [
-          {
-            role: 'system',
-            content:
-              'Generate a brief 1-2 sentence summary (max 200 characters) of this code file. Focus on its primary purpose and key exports. Be concise and specific.',
-          },
-          {
-            role: 'user',
-            content: `File path: ${input.path}\n\nContent:\n${input.content}`,
-          },
-        ],
-        temperature: 0.2,
-      }),
+      runtime
+        .generateText({
+          messages: [
+            {
+              role: 'system',
+              content:
+                'Generate a brief 1-2 sentence summary (max 200 characters) of this code file. Focus on its primary purpose and key exports. Be concise and specific.',
+            },
+            {
+              role: 'user',
+              content: `File path: ${input.path}\n\nContent:\n${input.content}`,
+            },
+          ],
+          temperature: 0.2,
+        })
+        .map((result) => result.text),
   );
 
 export const codeSummarizer = {
