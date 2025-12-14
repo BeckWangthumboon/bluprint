@@ -10,13 +10,14 @@
     "vitest": "^4.0.14"
   },
   "peerDependencies": {
-    "typescript": "^5"
+    "typescript": "^5.9.3"
   },
   "scripts": {
     "dev": "bun src/index.ts",
     "test": "vitest run",
     "format": "prettier \"src/**/*.{ts,tsx,js,jsx,json,md}\" \"tests/**/*.{ts,tsx,js,jsx,json,md}\" --write",
-    "format:check": "prettier \"src/**/*.{ts,tsx,js,jsx,json,md}\" \"tests/**/*.{ts,tsx,js,jsx,json,md}\" --check"
+    "format:check": "prettier \"src/**/*.{ts,tsx,js,jsx,json,md}\" \"tests/**/*.{ts,tsx,js,jsx,json,md}\" --check",
+    "typecheck": "tsc --noEmit"
   },
   "bin": {
     "bluprint": "src/index.ts"

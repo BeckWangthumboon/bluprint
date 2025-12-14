@@ -19,7 +19,7 @@
         "vitest": "^4.0.14",
       },
       "peerDependencies": {
-        "typescript": "^5",
+        "typescript": "^5.9.3",
       },
     },
   },
