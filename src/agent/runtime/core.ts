@@ -37,7 +37,6 @@ export type GenerateObjectReturn<T> = {
   object: T;
   usage: RuntimeUsage;
 };
-undefined;
 
 export type RuntimeUsage = {
   inputTokens?: number;
