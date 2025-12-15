@@ -22,31 +22,43 @@ Bluprint is a TypeScript CLI that evaluates feature branches against a spec and 
 
 ## LLM Provider Configuration
 
-Bluprint supports multiple LLM providers. Set the `PROVIDER` environment variable to choose one:
+Bluprint supports multiple LLM providers. Set the `PROVIDER` variable in .env:
 
 ### OpenRouter (default)
+
 ```bash
-export PROVIDER=openrouter  
-export OPENROUTER_API_KEY=your_api_key_here
+#.env
+PROVIDER=openrouter
+OPENROUTER_API_KEY=your_api_key_here
 ```
 
 ### ZAI
+
 ```bash
-export PROVIDER=zai
-export ZAI_API_KEY=your_api_key_here
+#.env
+PROVIDER=zai
+ZAI_API_KEY=your_api_key_here
 ```
 
 ### Google Vertex AI
+
 ```bash
-export PROVIDER=vertex
-export GOOGLE_APPLICATION_CREDENTIALS=./google-cloud-creds.json
+#.env
+PROVIDER=vertex
+GOOGLE_APPLICATION_CREDENTIALS=./google-cloud-creds.json
+GOOGLE_VERTEX_PROJECT=my-gcp-project-id
+GOOGLE_VERTEX_LOCATION=us-central1
 ```
 
 **Setting up Google Vertex AI:**
+
 1. Download a service account JSON key from [Google Cloud Console](https://console.cloud.google.com/iam-admin/serviceaccounts)
 2. Place it at the repository root as `google-cloud-creds.json` (this file is git-ignored)
 3. Ensure the service account has Vertex AI API permissions enabled
-4. Set the `GOOGLE_APPLICATION_CREDENTIALS` environment variable to point to the file
+4. Add to your `.env` file:
+   - `GOOGLE_APPLICATION_CREDENTIALS=./google-cloud-creds.json` (required)
+   - `GOOGLE_VERTEX_PROJECT=your-project-id` (optional, defaults to project from credentials)
+   - `GOOGLE_VERTEX_LOCATION=us-central1` (optional, defaults to `us-central1`)
 
 ## Usage
 
