@@ -14,10 +14,39 @@ Bluprint is a TypeScript CLI that evaluates feature branches against a spec and 
    ```bash
    bun install
    ```
-2. (Optional) Run the test suite to verify your setup:
+2. Configure LLM provider (see [LLM Provider Configuration](#llm-provider-configuration) below)
+3. (Optional) Run the test suite to verify your setup:
    ```bash
    bun run test
    ```
+
+## LLM Provider Configuration
+
+Bluprint supports multiple LLM providers. Set the `PROVIDER` environment variable to choose one:
+
+### OpenRouter (default)
+```bash
+export PROVIDER=openrouter  
+export OPENROUTER_API_KEY=your_api_key_here
+```
+
+### ZAI
+```bash
+export PROVIDER=zai
+export ZAI_API_KEY=your_api_key_here
+```
+
+### Google Vertex AI
+```bash
+export PROVIDER=vertex
+export GOOGLE_APPLICATION_CREDENTIALS=./google-cloud-creds.json
+```
+
+**Setting up Google Vertex AI:**
+1. Download a service account JSON key from [Google Cloud Console](https://console.cloud.google.com/iam-admin/serviceaccounts)
+2. Place it at the repository root as `google-cloud-creds.json` (this file is git-ignored)
+3. Ensure the service account has Vertex AI API permissions enabled
+4. Set the `GOOGLE_APPLICATION_CREDENTIALS` environment variable to point to the file
 
 ## Usage
 
