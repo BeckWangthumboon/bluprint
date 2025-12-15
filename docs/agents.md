@@ -13,8 +13,11 @@
 
 1. `createAgentRuntime` (`src/agent/runtime/index.ts`) delegates to `createAiSdkRuntime`, which wraps the AI SDK `generateText` call and surfaces `ResultAsync<string, AppError>`. It maps `AgentMessage` to SDK messages and, when provided, maps `Tool` definitions into the AI SDK tool shape so the model can call them.
 2. The runtime asks `llm/registry.ts` for a `LanguageModel`. The registry:
-   - Reads `PROVIDER` (defaults to `openrouter`; supports `zai`).
-   - Fetches the provider-specific API key (`OPENROUTER_API_KEY` or `ZAI_API_KEY`); missing keys produce `LLM_ERROR`.
+   - Reads `PROVIDER` (defaults to `openrouter`; supports `zai`, `vertex`).
+   - For `openrouter` and `zai`: fetches the provider-specific API key (`OPENROUTER_API_KEY` or `ZAI_API_KEY`); missing keys produce `LLM_ERROR`.
+   - For `vertex`: uses Google Cloud Application Default Credentials (ADC) for authentication:
+     - **Required**: `GOOGLE_APPLICATION_CREDENTIALS` — Path to a service account JSON key file (e.g., `./google-cloud-creds.json`)
+     - Note: The credentials file should be git-ignored to prevent committing secrets.
    - Builds a provider registry and resolves the model ID for that provider.
 3. Runtime invocation options map directly to the AI SDK: `messages`, optional `temperature`, optional `maxTokens`, and optional `tools`.
 4. Tool errors are formatted via `agent/tools/errors.ts` to return model-friendly strings; SDK failures are converted into `AppError` objects. Callers never handle raw exceptions.
