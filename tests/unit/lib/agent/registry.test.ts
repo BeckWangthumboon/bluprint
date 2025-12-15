@@ -46,6 +46,8 @@ describe('getModel', () => {
     delete process.env.PROVIDER;
     delete process.env.OPENROUTER_API_KEY;
     delete process.env.ZAI_API_KEY;
+    delete process.env.GOOGLE_VERTEX_PROJECT;
+    delete process.env.GOOGLE_VERTEX_LOCATION;
     vi.clearAllMocks();
 
     const mockProvider = {
@@ -166,7 +168,25 @@ describe('getModel', () => {
       expect(model).toEqual(stubLanguageModel('vertex:gemini-2.5-flash'));
     }
     expect(createVertexMock).toHaveBeenCalledTimes(1);
-    expect(createVertexMock).toHaveBeenCalledWith({});
+    expect(createVertexMock).toHaveBeenCalledWith({
+      project: undefined,
+      location: undefined,
+    });
+  });
+
+  it('passes optional vertex env vars to createVertex when set', async () => {
+    process.env.PROVIDER = 'vertex';
+    process.env.GOOGLE_VERTEX_PROJECT = 'my-project';
+    process.env.GOOGLE_VERTEX_LOCATION = 'us-west1';
+    const getModel = await importGetModel();
+
+    const result = getModel();
+
+    expect(result.isOk()).toBe(true);
+    expect(createVertexMock).toHaveBeenCalledWith({
+      project: 'my-project',
+      location: 'us-west1',
+    });
   });
 
   it('returns an error when vertex provider construction fails', async () => {
