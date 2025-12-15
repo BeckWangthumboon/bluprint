@@ -123,4 +123,88 @@ describe('AiSdkRuntime', () => {
       expect(result.value.text).toBe('boom');
     }
   });
+
+  it('adapts prepareStep calls between runtime and AI SDK', async () => {
+    const mockModel = {} as any;
+    const userPrepareStep = vi.fn().mockResolvedValue({
+      toolChoice: 'required',
+      activeTools: ['sampleTool'],
+      system: 'override system',
+      messages: [
+        { role: 'system', content: 'override system' },
+        { role: 'user', content: 'next user' },
+      ],
+    });
+
+    generateTextMock.mockImplementation(async (options) => {
+      expect(typeof options.prepareStep).toBe('function');
+
+      const aiStep = {
+        text: 'step text',
+        finishReason: 'stop',
+        usage: { inputTokens: 2, outputTokens: 1 },
+        toolCalls: [{ toolName: 'sampleTool', input: { arg: 1 } }],
+        toolResults: [{ toolName: 'sampleTool', output: { value: 'ok' } }],
+      };
+      const toolContent = [{ toolName: 'sampleTool', output: 'tool-output' }];
+      const aiMessages = [
+        { role: 'system', content: 'sys' },
+        { role: 'assistant', content: 'asst' },
+        { role: 'tool', content: toolContent },
+        { role: 'user', content: 'usr' },
+      ];
+
+      const prepareResult = await options.prepareStep?.({
+        steps: [aiStep],
+        stepNumber: 2,
+        messages: aiMessages,
+      });
+
+      expect(userPrepareStep).toHaveBeenCalledTimes(1);
+      expect(userPrepareStep).toHaveBeenCalledWith({
+        stepNumber: 2,
+        steps: [
+          {
+            stepNumber: 1,
+            text: 'step text',
+            finishReason: 'stop',
+            usage: { inputTokens: 2, outputTokens: 1 },
+            toolCalls: [{ toolName: 'sampleTool', args: { arg: 1 } }],
+            toolResults: [{ toolName: 'sampleTool', result: { value: 'ok' } }],
+          },
+        ],
+        messages: [
+          { role: 'system', content: 'sys' },
+          { role: 'assistant', content: 'asst' },
+          { role: 'tool', content: toolContent },
+          { role: 'user', content: 'usr' },
+        ],
+      });
+
+      expect(prepareResult).toEqual({
+        toolChoice: 'required',
+        activeTools: ['sampleTool'],
+        system: 'override system',
+        messages: [
+          { role: 'system', content: 'override system' },
+          { role: 'user', content: 'next user' },
+        ],
+      });
+
+      return {
+        text: 'done',
+        steps: [],
+        totalUsage: { inputTokens: 0, outputTokens: 0 },
+      } as never;
+    });
+
+    const runtime = new AiSdkRuntime(mockModel, {});
+    const result = await runtime.generateText({
+      messages: [{ role: 'user', content: 'start' }],
+      prepareStep: userPrepareStep,
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(generateTextMock).toHaveBeenCalledTimes(1);
+  });
 });
