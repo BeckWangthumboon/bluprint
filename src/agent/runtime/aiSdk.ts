@@ -8,6 +8,7 @@ import {
   type ToolSet,
   stepCountIs,
   type StepResult,
+  type PrepareStepFunction,
 } from 'ai';
 import { createAppError, type AppError } from '../../types/errors.js';
 import type { Tool } from '../tools/types.js';
@@ -16,7 +17,10 @@ import type {
   AgentRuntime,
   AgentMessage,
   GenerateObjectArgs,
+  GenerateObjectReturn,
   GenerateTextArgs,
+  GenerateTextReturn,
+  PrepareStep,
   RuntimeStep,
 } from './core.js';
 
@@ -27,9 +31,12 @@ class AiSdkRuntime implements AgentRuntime {
     this.model = model;
   }
 
-  generateText(args: GenerateTextArgs) {
+  generateText(args: GenerateTextArgs): ResultAsync<GenerateTextReturn, AppError> {
     const aiMessages = this.mapMessages(args.messages);
     const aiSdkTools = args.tools && args.tools.length > 0 ? this.mapTools(args.tools) : undefined;
+    const prepareStep = args.prepareStep
+      ? this.createPrepareStepAdapter(args.prepareStep)
+      : undefined;
 
     return ResultAsync.fromPromise(
       generateText({
@@ -39,6 +46,7 @@ class AiSdkRuntime implements AgentRuntime {
         maxOutputTokens: args.maxTokens,
         tools: aiSdkTools,
         stopWhen: args.maxSteps ? stepCountIs(args.maxSteps) : undefined,
+        prepareStep,
       }),
       (error) => this.toAppError(error, aiMessages),
     ).map((result) => ({
@@ -51,7 +59,7 @@ class AiSdkRuntime implements AgentRuntime {
     }));
   }
 
-  generateObject<T>(args: GenerateObjectArgs<T>) {
+  generateObject<T>(args: GenerateObjectArgs<T>): ResultAsync<GenerateObjectReturn<T>, AppError> {
     const aiMessages = this.mapMessages(args.messages);
     return ResultAsync.fromPromise(
       (async () => {
@@ -81,6 +89,9 @@ class AiSdkRuntime implements AgentRuntime {
       }
       if (message.role === 'assistant') {
         return { role: 'assistant', content: message.content };
+      }
+      if (message.role === 'tool') {
+        return { role: 'tool', content: message.content };
       }
       return { role: 'user', content: message.content };
     });
@@ -120,6 +131,48 @@ class AiSdkRuntime implements AgentRuntime {
         result: tr.output,
       })),
     }));
+  }
+
+  private mapModelMessagesToAgentMessages(messages: ModelMessage[]): AgentMessage[] {
+    return messages.map((message) => {
+      if (message.role === 'system') {
+        return { role: 'system', content: message.content };
+      }
+      if (message.role === 'assistant') {
+        return { role: 'assistant', content: message.content };
+      }
+      if (message.role === 'tool') {
+        return { role: 'tool', content: message.content };
+      }
+      return { role: 'user', content: message.content };
+    });
+  }
+
+  private createPrepareStepAdapter(
+    prepareStep: PrepareStep,
+  ): PrepareStepFunction<Record<string, AiSdkTool>> {
+    return async ({ steps, stepNumber, messages }) => {
+      const mappedSteps = this.mapSteps(steps);
+      const mappedMessages = this.mapModelMessagesToAgentMessages(messages);
+      const preparedStepSettings = await prepareStep({
+        stepNumber,
+        steps: mappedSteps,
+        messages: mappedMessages,
+      });
+
+      if (!preparedStepSettings) {
+        return undefined;
+      }
+
+      return {
+        toolChoice: preparedStepSettings.toolChoice,
+        activeTools: preparedStepSettings.activeTools,
+        system: preparedStepSettings.system,
+        messages: preparedStepSettings.messages
+          ? this.mapMessages(preparedStepSettings.messages)
+          : undefined,
+      };
+    };
   }
 
   // TODO: move this to utils file
