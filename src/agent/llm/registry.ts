@@ -83,7 +83,15 @@ const buildProvider = (
     }
 
     if (provider === 'vertex') {
-      return ok(createVertex({}));
+      const project = process.env.GOOGLE_VERTEX_PROJECT?.trim();
+      const location = process.env.GOOGLE_VERTEX_LOCATION?.trim();
+
+      return ok(
+        createVertex({
+          project,
+          location,
+        }),
+      );
     }
 
     return ok(
