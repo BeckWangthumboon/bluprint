@@ -1,18 +1,20 @@
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
+import { createVertex } from '@ai-sdk/google-vertex';
 import { createProviderRegistry, type LanguageModel, type ProviderRegistryProvider } from 'ai';
 import type { ProviderV2 } from '@ai-sdk/provider';
 import { err, ok, type Result } from 'neverthrow';
 import { createAppError, type AppError } from '../../types/errors.js';
 
-type ProviderName = 'openrouter' | 'zai';
+type ProviderName = 'openrouter' | 'zai' | 'vertex';
 
 const MODEL_BY_PROVIDER: Record<ProviderName, `${ProviderName}:${string}`> = {
   openrouter: 'openrouter:amazon/nova-2-lite-v1:free',
   zai: 'zai:GLM-4.6',
+  vertex: 'vertex:gemini-2.5-flash',
 };
 
-const API_KEY_ENV_BY_PROVIDER: Record<ProviderName, string> = {
+const API_KEY_ENV_BY_PROVIDER: Partial<Record<ProviderName, string>> = {
   openrouter: 'OPENROUTER_API_KEY',
   zai: 'ZAI_API_KEY',
 };
@@ -24,19 +26,31 @@ const resolveProviderSelection = (): Result<ProviderName, AppError> => {
   const rawProvider = process.env.PROVIDER?.trim().toLowerCase();
 
   if (!rawProvider) return ok('openrouter');
-  if (rawProvider === 'openrouter' || rawProvider === 'zai') return ok(rawProvider);
+  if (rawProvider === 'openrouter' || rawProvider === 'zai' || rawProvider === 'vertex')
+    return ok(rawProvider);
 
   return err(
     createAppError('VALIDATION_ERROR', 'Unsupported provider value in PROVIDER env variable', {
       provider: rawProvider,
-      allowedProviders: Object.keys(API_KEY_ENV_BY_PROVIDER),
+      allowedProviders: ['openrouter', 'zai', 'vertex'],
     }),
   );
 };
 
-// get the api key for the provider
-const readApiKeyForProvider = (provider: ProviderName): Result<string, AppError> => {
+/**
+ * Reads the API key for providers that require one.
+ *
+ * @param provider - Provider name to get API key for.
+ * @returns Result containing the API key or AppError if missing. Returns ok(undefined) for providers that don't need API keys.
+ * @throws Never throws. Errors flow via AppError in Result.
+ */
+const readApiKeyForProvider = (provider: ProviderName): Result<string | undefined, AppError> => {
   const envKey = API_KEY_ENV_BY_PROVIDER[provider];
+
+  if (!envKey) {
+    return ok(undefined);
+  }
+
   const apiKey = process.env[envKey]?.trim();
 
   if (!apiKey) {
@@ -51,17 +65,31 @@ const readApiKeyForProvider = (provider: ProviderName): Result<string, AppError>
   return ok(apiKey);
 };
 
-// create the provider instance
-const buildProvider = (provider: ProviderName, apiKey: string): Result<ProviderV2, AppError> => {
+/**
+ * Creates a provider instance for the specified provider.
+ *
+ * @param provider - Provider name to instantiate.
+ * @param apiKey - API key for providers that require one; undefined for providers using other auth methods.
+ * @returns Result containing the provider instance or AppError on construction failure.
+ * @throws Never throws. Errors flow via AppError in Result.
+ */
+const buildProvider = (
+  provider: ProviderName,
+  apiKey: string | undefined,
+): Result<ProviderV2, AppError> => {
   try {
     if (provider === 'openrouter') {
-      return ok(createOpenRouter({ apiKey }));
+      return ok(createOpenRouter({ apiKey: apiKey! }));
+    }
+
+    if (provider === 'vertex') {
+      return ok(createVertex({}));
     }
 
     return ok(
       createOpenAICompatible({
         name: 'zai',
-        apiKey,
+        apiKey: apiKey!,
         baseURL: 'https://api.z.ai/api/coding/paas/v4',
       }),
     );
