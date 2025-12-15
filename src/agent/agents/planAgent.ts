@@ -273,7 +273,7 @@ const createPlanAgent = (): Result<PlanAgent, AppError> =>
         temperature: 0.3,
         tools,
       })
-      .andThen((text) => validatePlanResponse(text, specId));
+      .andThen((result) => validatePlanResponse(result.text, specId));
   });
 
 export const planAgent = {
