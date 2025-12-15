@@ -3,6 +3,7 @@ import type { ProviderV2, LanguageModelV2 } from '@ai-sdk/provider';
 
 const createOpenRouterMock = vi.fn();
 const createOpenAICompatibleMock = vi.fn();
+const createVertexMock = vi.fn();
 const createProviderRegistryMock = vi.fn();
 
 vi.mock('@openrouter/ai-sdk-provider', () => ({
@@ -11,6 +12,10 @@ vi.mock('@openrouter/ai-sdk-provider', () => ({
 
 vi.mock('@ai-sdk/openai-compatible', () => ({
   createOpenAICompatible: (...args: unknown[]) => createOpenAICompatibleMock(...args),
+}));
+
+vi.mock('@ai-sdk/google-vertex', () => ({
+  createVertex: (...args: unknown[]) => createVertexMock(...args),
 }));
 
 vi.mock('ai', () => ({
@@ -37,7 +42,10 @@ describe('getModel', () => {
 
   beforeEach(() => {
     originalEnv = { ...process.env };
-    vi.resetModules();
+    // Clear all provider-related env vars
+    delete process.env.PROVIDER;
+    delete process.env.OPENROUTER_API_KEY;
+    delete process.env.ZAI_API_KEY;
     vi.clearAllMocks();
 
     const mockProvider = {
@@ -54,8 +62,16 @@ describe('getModel', () => {
       imageModel: vi.fn((modelId: string) => stubImageModel(modelId)),
     } as unknown as ProviderV2;
 
+    const mockVertexProvider = {
+      id: 'vertex-provider',
+      languageModel: vi.fn((modelId: string) => stubLanguageModel(modelId)),
+      textEmbeddingModel: vi.fn((modelId: string) => stubTextEmbeddingModel(modelId)),
+      imageModel: vi.fn((modelId: string) => stubImageModel(modelId)),
+    } as unknown as ProviderV2;
+
     createOpenRouterMock.mockReturnValue(mockProvider);
     createOpenAICompatibleMock.mockReturnValue(mockZaiProvider);
+    createVertexMock.mockReturnValue(mockVertexProvider);
     createProviderRegistryMock.mockReturnValue(defaultProviderRegistry);
   });
 
@@ -135,6 +151,37 @@ describe('getModel', () => {
     if (result.isErr()) {
       expect(result.error.code).toBe('LLM_ERROR');
       expect(result.error.message).toContain('Model openrouter:amazon/nova-2-lite-v1:free');
+    }
+  });
+
+  it('returns vertex model when PROVIDER=vertex without requiring API key', async () => {
+    process.env.PROVIDER = 'vertex';
+    const getModel = await importGetModel();
+
+    const result = getModel();
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      const model = result.value;
+      expect(model).toEqual(stubLanguageModel('vertex:gemini-2.5-flash'));
+    }
+    expect(createVertexMock).toHaveBeenCalledTimes(1);
+    expect(createVertexMock).toHaveBeenCalledWith({});
+  });
+
+  it('returns an error when vertex provider construction fails', async () => {
+    process.env.PROVIDER = 'vertex';
+    createVertexMock.mockImplementationOnce(() => {
+      throw new Error('vertex config failed');
+    });
+    const getModel = await importGetModel();
+
+    const result = getModel();
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.code).toBe('LLM_ERROR');
+      expect(result.error.message).toContain('configure provider vertex');
     }
   });
 });
