@@ -84,10 +84,10 @@ class AiSdkRuntime implements AgentRuntime {
   private isAppError(error: unknown): error is AppError {
     return Boolean(
       error &&
-        typeof error === 'object' &&
-        'code' in error &&
-        'message' in error &&
-        typeof (error as { message: unknown }).message === 'string',
+      typeof error === 'object' &&
+      'code' in error &&
+      'message' in error &&
+      typeof (error as { message: unknown }).message === 'string',
     );
   }
 }
