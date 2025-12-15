@@ -4,3 +4,4 @@ dist/
 .vscode/
 .bluprint/
 .env
+google-cloud-creds.json
