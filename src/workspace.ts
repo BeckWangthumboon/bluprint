@@ -1,49 +1,64 @@
-import { promises as fs } from 'node:fs';
-import { join } from 'node:path';
+import { join } from 'path';
 import { ResultAsync } from 'neverthrow';
+import { appendFile, clearFile, readFile, writeFile } from './fs.js';
 
 const DUO_DIR = join(process.cwd(), '.duo');
 const LOG_FILE = join(DUO_DIR, 'logs.md');
-const MASTER_INSTRUCTION_FILE = join(DUO_DIR, 'master_instruction.md');
-const CODER_REPORT_FILE = join(DUO_DIR, 'coder_report.md');
+const TASK_FILE = join(DUO_DIR, 'task.md');
+const REPORT_FILE = join(DUO_DIR, 'report.md');
+const SPEC_FILE = join(DUO_DIR, 'spec.md');
+const PLAN_FILE = join(DUO_DIR, 'plan.md');
 
-const toError = (err: unknown): Error => (err instanceof Error ? err : new Error(String(err)));
-
-export const appendLog = (entry: string): ResultAsync<void, Error> => {
+const appendLog = (entry: string): ResultAsync<void, Error> => {
   const normalized = entry.endsWith('\n') ? entry : `${entry}\n`;
-
-  return ResultAsync.fromPromise(
-    (async () => {
-      await fs.mkdir(DUO_DIR, { recursive: true });
-      await fs.appendFile(LOG_FILE, normalized, { encoding: 'utf8' });
-    })(),
-    toError
-  );
+  return appendFile(LOG_FILE, normalized);
 };
 
-export const writeMasterInstruction = (content: string): ResultAsync<void, Error> =>
-  ResultAsync.fromPromise(
-    (async () => {
-      await fs.mkdir(DUO_DIR, { recursive: true });
-      await fs.writeFile(MASTER_INSTRUCTION_FILE, content, {
-        encoding: 'utf8',
-      });
-    })(),
-    toError
-  );
+const clearLogs = (): ResultAsync<void, Error> => clearFile(LOG_FILE);
 
-export const writeCoderReport = (content: string): ResultAsync<void, Error> =>
-  ResultAsync.fromPromise(
-    (async () => {
-      await fs.mkdir(DUO_DIR, { recursive: true });
-      await fs.writeFile(CODER_REPORT_FILE, content, { encoding: 'utf8' });
-    })(),
-    toError
-  );
+const writeTask = (content: string): ResultAsync<void, Error> => writeFile(TASK_FILE, content);
 
-export const workspaceConstants = {
+const writeReport = (content: string): ResultAsync<void, Error> => writeFile(REPORT_FILE, content);
+
+const readLogs = (): ResultAsync<string, Error> => readFile(LOG_FILE);
+
+const readTask = (): ResultAsync<string, Error> => readFile(TASK_FILE);
+
+const readReport = (): ResultAsync<string, Error> => readFile(REPORT_FILE);
+
+const readSpec = (): ResultAsync<string, Error> => readFile(SPEC_FILE);
+
+const readPlan = (): ResultAsync<string, Error> => readFile(PLAN_FILE);
+
+const workspaceConstants = {
   DUO_DIR,
   LOG_FILE,
-  MASTER_INSTRUCTION_FILE,
-  CODER_REPORT_FILE,
+  TASK_FILE,
+  REPORT_FILE,
+  SPEC_FILE,
+  PLAN_FILE,
 };
+
+const workspace = {
+  logs: {
+    append: appendLog,
+    clear: clearLogs,
+    read: readLogs,
+  },
+  task: {
+    write: writeTask,
+    read: readTask,
+  },
+  report: {
+    write: writeReport,
+    read: readReport,
+  },
+  spec: {
+    read: readSpec,
+  },
+  plan: {
+    read: readPlan,
+  },
+};
+
+export { workspace, workspaceConstants };
