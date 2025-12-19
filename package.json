@@ -12,7 +12,9 @@
   },
   "dependencies": {
     "@opencode-ai/sdk": "^1.0.169",
-    "neverthrow": "^8.2.0"
+    "@types/yargs": "^17.0.35",
+    "neverthrow": "^8.2.0",
+    "yargs": "^18.0.0"
   },
   "scripts": {
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
