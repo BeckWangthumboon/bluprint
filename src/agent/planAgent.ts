@@ -3,6 +3,7 @@ import { ResultAsync } from 'neverthrow';
 import { opencodeClient } from './session.js';
 import { workspace } from '../workspace.js';
 import { readFile } from '../fs.js';
+import { exit } from '../exit.js';
 
 const PLAN_AGENT_PROMPT_FILE = join(
   dirname(new URL(import.meta.url).pathname),
@@ -48,19 +49,19 @@ export const generatePlan = async (): Promise<void> => {
   if (specResult.isErr()) {
     console.error(`Error: Could not read spec file at .duo/spec.md`);
     console.error(`${specResult.error.message}`);
-    process.exit(1);
+    exit();
   }
 
   const spec = specResult.value;
   if (!spec.trim()) {
     console.error('Error: spec.md is empty. Please add a specification first.');
-    process.exit(1);
+    exit();
   }
 
   const promptResult = await loadPlanAgentPrompt();
   if (promptResult.isErr()) {
     console.error(`Error: ${promptResult.error.message}`);
-    process.exit(1);
+    exit();
   }
 
   const systemPrompt = promptResult.value;
@@ -110,17 +111,18 @@ export const generatePlan = async (): Promise<void> => {
     const savePlanResult = await workspace.plan.write(plan);
     if (savePlanResult.isErr()) {
       console.error(`Error saving plan: ${savePlanResult.error.message}`);
-      process.exit(1);
+      exit();
     }
 
     console.log('Plan saved to .duo/plan.md');
 
     await opencodeClient.session.delete({ path: { id: sessionId } });
+    exit();
   } catch (error) {
     console.error('Error generating plan:', error);
     if (error instanceof Error) {
       console.error(`${error.message}`);
     }
-    process.exit(1);
+    exit();
   }
 };
