@@ -20,6 +20,8 @@ const writeTask = (content: string): ResultAsync<void, Error> => writeFile(TASK_
 
 const writeReport = (content: string): ResultAsync<void, Error> => writeFile(REPORT_FILE, content);
 
+const writePlan = (content: string): ResultAsync<void, Error> => writeFile(PLAN_FILE, content);
+
 const readLogs = (): ResultAsync<string, Error> => readFile(LOG_FILE);
 
 const readTask = (): ResultAsync<string, Error> => readFile(TASK_FILE);
@@ -58,6 +60,7 @@ const workspace = {
   },
   plan: {
     read: readPlan,
+    write: writePlan,
   },
 };
 
