@@ -80,6 +80,7 @@ export const generatePlan = async (): Promise<void> => {
     const promptResponse = await opencodeClient.session.prompt({
       path: { id: sessionId },
       body: {
+        agent: 'plan',
         model,
         system: systemPrompt,
         parts: [
@@ -95,23 +96,10 @@ export const generatePlan = async (): Promise<void> => {
       throw new Error('Failed to generate plan: No response from model');
     }
 
-    const messages = await opencodeClient.session.messages({
-      path: { id: sessionId },
-    });
-
-    if (!messages.data || messages.data.length === 0) {
-      throw new Error('Failed to retrieve plan: No messages in session');
-    }
-
-    const lastMessage = messages.data[messages.data.length - 1];
-    if (!lastMessage) {
-      throw new Error('Failed to retrieve plan: Last message is undefined');
-    }
-
-    const textParts = lastMessage.parts.filter((part) => part.type === 'text');
+    const textParts = promptResponse.data.parts.filter((part) => part.type === 'text');
 
     if (textParts.length === 0) {
-      throw new Error('Failed to retrieve plan: No text content in response');
+      throw new Error('No text content in response');
     }
 
     const rawPlan = textParts.map((part) => (part as { text: string }).text).join('\n\n');
