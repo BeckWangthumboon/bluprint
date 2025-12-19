@@ -11,6 +11,7 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "@opencode-ai/sdk": "^1.0.169",
     "neverthrow": "^8.2.0"
   },
   "scripts": {

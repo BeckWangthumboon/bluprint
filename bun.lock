@@ -5,6 +5,7 @@
     "": {
       "name": "duoloop",
       "dependencies": {
+        "@opencode-ai/sdk": "^1.0.169",
         "neverthrow": "^8.2.0",
       },
       "devDependencies": {
@@ -17,6 +18,8 @@
     },
   },
   "packages": {
+    "@opencode-ai/sdk": ["@opencode-ai/sdk@1.0.169", "", {}, "sha512-c9XyrvQlZOQ+WxtD3io+VKkwhH1g82e9eNgczpXe3h+rkt5LANFgiwCGSHVArD0p/5FiPQPUEGk7mwqAjGL/GQ=="],
+
     "@rollup/rollup-linux-x64-gnu": ["@rollup/rollup-linux-x64-gnu@4.53.5", "", { "os": "linux", "cpu": "x64" }, "sha512-Pg6E+oP7GvZ4XwgRJBuSXZjcqpIW3yCBhK4BcsANvb47qMvAbCjR6E+1a/U2WXz1JJxp9/4Dno3/iSJLcm5auw=="],
 
     "@types/bun": ["@types/bun@1.3.5", "", { "dependencies": { "bun-types": "1.3.5" } }, "sha512-RnygCqNrd3srIPEWBd5LFeUYG7plCoH2Yw9WaZGyNmdTEei+gWaHqydbaIRkIkcbXwhBT94q78QljxN0Sk838w=="],
