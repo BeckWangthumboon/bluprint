@@ -4,12 +4,11 @@ type Opencode = Awaited<ReturnType<typeof createOpencode>>;
 
 let opencode: Opencode | null = null;
 
+export const isOpencodeInitialized = (): boolean => opencode !== null;
+
 export const getOpencode = async (): Promise<Opencode> => {
   if (!opencode) {
-    opencode = await createOpencode({
-      hostname: '127.0.0.1',
-      port: 4096,
-    });
+    opencode = await createOpencode();
   }
   return opencode;
 };
