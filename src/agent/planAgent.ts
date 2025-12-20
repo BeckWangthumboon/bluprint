@@ -1,6 +1,6 @@
 import { join, dirname } from 'path';
-import { ResultAsync } from 'neverthrow';
-import { getOpencodeClient } from './session.js';
+import { ResultAsync, err } from 'neverthrow';
+import { createSession, deleteSession } from './sessionManager.js';
 import { workspace } from '../workspace.js';
 import { readFile } from '../fs.js';
 
@@ -43,83 +43,72 @@ const loadPlanAgentPrompt = (): ResultAsync<string, Error> =>
   readFile(PLAN_AGENT_PROMPT_FILE).mapErr(
     (err) => new Error(`Failed to load plan agent prompt: ${err.message}`)
   );
+
+const toError = (e: unknown): Error => (e instanceof Error ? e : new Error(String(e)));
+
 export const generatePlan = (): ResultAsync<void, Error> => {
-  return ResultAsync.fromPromise(
-    (async () => {
-      const specResult = await workspace.spec.read();
-      if (specResult.isErr()) {
-        throw new Error(`Could not read spec file at .duo/spec.md: ${specResult.error.message}`);
-      }
-
-      const spec = specResult.value;
+  return workspace.spec
+    .read()
+    .mapErr((e) => new Error(`Could not read spec file at .duo/spec.md: ${e.message}`))
+    .andThen((spec) => {
       if (!spec.trim()) {
-        throw new Error('spec.md is empty. Please add a specification first.');
+        return err(new Error('spec.md is empty. Please add a specification first.'));
       }
-
-      const promptResult = await loadPlanAgentPrompt();
-      if (promptResult.isErr()) {
-        throw promptResult.error;
-      }
-
-      const systemPrompt = promptResult.value;
+      return loadPlanAgentPrompt().map((systemPrompt) => ({ spec, systemPrompt }));
+    })
+    .andThen(({ spec, systemPrompt }) => {
       const model = getModelConfig();
 
-      const opencodeClient = await getOpencodeClient();
-
-      const sessionResponse = await opencodeClient.session.create({
-        body: { title: 'Plan Generation' },
-      });
-
-      if (!sessionResponse.data) {
-        throw new Error('Failed to create session: No data returned');
-      }
-
-      const sessionId = sessionResponse.data.id;
-
-      const promptResponse = await opencodeClient.session.prompt({
-        path: { id: sessionId },
-        body: {
-          agent: 'plan',
-          model,
-          system: systemPrompt,
-          parts: [
-            {
-              type: 'text',
-              text: `Here is the specification to analyze:\n\n${spec}\n\nPlease create a detailed implementation plan following the format specified in your instructions.`,
+      return createSession('Plan Generation').andThen((session) =>
+        ResultAsync.fromPromise(
+          session.client.session.prompt({
+            path: { id: session.id },
+            body: {
+              agent: 'plan',
+              model,
+              system: systemPrompt,
+              parts: [
+                {
+                  type: 'text',
+                  text: `Here is the specification to analyze:\n\n${spec}\n\nPlease create a detailed implementation plan following the format specified in your instructions.`,
+                },
+              ],
             },
-          ],
-        },
-      });
+          }),
+          toError
+        )
+          .andThen((promptResponse) => {
+            if (!promptResponse.data) {
+              return err(new Error('Failed to generate plan: No response from model'));
+            }
 
-      if (!promptResponse.data) {
-        throw new Error('Failed to generate plan: No response from model');
-      }
+            const textParts = promptResponse.data.parts.filter(
+              (part: { type: string }) => part.type === 'text'
+            );
 
-      const textParts = promptResponse.data.parts.filter((part) => part.type === 'text');
+            if (textParts.length === 0) {
+              return err(new Error('No text content in response'));
+            }
 
-      if (textParts.length === 0) {
-        throw new Error('No text content in response');
-      }
+            const rawPlan = textParts
+              .map((part: { type: string; text?: string }) => part.text ?? '')
+              .join('\n\n');
 
-      const rawPlan = textParts.map((part) => (part as { text: string }).text).join('\n\n');
+            const firstHeaderIndex = rawPlan.indexOf('##');
+            const plan = firstHeaderIndex !== -1 ? rawPlan.slice(firstHeaderIndex) : rawPlan;
 
-      const firstHeaderIndex = rawPlan.indexOf('##');
-      const plan = firstHeaderIndex !== -1 ? rawPlan.slice(firstHeaderIndex) : rawPlan;
-
-      const savePlanResult = await workspace.plan.write(plan);
-      if (savePlanResult.isErr()) {
-        throw new Error(`Error saving plan: ${savePlanResult.error.message}`);
-      }
-
-      console.log('Plan saved to .duo/plan.md');
-
-      await opencodeClient.session.delete({ path: { id: sessionId } });
-    })(),
-    (error) => {
-      if (error instanceof Error) {
-        return error;
-      }
-      return new Error(String(error));
-    }
-  );
+            return ResultAsync.fromSafePromise<string, Error>(Promise.resolve(plan));
+          })
+          .andThen((plan) => deleteSession(session).map(() => plan))
+          .orElse((error) => deleteSession(session).andThen(() => err(error)))
+      );
+    })
+    .andThen((plan) =>
+      workspace.plan
+        .write(plan)
+        .mapErr((e) => new Error(`Error saving plan: ${e.message}`))
+        .map(() => {
+          console.log('Plan saved to .duo/plan.md');
+        })
+    );
 };
