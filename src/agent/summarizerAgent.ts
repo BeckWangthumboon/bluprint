@@ -1,52 +1,17 @@
-import { join, dirname } from 'path';
 import { ResultAsync, err } from 'neverthrow';
 import { createSession, deleteSession } from './sessionManager.js';
 import { workspace } from '../workspace.js';
-import { readFile } from '../fs.js';
+import { toError, getModelConfig, loadPromptFile } from './utils.js';
+import type { ModelConfig } from './types.js';
 
-const SUMMARIZER_AGENT_PROMPT_FILE = join(
-  dirname(new URL(import.meta.url).pathname),
-  'prompts',
-  'summarizerAgent.txt'
-);
-
-const DEFAULT_MODEL = {
+export const SUMMARIZER_DEFAULT_MODEL: ModelConfig = {
   providerID: 'google',
   modelID: 'gemini-3-flash',
 };
 
-interface ModelConfig {
-  providerID: string;
-  modelID: string;
-}
-
-const parseModelFromEnv = (): ModelConfig | null => {
-  const modelEnv = process.env.SUMMARIZER_AGENT_MODEL;
-  if (!modelEnv) return null;
-
-  const [providerID, modelID] = modelEnv.split('/');
-  if (!providerID || !modelID) {
-    console.warn(
-      `Invalid SUMMARIZER_AGENT_MODEL format: "${modelEnv}". Expected "provider/model". Using default.`
-    );
-    return null;
-  }
-
-  return { providerID, modelID };
-};
-
-const getModelConfig = (): ModelConfig => {
-  return parseModelFromEnv() || DEFAULT_MODEL;
-};
-
-const loadSummarizerAgentPrompt = (): ResultAsync<string, Error> =>
-  readFile(SUMMARIZER_AGENT_PROMPT_FILE).mapErr(
-    (err) => new Error(`Failed to load summarizer agent prompt: ${err.message}`)
-  );
-
-const toError = (e: unknown): Error => (e instanceof Error ? e : new Error(String(e)));
-
 const generateSummary = (): ResultAsync<void, Error> => {
+  const model = getModelConfig('SUMMARIZER_AGENT_MODEL', SUMMARIZER_DEFAULT_MODEL);
+
   return workspace.spec
     .read()
     .mapErr((e) => new Error(`Could not read spec file at .duo/spec.md: ${e.message}`))
@@ -63,11 +28,13 @@ const generateSummary = (): ResultAsync<void, Error> => {
       if (!plan.trim()) {
         return err(new Error('plan.md is empty. Please generate a plan first.'));
       }
-      return loadSummarizerAgentPrompt().map((systemPrompt) => ({ spec, plan, systemPrompt }));
+      return loadPromptFile('summarizerAgent.txt').map((systemPrompt) => ({
+        spec,
+        plan,
+        systemPrompt,
+      }));
     })
     .andThen(({ spec, plan, systemPrompt }) => {
-      const model = getModelConfig();
-
       return createSession('Summary Generation').andThen((session) =>
         ResultAsync.fromPromise(
           session.client.session.prompt({
@@ -87,7 +54,6 @@ const generateSummary = (): ResultAsync<void, Error> => {
           toError
         )
           .andThen((promptResponse) => {
-            console.log(promptResponse);
             if (!promptResponse.data || !promptResponse.data.parts) {
               return err(new Error('Failed to generate summary: No response from model'));
             }

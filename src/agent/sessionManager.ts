@@ -1,5 +1,6 @@
 import { ResultAsync, err } from 'neverthrow';
 import { getOpencodeClient } from './session.js';
+import { toError } from './utils.js';
 
 export type OpencodeClient = Awaited<ReturnType<typeof getOpencodeClient>>;
 
@@ -7,8 +8,6 @@ export interface Session {
   id: string;
   client: OpencodeClient;
 }
-
-const toError = (e: unknown): Error => (e instanceof Error ? e : new Error(String(e)));
 
 export const createSession = (title: string): ResultAsync<Session, Error> =>
   ResultAsync.fromPromise(getOpencodeClient(), toError).andThen((client) =>
