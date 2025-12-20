@@ -9,6 +9,7 @@ const REPORT_FILE = join(DUO_DIR, 'report.md');
 const SPEC_FILE = join(DUO_DIR, 'spec.md');
 const PLAN_FILE = join(DUO_DIR, 'plan.md');
 const SUMMARY_FILE = join(DUO_DIR, 'summary.md');
+const STATE_FILE = join(DUO_DIR, 'state.json');
 
 const appendLog = (entry: string): ResultAsync<void, Error> => {
   const normalized = entry.endsWith('\n') ? entry : `${entry}\n`;
@@ -33,6 +34,10 @@ const readSpec = (): ResultAsync<string, Error> => readFile(SPEC_FILE);
 
 const readPlan = (): ResultAsync<string, Error> => readFile(PLAN_FILE);
 
+const readState = (): ResultAsync<string, Error> => readFile(STATE_FILE);
+
+const writeState = (content: string): ResultAsync<void, Error> => writeFile(STATE_FILE, content);
+
 const readSummary = (): ResultAsync<string, Error> => readFile(SUMMARY_FILE);
 
 const writeSummary = (content: string): ResultAsync<void, Error> =>
@@ -46,6 +51,7 @@ const workspaceConstants = {
   SPEC_FILE,
   PLAN_FILE,
   SUMMARY_FILE,
+  STATE_FILE,
 };
 
 const workspace = {
@@ -72,6 +78,10 @@ const workspace = {
   summary: {
     read: readSummary,
     write: writeSummary,
+  },
+  state: {
+    read: readState,
+    write: writeState,
   },
 };
 
