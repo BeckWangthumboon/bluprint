@@ -4,7 +4,7 @@ import { appendFile, clearFile, readFile, writeFile } from './fs.js';
 
 const DUO_DIR = join(process.cwd(), '.duo');
 const LOG_FILE = join(DUO_DIR, 'logs.md');
-const TASK_FILE = join(DUO_DIR, 'task.md');
+const TASK_JSON_FILE = join(DUO_DIR, 'task.json');
 const REPORT_FILE = join(DUO_DIR, 'report.md');
 const SPEC_FILE = join(DUO_DIR, 'spec.md');
 const PLAN_FILE = join(DUO_DIR, 'plan.md');
@@ -18,15 +18,16 @@ const appendLog = (entry: string): ResultAsync<void, Error> => {
 
 const clearLogs = (): ResultAsync<void, Error> => clearFile(LOG_FILE);
 
-const writeTask = (content: string): ResultAsync<void, Error> => writeFile(TASK_FILE, content);
+const readTaskJson = (): ResultAsync<string, Error> => readFile(TASK_JSON_FILE);
+
+const writeTaskJson = (content: string): ResultAsync<void, Error> =>
+  writeFile(TASK_JSON_FILE, content);
 
 const writeReport = (content: string): ResultAsync<void, Error> => writeFile(REPORT_FILE, content);
 
 const writePlan = (content: string): ResultAsync<void, Error> => writeFile(PLAN_FILE, content);
 
 const readLogs = (): ResultAsync<string, Error> => readFile(LOG_FILE);
-
-const readTask = (): ResultAsync<string, Error> => readFile(TASK_FILE);
 
 const readReport = (): ResultAsync<string, Error> => readFile(REPORT_FILE);
 
@@ -46,7 +47,7 @@ const writeSummary = (content: string): ResultAsync<void, Error> =>
 const workspaceConstants = {
   DUO_DIR,
   LOG_FILE,
-  TASK_FILE,
+  TASK_JSON_FILE,
   REPORT_FILE,
   SPEC_FILE,
   PLAN_FILE,
@@ -60,9 +61,9 @@ const workspace = {
     clear: clearLogs,
     read: readLogs,
   },
-  task: {
-    write: writeTask,
-    read: readTask,
+  taskJson: {
+    write: writeTaskJson,
+    read: readTaskJson,
   },
   report: {
     write: writeReport,
