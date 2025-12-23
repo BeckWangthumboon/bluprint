@@ -72,7 +72,11 @@ const extractCurrentStepFromPlan = (plan: string, taskNumber: number): string | 
 /**
  * Generates a repair prompt for invalid JSON output
  */
-const createRepairPrompt = (validationError: string): string => {
+const createRepairPrompt = (
+  validationError: string,
+  originalPrompt: string,
+  invalidOutput: string
+): string => {
   return `Your previous output was invalid. Error: ${validationError}
 
 You MUST output ONLY valid JSON in this exact format:
@@ -89,6 +93,14 @@ Rules:
 - No additional text or explanation
 - "decision" must be exactly "accept" or "reject" (lowercase)
 - "task" must be a non-empty string
+
+Here is the full original review context:
+
+${originalPrompt}
+
+Here is your invalid output to repair:
+
+${invalidOutput}
 
 Now output ONLY valid JSON:`;
 };
@@ -152,7 +164,11 @@ const callModelWithRepair = (
       }
 
       // Attempt repair
-      const repairPrompt = createRepairPrompt(`Invalid JSON: ${toError(e).message}`);
+      const repairPrompt = createRepairPrompt(
+        `Invalid JSON: ${toError(e).message}`,
+        userPrompt,
+        rawOutput
+      );
       return callModelWithRepair(
         sessionId,
         client,
@@ -175,7 +191,7 @@ const callModelWithRepair = (
       }
 
       // Attempt repair
-      const repairPrompt = createRepairPrompt(validation.reason);
+      const repairPrompt = createRepairPrompt(validation.reason, userPrompt, rawOutput);
       return callModelWithRepair(
         sessionId,
         client,
