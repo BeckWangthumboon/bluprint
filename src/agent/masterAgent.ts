@@ -1,10 +1,17 @@
 import { ResultAsync, err, ok } from 'neverthrow';
 import { createSession, deleteSession, type OpencodeClient } from './sessionManager.js';
 import { workspace } from '../workspace.js';
-import { toError, getModelConfig, loadPromptFile, validateModel } from './utils.js';
+import {
+  parseTextResponse,
+  toError,
+  getModelConfig,
+  loadPromptFile,
+  validateModel,
+} from './utils.js';
 import { getOpencodeClient } from './session.js';
 import { readState } from '../state.js';
 import { exec } from '../shell.js';
+import { findPlanStep, getPlanStep } from './planUtils.js';
 import type { ModelConfig, MasterAgentOutput } from './types.js';
 
 const MASTER_DEFAULT_MODEL: ModelConfig = {
@@ -19,18 +26,6 @@ const MAX_REPAIR_ATTEMPTS = 2;
  */
 const isObject = (data: unknown): data is Record<string, unknown> => {
   return typeof data === 'object' && data !== null;
-};
-
-/**
- * Type guard to check if response has valid data structure
- */
-const hasValidResponseData = (
-  response: unknown
-): response is { data: { parts: Array<{ type: string; text?: string }> } } => {
-  if (!isObject(response)) return false;
-  if (!isObject(response.data)) return false;
-  if (!Array.isArray(response.data.parts)) return false;
-  return true;
 };
 
 /**
@@ -54,20 +49,6 @@ const validateMasterOutput = (
   }
 
   return { ok: true, value: { decision, task } };
-};
-
-/**
- * Extracts the current step content from the plan based on task number
- */
-const extractCurrentStepFromPlan = (plan: string, taskNumber: number): string | null => {
-  const stepRegex = new RegExp(`^## ${taskNumber} (.+?)(?=^## ${taskNumber + 1} |$)`, 'ms');
-  const match = plan.match(stepRegex);
-
-  if (!match) {
-    return null;
-  }
-
-  return match[0].trim();
 };
 
 /**
@@ -133,78 +114,68 @@ const callModelWithRepair = (
       },
     }),
     toError
-  ).andThen((promptResponse: unknown) => {
-    if (!hasValidResponseData(promptResponse)) {
-      return err(new Error('Failed to get response from master agent: Invalid response structure'));
-    }
+  ).andThen((promptResponse: unknown) =>
+    parseTextResponse(promptResponse, {
+      invalidResponseMessage:
+        'Failed to get response from master agent: Invalid response structure',
+      emptyResponseMessage: 'No text content in master agent response',
+      trim: true,
+    }).andThen((rawOutput) => {
+      // Try to parse JSON
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(rawOutput);
+      } catch (e) {
+        if (attemptNumber >= MAX_REPAIR_ATTEMPTS) {
+          return err(
+            new Error(
+              `Failed to parse master agent output after ${MAX_REPAIR_ATTEMPTS} attempts: ${toError(e).message}`
+            )
+          );
+        }
 
-    const textParts = promptResponse.data.parts.filter(
-      (part: { type: string }) => part.type === 'text'
-    );
-
-    if (textParts.length === 0) {
-      return err(new Error('No text content in master agent response'));
-    }
-
-    const rawOutput = textParts
-      .map((part: { type: string; text?: string }) => part.text ?? '')
-      .join('\n\n')
-      .trim();
-
-    // Try to parse JSON
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(rawOutput);
-    } catch (e) {
-      if (attemptNumber >= MAX_REPAIR_ATTEMPTS) {
-        return err(
-          new Error(
-            `Failed to parse master agent output after ${MAX_REPAIR_ATTEMPTS} attempts: ${toError(e).message}`
-          )
+        // Attempt repair
+        const repairPrompt = createRepairPrompt(
+          `Invalid JSON: ${toError(e).message}`,
+          userPrompt,
+          rawOutput
+        );
+        return callModelWithRepair(
+          sessionId,
+          client,
+          model,
+          systemPrompt,
+          repairPrompt,
+          attemptNumber + 1
         );
       }
 
-      // Attempt repair
-      const repairPrompt = createRepairPrompt(
-        `Invalid JSON: ${toError(e).message}`,
-        userPrompt,
-        rawOutput
-      );
-      return callModelWithRepair(
-        sessionId,
-        client,
-        model,
-        systemPrompt,
-        repairPrompt,
-        attemptNumber + 1
-      );
-    }
+      // Validate schema
+      const validation = validateMasterOutput(parsed);
+      if (!validation.ok) {
+        if (attemptNumber >= MAX_REPAIR_ATTEMPTS) {
+          return err(
+            new Error(
+              `Master agent output validation failed after ${MAX_REPAIR_ATTEMPTS} attempts: ${validation.reason}`
+            )
+          );
+        }
 
-    // Validate schema
-    const validation = validateMasterOutput(parsed);
-    if (!validation.ok) {
-      if (attemptNumber >= MAX_REPAIR_ATTEMPTS) {
-        return err(
-          new Error(
-            `Master agent output validation failed after ${MAX_REPAIR_ATTEMPTS} attempts: ${validation.reason}`
-          )
+        // Attempt repair
+        const repairPrompt = createRepairPrompt(validation.reason, userPrompt, rawOutput);
+        return callModelWithRepair(
+          sessionId,
+          client,
+          model,
+          systemPrompt,
+          repairPrompt,
+          attemptNumber + 1
         );
       }
 
-      // Attempt repair
-      const repairPrompt = createRepairPrompt(validation.reason, userPrompt, rawOutput);
-      return callModelWithRepair(
-        sessionId,
-        client,
-        model,
-        systemPrompt,
-        repairPrompt,
-        attemptNumber + 1
-      );
-    }
-
-    return ok(validation.value);
-  });
+      return ok(validation.value);
+    })
+  );
 };
 
 /**
@@ -235,16 +206,11 @@ export const reviewAndGenerateTask = (): ResultAsync<string, Error> => {
                 .map((plan) => ({ state, spec, plan }));
             });
         })
-        .andThen(({ state, spec, plan }) => {
-          // Extract current step from plan
-          const currentStep = extractCurrentStepFromPlan(plan, state.currentTaskNumber);
-
-          if (!currentStep) {
-            return err(new Error(`Could not find task ${state.currentTaskNumber} in plan.md`));
-          }
-
-          return ok({ state, spec, plan, currentStep });
-        })
+        .andThen(({ state, spec, plan }) =>
+          getPlanStep(plan, state.currentTaskNumber, {
+            missingStep: (stepNumber) => `Could not find task ${stepNumber} in plan.md`,
+          }).map((currentStep) => ({ state, spec, plan, currentStep }))
+        )
         .andThen(({ state, spec, plan, currentStep }) => {
           // Read report (allow empty)
           return workspace.report
@@ -308,7 +274,7 @@ ${currentStep}`,
                 let nextStepContent = '';
 
                 if (hasNextStep) {
-                  const nextStep = extractCurrentStepFromPlan(plan, nextStepNumber);
+                  const nextStep = findPlanStep(plan, nextStepNumber);
                   if (nextStep) {
                     nextStepContent = nextStep;
                   }

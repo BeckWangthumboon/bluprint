@@ -3,7 +3,13 @@ import { createSession, deleteSession } from './sessionManager.js';
 import { workspace } from '../workspace.js';
 import { generateSummary, SUMMARIZER_DEFAULT_MODEL } from './summarizerAgent.js';
 import { getOpencodeClient } from './session.js';
-import { toError, getModelConfig, loadPromptFile, validateModel } from './utils.js';
+import {
+  parseTextResponse,
+  toError,
+  getModelConfig,
+  loadPromptFile,
+  validateModel,
+} from './utils.js';
 import type { ModelConfig } from './types.js';
 
 const PLAN_DEFAULT_MODEL: ModelConfig = {
@@ -66,28 +72,17 @@ export const generatePlan = (): ResultAsync<void, Error> => {
               }),
               toError
             )
-              .andThen((promptResponse) => {
-                if (!promptResponse.data) {
-                  return err(new Error('Failed to generate plan: No response from model'));
-                }
+              .andThen((promptResponse) =>
+                parseTextResponse(promptResponse, {
+                  invalidResponseMessage: 'Failed to generate plan: No response from model',
+                  emptyResponseMessage: 'No text content in response',
+                  trim: false,
+                }).map((rawPlan) => {
+                  const firstHeaderIndex = rawPlan.indexOf('##');
+                  return firstHeaderIndex !== -1 ? rawPlan.slice(firstHeaderIndex) : rawPlan;
+                })
+              )
 
-                const textParts = promptResponse.data.parts.filter(
-                  (part: { type: string }) => part.type === 'text'
-                );
-
-                if (textParts.length === 0) {
-                  return err(new Error('No text content in response'));
-                }
-
-                const rawPlan = textParts
-                  .map((part: { type: string; text?: string }) => part.text ?? '')
-                  .join('\n\n');
-
-                const firstHeaderIndex = rawPlan.indexOf('##');
-                const plan = firstHeaderIndex !== -1 ? rawPlan.slice(firstHeaderIndex) : rawPlan;
-
-                return ResultAsync.fromSafePromise<string, Error>(Promise.resolve(plan));
-              })
               .andThen((plan) => deleteSession(session).map(() => plan))
               .orElse((error) => deleteSession(session).andThen(() => err(error)))
           );
