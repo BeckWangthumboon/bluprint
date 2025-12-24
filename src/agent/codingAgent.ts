@@ -102,36 +102,33 @@ export const validateCurrentStep = (
 export const executeCodingAgent = (): ResultAsync<string, Error> => {
   const codingModel = getModelConfig('CODING_AGENT_MODEL', CODING_DEFAULT_MODEL);
 
-  return ResultAsync.fromPromise(getOpencodeClient(), toError)
-    .andThen((client) =>
-      ResultAsync.fromPromise(
-        validateModel(client, codingModel.providerID, codingModel.modelID),
-        toError
-      ).andThen((isValid) => {
-        if (!isValid) {
-          return err(
-            new Error(`Invalid coding model: ${codingModel.providerID}/${codingModel.modelID}`)
-          );
-        }
+  return ResultAsync.fromPromise(getOpencodeClient(), toError).andThen((client) =>
+    ResultAsync.fromPromise(
+      validateModel(client, codingModel.providerID, codingModel.modelID),
+      toError
+    ).andThen((isValid) => {
+      if (!isValid) {
+        return err(
+          new Error(`Invalid coding model: ${codingModel.providerID}/${codingModel.modelID}`)
+        );
+      }
 
-        // Read all required inputs in parallel
-        return ResultAsync.combine([
-          workspace.taskJson
-            .read()
-            .mapErr((e) => new Error(`Could not read task.json: ${e.message}`)),
-          workspace.summary
-            .read()
-            .mapErr((e) => new Error(`Could not read summary.md: ${e.message}`)),
-          workspace.plan.read().mapErr((e) => new Error(`Could not read plan.md: ${e.message}`)),
-          readState().mapErr((e) => new Error(`Could not read state: ${e.message}`)),
-          loadPromptFile('codingAgent.txt'),
-        ]).andThen(([task, summary, plan, state, systemPrompt]) => {
-          // Validate current step before extraction
-          return validateCurrentStep(plan, state.currentTaskNumber)
-            .andThen(() => extractPlanStep(plan, state.currentTaskNumber))
-            .andThen((currentStep) => {
-              // Construct the prompt with injected context
-              const userPrompt = `# Task
+      // Read all required inputs in parallel
+      return ResultAsync.combine([
+        workspace.task.read().mapErr((e) => new Error(`Could not read task.md: ${e.message}`)),
+        workspace.summary
+          .read()
+          .mapErr((e) => new Error(`Could not read summary.md: ${e.message}`)),
+        workspace.plan.read().mapErr((e) => new Error(`Could not read plan.md: ${e.message}`)),
+        readState().mapErr((e) => new Error(`Could not read state: ${e.message}`)),
+        loadPromptFile('codingAgent.txt'),
+      ]).andThen(([task, summary, plan, state, systemPrompt]) => {
+        // Validate current step before extraction
+        return validateCurrentStep(plan, state.currentTaskNumber)
+          .andThen(() => extractPlanStep(plan, state.currentTaskNumber))
+          .andThen((currentStep) => {
+            // Construct the prompt with injected context
+            const userPrompt = `# Task
 ${task}
 
 # Plan Summary
@@ -142,62 +139,56 @@ ${currentStep}
 
 Please implement this step and provide a report following the format specified in your instructions.`;
 
-              // Create session and run the agent
-              return createSession('Coding Agent Execution').andThen((session) =>
-                ResultAsync.fromPromise(
-                  session.client.session.prompt({
-                    path: { id: session.id },
-                    body: {
-                      agent: 'build',
-                      model: codingModel,
-                      system: systemPrompt,
-                      parts: [
-                        {
-                          type: 'text',
-                          text: userPrompt,
-                        },
-                      ],
-                    },
-                  }),
-                  toError
-                )
-                  .andThen((promptResponse) => {
-                    if (!hasValidResponseData(promptResponse)) {
-                      console.error(
-                        'Invalid response structure:',
-                        JSON.stringify(promptResponse, null, 2)
-                      );
-                      return err(
-                        new Error('Failed to execute coding agent: Invalid response structure')
-                      );
-                    }
-
-                    const textParts = promptResponse.data.parts.filter(
-                      (part: { type: string }) => part.type === 'text'
+            // Create session and run the agent
+            return createSession('Coding Agent Execution').andThen((session) =>
+              ResultAsync.fromPromise(
+                session.client.session.prompt({
+                  path: { id: session.id },
+                  body: {
+                    agent: 'build',
+                    model: codingModel,
+                    system: systemPrompt,
+                    parts: [
+                      {
+                        type: 'text',
+                        text: userPrompt,
+                      },
+                    ],
+                  },
+                }),
+                toError
+              )
+                .andThen((promptResponse) => {
+                  if (!hasValidResponseData(promptResponse)) {
+                    console.error(
+                      'Invalid response structure:',
+                      JSON.stringify(promptResponse, null, 2)
                     );
+                    return err(
+                      new Error('Failed to execute coding agent: Invalid response structure')
+                    );
+                  }
 
-                    if (textParts.length === 0) {
-                      return err(new Error('No text content in response'));
-                    }
+                  const textParts = promptResponse.data.parts.filter(
+                    (part: { type: string }) => part.type === 'text'
+                  );
 
-                    const report = textParts
-                      .map((part: { type: string; text?: string }) => part.text ?? '')
-                      .join('\n\n')
-                      .trim();
+                  if (textParts.length === 0) {
+                    return err(new Error('No text content in response'));
+                  }
 
-                    return ResultAsync.fromSafePromise<string, Error>(Promise.resolve(report));
-                  })
-                  .andThen((report) => deleteSession(session).map(() => report))
-                  .orElse((error) => deleteSession(session).andThen(() => err(error)))
-              );
-            });
-        });
-      })
-    )
-    .andThen((report) =>
-      workspace.report
-        .write(report)
-        .mapErr((e) => new Error(`Error saving report: ${e.message}`))
-        .map(() => report)
-    );
+                  const report = textParts
+                    .map((part: { type: string; text?: string }) => part.text ?? '')
+                    .join('\n\n')
+                    .trim();
+
+                  return ResultAsync.fromSafePromise<string, Error>(Promise.resolve(report));
+                })
+                .andThen((report) => deleteSession(session).map(() => report))
+                .orElse((error) => deleteSession(session).andThen(() => err(error)))
+            );
+          });
+      });
+    })
+  );
 };
