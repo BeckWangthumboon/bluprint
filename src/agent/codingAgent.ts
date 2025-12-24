@@ -11,6 +11,19 @@ const CODING_DEFAULT_MODEL: ModelConfig = {
   modelID: 'claude-sonnet-4-5',
 };
 
+const isObject = (data: unknown): data is Record<string, unknown> => {
+  return typeof data === 'object' && data !== null;
+};
+
+const hasValidResponseData = (
+  response: unknown
+): response is { data: { parts: Array<{ type: string; text?: string }> } } => {
+  if (!isObject(response)) return false;
+  if (!isObject(response.data)) return false;
+  if (!Array.isArray(response.data.parts)) return false;
+  return true;
+};
+
 /**
  * Extracts the current plan step section from plan.md based on the task number.
  * Returns the full section including heading and body until the next section or EOF.
@@ -103,7 +116,9 @@ export const executeCodingAgent = (): ResultAsync<string, Error> => {
 
         // Read all required inputs in parallel
         return ResultAsync.combine([
-          workspace.task.read().mapErr((e) => new Error(`Could not read task.md: ${e.message}`)),
+          workspace.taskJson
+            .read()
+            .mapErr((e) => new Error(`Could not read task.json: ${e.message}`)),
           workspace.summary
             .read()
             .mapErr((e) => new Error(`Could not read summary.md: ${e.message}`)),
@@ -133,7 +148,7 @@ Please implement this step and provide a report following the format specified i
                   session.client.session.prompt({
                     path: { id: session.id },
                     body: {
-                      agent: 'code',
+                      agent: 'build',
                       model: codingModel,
                       system: systemPrompt,
                       parts: [
@@ -147,9 +162,13 @@ Please implement this step and provide a report following the format specified i
                   toError
                 )
                   .andThen((promptResponse) => {
-                    if (!promptResponse.data) {
+                    if (!hasValidResponseData(promptResponse)) {
+                      console.error(
+                        'Invalid response structure:',
+                        JSON.stringify(promptResponse, null, 2)
+                      );
                       return err(
-                        new Error('Failed to execute coding agent: No response from model')
+                        new Error('Failed to execute coding agent: Invalid response structure')
                       );
                     }
 

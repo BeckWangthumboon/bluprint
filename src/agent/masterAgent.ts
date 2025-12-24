@@ -1,7 +1,8 @@
 import { ResultAsync, err, ok } from 'neverthrow';
 import { createSession, deleteSession, type OpencodeClient } from './sessionManager.js';
 import { workspace } from '../workspace.js';
-import { toError, getModelConfig, loadPromptFile } from './utils.js';
+import { toError, getModelConfig, loadPromptFile, validateModel } from './utils.js';
+import { getOpencodeClient } from './session.js';
 import { readState } from '../state.js';
 import { exec } from '../shell.js';
 import type { ModelConfig, MasterAgentOutput } from './types.js';
@@ -120,7 +121,7 @@ const callModelWithRepair = (
     client.session.prompt({
       path: { id: sessionId },
       body: {
-        agent: 'master',
+        agent: 'ask',
         model,
         system: systemPrompt,
         parts: [
@@ -212,42 +213,51 @@ const callModelWithRepair = (
 export const reviewAndGenerateTask = (): ResultAsync<string, Error> => {
   const model = getModelConfig('MASTER_AGENT_MODEL', MASTER_DEFAULT_MODEL);
 
-  // Read all required context files
-  return readState()
-    .andThen((state) => {
-      return workspace.spec
-        .read()
-        .mapErr((e) => new Error(`Could not read spec.md: ${e.message}`))
-        .andThen((spec) => {
-          return workspace.plan
-            .read()
-            .mapErr((e) => new Error(`Could not read plan.md: ${e.message}`))
-            .map((plan) => ({ state, spec, plan }));
-        });
-    })
-    .andThen(({ state, spec, plan }) => {
-      // Extract current step from plan
-      const currentStep = extractCurrentStepFromPlan(plan, state.currentTaskNumber);
-
-      if (!currentStep) {
-        return err(new Error(`Could not find task ${state.currentTaskNumber} in plan.md`));
+  return ResultAsync.fromPromise(getOpencodeClient(), toError).andThen((client) =>
+    ResultAsync.fromPromise(
+      validateModel(client, model.providerID, model.modelID),
+      toError
+    ).andThen((isValid) => {
+      if (!isValid) {
+        return err(new Error(`Invalid master model: ${model.providerID}/${model.modelID}`));
       }
 
-      return ok({ state, spec, plan, currentStep });
-    })
-    .andThen(({ state, spec, plan, currentStep }) => {
-      // Read report (allow empty)
-      return workspace.report
-        .read()
-        .orElse(() => ResultAsync.fromSafePromise(Promise.resolve(''))) // Treat missing report as empty
-        .map((report) => ({ state, spec, plan, currentStep, report }));
-    })
-    .andThen(({ state, spec, plan, currentStep, report }) => {
-      // Check for coding agent failure: isRetry is true but report is empty
-      if (state.isRetry && report.trim() === '') {
-        const rejectOutput: MasterAgentOutput = {
-          decision: 'reject',
-          task: `The coding agent failed to produce a report on the retry attempt. This indicates an error or crash during execution.
+      // Read all required context files
+      return readState()
+        .andThen((state) => {
+          return workspace.spec
+            .read()
+            .mapErr((e) => new Error(`Could not read spec.md: ${e.message}`))
+            .andThen((spec) => {
+              return workspace.plan
+                .read()
+                .mapErr((e) => new Error(`Could not read plan.md: ${e.message}`))
+                .map((plan) => ({ state, spec, plan }));
+            });
+        })
+        .andThen(({ state, spec, plan }) => {
+          // Extract current step from plan
+          const currentStep = extractCurrentStepFromPlan(plan, state.currentTaskNumber);
+
+          if (!currentStep) {
+            return err(new Error(`Could not find task ${state.currentTaskNumber} in plan.md`));
+          }
+
+          return ok({ state, spec, plan, currentStep });
+        })
+        .andThen(({ state, spec, plan, currentStep }) => {
+          // Read report (allow empty)
+          return workspace.report
+            .read()
+            .orElse(() => ResultAsync.fromSafePromise(Promise.resolve(''))) // Treat missing report as empty
+            .map((report) => ({ state, spec, plan, currentStep, report }));
+        })
+        .andThen(({ state, spec, plan, currentStep, report }) => {
+          // Check for coding agent failure: isRetry is true but report is empty
+          if (state.isRetry && report.trim() === '') {
+            const rejectOutput: MasterAgentOutput = {
+              decision: 'reject',
+              task: `The coding agent failed to produce a report on the retry attempt. This indicates an error or crash during execution.
 
 Please check for:
 1. Syntax errors in recently modified files
@@ -262,47 +272,50 @@ Fix any errors you find, then update report.md with:
 
 Current task you should be working on:
 ${currentStep}`,
-        };
-        return ResultAsync.fromSafePromise(Promise.resolve(JSON.stringify(rejectOutput, null, 2)));
-      }
-
-      // Get git diff and git status
-      return exec('git', ['diff', 'HEAD'])
-        .map((result) => result.stdout)
-        .orElse(() => ResultAsync.fromSafePromise(Promise.resolve(''))) // If git diff fails, treat as no changes
-        .andThen((gitDiff) => {
-          return exec('git', ['status', '--short'])
-            .map((result) => result.stdout)
-            .orElse(() => ResultAsync.fromSafePromise(Promise.resolve('')))
-            .map((gitStatus) => ({ gitDiff, gitStatus }));
-        })
-        .andThen(({ gitDiff, gitStatus }) => {
-          return loadPromptFile('masterAgent.txt').map((systemPrompt) => ({
-            state,
-            spec,
-            plan,
-            currentStep,
-            report,
-            gitDiff,
-            gitStatus,
-            systemPrompt,
-          }));
-        })
-        .andThen(({ state, spec, plan, currentStep, report, gitDiff, gitStatus, systemPrompt }) => {
-          // Determine if there's a next step
-          const hasNextStep = state.currentTaskNumber < state.tasks.length;
-          const nextStepNumber = state.currentTaskNumber + 1;
-          let nextStepContent = '';
-
-          if (hasNextStep) {
-            const nextStep = extractCurrentStepFromPlan(plan, nextStepNumber);
-            if (nextStep) {
-              nextStepContent = nextStep;
-            }
+            };
+            return ResultAsync.fromSafePromise(
+              Promise.resolve(JSON.stringify(rejectOutput, null, 2))
+            );
           }
 
-          // Build user prompt
-          const userPrompt = `# Review Context
+          // Get git diff and git status
+          return exec('git', ['diff', 'HEAD'])
+            .map((result) => result.stdout)
+            .orElse(() => ResultAsync.fromSafePromise(Promise.resolve(''))) // If git diff fails, treat as no changes
+            .andThen((gitDiff) => {
+              return exec('git', ['status', '--short'])
+                .map((result) => result.stdout)
+                .orElse(() => ResultAsync.fromSafePromise(Promise.resolve('')))
+                .map((gitStatus) => ({ gitDiff, gitStatus }));
+            })
+            .andThen(({ gitDiff, gitStatus }) => {
+              return loadPromptFile('masterAgent.txt').map((systemPrompt) => ({
+                state,
+                spec,
+                plan,
+                currentStep,
+                report,
+                gitDiff,
+                gitStatus,
+                systemPrompt,
+              }));
+            })
+            .andThen(
+              ({ state, spec, plan, currentStep, report, gitDiff, gitStatus, systemPrompt }) => {
+                // Determine if there's a next step
+                const hasNextStep = state.currentTaskNumber < state.tasks.length;
+                const nextStepNumber = state.currentTaskNumber + 1;
+                let nextStepContent = '';
+
+                if (hasNextStep) {
+                  const nextStep = extractCurrentStepFromPlan(plan, nextStepNumber);
+                  if (nextStep) {
+                    nextStepContent = nextStep;
+                  }
+                }
+
+                // Build user prompt
+                const userPrompt = `# Review Context
 
 ## Specification (spec.md)
 ${spec}
@@ -335,13 +348,16 @@ ${hasNextStep ? `## Next Plan Step (Task ${nextStepNumber})\n${nextStepContent}`
 
 Review the current task implementation and decide whether to accept or reject. Output ONLY valid JSON.`;
 
-          // Call model with repair capability
-          return createSession('Master Agent Review').andThen((session) =>
-            callModelWithRepair(session.id, session.client, model, systemPrompt, userPrompt)
-              .andThen((output) => deleteSession(session).map(() => output))
-              .orElse((error) => deleteSession(session).andThen(() => err(error)))
-              .map((output) => JSON.stringify(output, null, 2))
-          );
+                // Call model with repair capability
+                return createSession('Master Agent Review').andThen((session) =>
+                  callModelWithRepair(session.id, session.client, model, systemPrompt, userPrompt)
+                    .andThen((output) => deleteSession(session).map(() => output))
+                    .orElse((error) => deleteSession(session).andThen(() => err(error)))
+                    .map((output) => JSON.stringify(output, null, 2))
+                );
+              }
+            );
         });
-    });
+    })
+  );
 };
