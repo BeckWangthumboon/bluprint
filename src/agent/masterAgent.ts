@@ -13,6 +13,7 @@ import { readState } from '../state.js';
 import { exec } from '../shell.js';
 import { findPlanStep, getPlanStep } from './planUtils.js';
 import type { ModelConfig, MasterAgentOutput } from './types.js';
+import { isObject } from './utils.js';
 
 const MASTER_DEFAULT_MODEL: ModelConfig = {
   providerID: 'google',
@@ -20,13 +21,6 @@ const MASTER_DEFAULT_MODEL: ModelConfig = {
 };
 
 const MAX_REPAIR_ATTEMPTS = 2;
-
-/**
- * Type guard to check if data is a valid object
- */
-const isObject = (data: unknown): data is Record<string, unknown> => {
-  return typeof data === 'object' && data !== null;
-};
 
 /**
  * Validates the master agent output against the expected schema

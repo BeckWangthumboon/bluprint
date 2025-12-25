@@ -40,7 +40,7 @@ type TextResponseParseOptions = {
   onInvalidResponse?: (response: unknown) => void;
 };
 
-const isObject = (data: unknown): data is Record<string, unknown> => {
+export const isObject = (data: unknown): data is Record<string, unknown> => {
   return typeof data === 'object' && data !== null;
 };
 
