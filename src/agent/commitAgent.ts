@@ -4,7 +4,7 @@ import { exec } from '../shell.js';
 import { parseTextResponse, toError, getModelConfig, loadPromptFile } from './utils.js';
 import type { ModelConfig } from './types.js';
 
-const REVIEW_DEFAULT_MODEL: ModelConfig = {
+const COMMIT_DEFAULT_MODEL: ModelConfig = {
   providerID: 'google',
   modelID: 'gemini-3-flash',
 };
@@ -14,7 +14,7 @@ const REVIEW_DEFAULT_MODEL: ModelConfig = {
  * then stages and commits all changes with the generated message.
  */
 const generateCommit = (): ResultAsync<void, Error> => {
-  const model = getModelConfig('REVIEW_AGENT_MODEL', REVIEW_DEFAULT_MODEL);
+  const model = getModelConfig('COMMIT_AGENT_MODEL', COMMIT_DEFAULT_MODEL);
 
   return exec('git', ['status', '--short'])
     .andThen((result) => {
@@ -34,7 +34,7 @@ const generateCommit = (): ResultAsync<void, Error> => {
         .orElse(() => ResultAsync.fromSafePromise(Promise.resolve({ gitStatus, gitDiff: '' })));
     })
     .andThen(({ gitStatus, gitDiff }) => {
-      return loadPromptFile('reviewAgent.txt').map((systemPrompt) => ({
+      return loadPromptFile('commitAgent.txt').map((systemPrompt) => ({
         gitStatus,
         gitDiff,
         systemPrompt,
