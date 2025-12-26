@@ -8,7 +8,11 @@ export const isOpencodeInitialized = (): boolean => opencode !== null;
 
 export const getOpencode = async (): Promise<Opencode> => {
   if (!opencode) {
-    opencode = await createOpencode();
+    try {
+      opencode = await createOpencode({ port: 4096 });
+    } catch {
+      opencode = await createOpencode({ port: 0 });
+    }
   }
   return opencode;
 };
