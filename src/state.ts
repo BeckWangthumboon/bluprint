@@ -23,6 +23,19 @@ const STATE_VERSION = '1.0.0';
 const DEFAULT_MAX_ITERATIONS = 50;
 const DEFAULT_MAX_TIME_MINUTES = 15;
 
+const parsePositiveInt = (value: string | undefined): number | null => {
+  if (!value) return null;
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return parsed;
+};
+
+const resolveMaxIterations = (): number =>
+  parsePositiveInt(process.env.MAX_ITERATIONS) ?? DEFAULT_MAX_ITERATIONS;
+
+const resolveMaxTimeMinutes = (): number =>
+  parsePositiveInt(process.env.MAX_TIME_MINUTES) ?? DEFAULT_MAX_TIME_MINUTES;
+
 const validateState = (data: unknown): data is LoopState => {
   if (typeof data !== 'object' || data === null) return false;
 
@@ -138,8 +151,8 @@ export const initializeState = (): ResultAsync<void, Error> =>
         status: 'planning',
         currentTaskNumber: 1,
         isRetry: false,
-        maxIterations: DEFAULT_MAX_ITERATIONS,
-        maxTimeMinutes: DEFAULT_MAX_TIME_MINUTES,
+        maxIterations: resolveMaxIterations(),
+        maxTimeMinutes: resolveMaxTimeMinutes(),
         iterationCount: 0,
         tasks: taskNumbers.map((taskNumber) => ({
           taskNumber,

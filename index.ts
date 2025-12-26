@@ -1,5 +1,6 @@
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
+import { runLoop } from './src/agent/loop.js';
 import { generatePlan } from './src/agent/planAgent.js';
 import { exit } from './src/exit.js';
 
@@ -23,6 +24,21 @@ await yargs(hideBin(process.argv))
     () => {},
     async () => {
       const result = await generatePlan();
+
+      if (result.isErr()) {
+        console.error('Error:', result.error.message);
+        await exit(1);
+      }
+
+      await exit(0);
+    }
+  )
+  .command(
+    'build',
+    'Run the agent loop',
+    () => {},
+    async () => {
+      const result = await runLoop();
 
       if (result.isErr()) {
         console.error('Error:', result.error.message);
