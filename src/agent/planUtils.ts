@@ -18,7 +18,7 @@ export const findPlanStep = (planContent: string, stepNumber: number): string | 
     return null;
   }
 
-  const stepRegex = new RegExp(`^## ${stepNumber} [\s\S]+?(?=^## \\d+ |$)`, 'm');
+  const stepRegex = new RegExp(`^## ${stepNumber} [\\s\\S]+?(?=^## \\d+ |$)`, 'm');
   const match = planContent.match(stepRegex);
   if (!match) {
     return null;
