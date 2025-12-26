@@ -60,7 +60,7 @@ If you need more context about any files, use your tools to read them.`;
           session.client.session.prompt({
             path: { id: session.id },
             body: {
-              agent: 'ask',
+              agent: 'plan',
               model,
               system: systemPrompt,
               parts: [

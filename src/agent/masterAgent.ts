@@ -96,7 +96,7 @@ const callModelWithRepair = (
     client.session.prompt({
       path: { id: sessionId },
       body: {
-        agent: 'ask',
+        agent: 'plan',
         model,
         system: systemPrompt,
         parts: [
