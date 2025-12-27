@@ -2,6 +2,8 @@ import { ResultAsync, errAsync } from 'neverthrow';
 import { readFile } from '../fs.js';
 import { join, dirname } from 'path';
 import type { ModelConfig } from './types.js';
+import type { ToolPart } from '@opencode-ai/sdk';
+import type { ToolCallSummary } from './logger.js';
 
 export const toError = (e: unknown): Error => (e instanceof Error ? e : new Error(String(e)));
 
@@ -101,3 +103,27 @@ export async function validateModel(
 
   return true;
 }
+
+type ResponseWithParts = {
+  data?: {
+    parts?: Array<{ type: string; tool?: string; state?: { status: string; title?: string } }>;
+  };
+};
+
+/**
+ * Extract tool call summaries from a prompt response
+ */
+export const extractToolCalls = (response: unknown): ToolCallSummary[] => {
+  const resp = response as ResponseWithParts;
+  if (!resp?.data?.parts || !Array.isArray(resp.data.parts)) {
+    return [];
+  }
+
+  return resp.data.parts
+    .filter((part): part is ToolPart => part.type === 'tool')
+    .filter((part) => part.state.status === 'completed')
+    .map((part) => ({
+      tool: part.tool,
+      title: (part.state as { title: string }).title,
+    }));
+};

@@ -43,4 +43,10 @@ export const clearFile = (
   encoding: BufferEncoding = DEFAULT_ENCODING
 ): ResultAsync<void, Error> => writeFile(filePath, '', encoding);
 
-export const fsUtils = { readFile, writeFile, appendFile, clearFile };
+export const removeDir = (dirPath: string): ResultAsync<void, Error> =>
+  ResultAsync.fromPromise(
+    fs.rm(dirPath, { recursive: true, force: true }).catch(() => {}),
+    toError
+  );
+
+export const fsUtils = { readFile, writeFile, appendFile, clearFile, removeDir };
