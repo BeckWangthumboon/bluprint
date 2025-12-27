@@ -15,7 +15,7 @@ import type { ModelConfig } from './types.js';
 
 const CODING_DEFAULT_MODEL: ModelConfig = {
   providerID: 'google',
-  modelID: 'claude-sonnet-4-5',
+  modelID: 'claude-sonnet-4-5-thinking',
 };
 
 /**

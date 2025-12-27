@@ -53,7 +53,7 @@
     - Be as detailed as the plan step itself
 
     <example>
-      {"decision":"accept","task":"Implement Task 2: Integrate Logger into Session Manager\n\nAdd logging to track the lifecycle of Opencode sessions.\n\nRequirements:\n- Modify file: src/agent/sessionManager.ts\n- Import Logger from ../logger.js\n- Instantiate a top-level logger with component name \"SessionManager\"\n- Update createSession: log INFO message \"Session created: ${title} (ID: ${response.data.id})\"\n- Update createSession: log ERROR message if session creation fails\n- Update deleteSession: log INFO message \"Session deleted (ID: ${session.id})\"\n- Update deleteSession: log ERROR message if session deletion fails\n\nExpected outcome: All session operations are recorded in the persistent log file.\n\nUpdate report.md with what you implemented."}
+      {"decision":"accept","task":"Implement Task 2: Integrate Logger into Session Manager\n\nAdd logging to track the lifecycle of Opencode sessions.\n\nRequirements:\n- Modify file: src/agent/sessionManager.ts\n- Import Logger from ../logger.js\n- Instantiate a top-level logger with component name \"SessionManager\"\n- Update createSession: log INFO message \"Session created: ${title} (ID: ${response.data.id})\"\n- Update createSession: log ERROR message if session creation fails\n- Update deleteSession: log INFO message \"Session deleted (ID: ${session.id})\"\n- Update deleteSession: log ERROR message if session deletion fails\n\nExpected outcome: All session operations are recorded in the persistent log file."}
     </example>
   </on_accept>
 
@@ -68,7 +68,7 @@
     - Include code examples or file paths where helpful
 
     <example>
-      {"decision":"reject","task":"The implementation for Task 1 is incomplete. You were required to create src/logger.ts with a Logger class, but the git diff shows no changes.\n\nMissing requirements:\n1. File src/logger.ts does not exist\n2. LogLevel enum with INFO, WARN, ERROR is not defined\n3. Logger class with constructor and methods is not implemented\n4. No integration with workspace.logs.append\n\nYou must:\n1. Create the file src/logger.ts\n2. Define the LogLevel enum as specified in the plan\n3. Implement the Logger class with:\n   - Constructor: constructor(private component: string)\n   - Public methods: info(message: string), warn(message: string), error(message: string)\n   - Private log method that formats entries and calls workspace.logs.append\n4. Test that the logger writes to .duo/logs.md\n\nUpdate report.md with your implementation once complete."}
+      {"decision":"reject","task":"The implementation for Task 1 is incomplete. You were required to create src/logger.ts with a Logger class, but the git diff shows no changes.\n\nMissing requirements:\n1. File src/logger.ts does not exist\n2. LogLevel enum with INFO, WARN, ERROR is not defined\n3. Logger class with constructor and methods is not implemented\n4. No integration with workspace.logs.append\n\nYou must:\n1. Create the file src/logger.ts\n2. Define the LogLevel enum as specified in the plan\n3. Implement the Logger class with:\n   - Constructor: constructor(private component: string)\n   - Public methods: info(message: string), warn(message: string), error(message: string)\n   - Private log method that formats entries and calls workspace.logs.append\n4. Test that the logger writes to .duo/logs.md\n\nUpdate your implementation."}
     </example>
   </on_reject>
 </output_format>
