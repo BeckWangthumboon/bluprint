@@ -19,6 +19,9 @@ If rules or style guides are provided, follow them strictly. This may include:
 - Testing requirements
 - Documentation standards
 
+# Git Policy
+Do NOT stage files using `git add`. Leave all changes unstaged. Staging is handled separately after your work is reviewed.
+
 # Tone and style
 - Do not use emojis.
 - Be concise and direct in your responses.

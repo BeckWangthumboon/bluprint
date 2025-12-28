@@ -1,5 +1,6 @@
 import { ResultAsync } from 'neverthrow';
 import { workspace } from '../workspace.js';
+import { exec } from '../shell.js';
 import {
   checkLimits,
   completeCurrentTask,
@@ -190,6 +191,8 @@ export const runLoop = (): ResultAsync<void, Error> =>
           const report = await unwrapOrThrow(executeCodingAgent(iteration));
           await unwrapOrThrow(saveReport(report));
           iterationData.codingDurationMs = Date.now() - codingStartedAt;
+
+          await exec('git', ['restore', '--staged', '.']).unwrapOr(undefined);
 
           // Master review
           const reviewStartedAt = Date.now();

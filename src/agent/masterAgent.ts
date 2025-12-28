@@ -308,7 +308,7 @@ ${currentStep}`,
             .map((result) => result.stdout)
             .orElse(() => ResultAsync.fromSafePromise(Promise.resolve(''))) // If git diff fails, treat as no changes
             .andThen((gitDiff) => {
-              return exec('git', ['status', '--short'])
+              return exec('git', ['status', '--porcelain'])
                 .map((result) => result.stdout)
                 .orElse(() => ResultAsync.fromSafePromise(Promise.resolve('')))
                 .map((gitStatus) => ({ gitDiff, gitStatus }));

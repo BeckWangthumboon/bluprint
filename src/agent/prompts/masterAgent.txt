@@ -100,6 +100,19 @@
   </on_reject>
 </output_format>
 
+<file_change_interpretation>
+  Files are NOT staged during the coding agent's execution. When interpreting changes:
+
+  - New files appear as untracked (??) in git status but will NOT appear in git diff
+  - Modified files appear in git diff as unstaged changes
+  - To verify new file contents, use your tools to read the files directly
+
+  Do NOT instruct the coding agent to stage files. Accept implementations based on:
+  1. The presence of required files in git status
+  2. The coding agent's report describing what was implemented
+  3. Direct file inspection using your tools if verification is needed
+</file_change_interpretation>
+
 <critical_rules>
   <json_output_rules>
     1. Output ONLY the JSON object - no markdown, no explanations, no additional text
