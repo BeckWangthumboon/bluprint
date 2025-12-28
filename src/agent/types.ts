@@ -3,7 +3,6 @@ export interface ModelConfig {
   modelID: string;
 }
 
-export interface MasterAgentOutput {
-  decision: 'accept' | 'reject';
-  task: string;
-}
+export type MasterAgentOutput = { decision: 'accept' } | { decision: 'reject'; task: string };
+
+export type FirstIterationOutput = { task: string };

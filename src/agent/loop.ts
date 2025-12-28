@@ -12,7 +12,7 @@ import {
 } from '../state.js';
 import { executeCodingAgent } from './codingAgent.js';
 import { createCommitForTask } from './commitAgent.js';
-import { reviewAndGenerateTask } from './masterAgent.js';
+import { reviewAndGenerateTask, generateInitialTask } from './masterAgent.js';
 import type { MasterAgentOutput } from './types.js';
 import { isObject, toError } from './utils.js';
 import { purgeAndInitLogger, type ManifestData } from './logger.js';
@@ -32,15 +32,17 @@ const parseMasterOutput = (raw: string): MasterAgentOutput => {
   const decision = parsed.decision;
   const task = parsed.task;
 
-  if (decision !== 'accept' && decision !== 'reject') {
-    throw new Error('Master output decision must be "accept" or "reject"');
+  switch (decision) {
+    case 'reject':
+      if (typeof task !== 'string' || task.trim() === '') {
+        throw new Error('Master output task must be a non-empty string when decision is "reject"');
+      }
+      return { decision, task };
+    case 'accept':
+      return { decision }; // On accept, task is not required
+    default:
+      throw new Error('Master output decision must be "accept" or "reject"');
   }
-
-  if (typeof task !== 'string' || task.trim() === '') {
-    throw new Error('Master output task must be a non-empty string');
-  }
-
-  return { decision, task };
 };
 
 const unwrapOrThrow = async <T>(result: ResultAsync<T, Error>): Promise<T> => {
@@ -161,10 +163,9 @@ export const runLoop = (): ResultAsync<void, Error> =>
         // Write initial manifest
         await logger.writeManifest(manifestData);
 
-        // Generate seed task (iteration 0)
-        const seedRaw = await unwrapOrThrow(reviewAndGenerateTask(0));
-        const seedOutput = parseMasterOutput(seedRaw);
-        await unwrapOrThrow(saveTaskMarkdown(seedOutput.task));
+        // Generate seed task (iteration 0), use first iteration prompt
+        const seedTask = await unwrapOrThrow(generateInitialTask());
+        await unwrapOrThrow(saveTaskMarkdown(seedTask));
 
         // Main loop
         while (true) {
@@ -194,7 +195,6 @@ export const runLoop = (): ResultAsync<void, Error> =>
           const reviewStartedAt = Date.now();
           const reviewRaw = await unwrapOrThrow(reviewAndGenerateTask(iteration));
           const reviewOutput = parseMasterOutput(reviewRaw);
-          await unwrapOrThrow(saveTaskMarkdown(reviewOutput.task));
           iterationData.masterDurationMs = Date.now() - reviewStartedAt;
           iterationData.decision = reviewOutput.decision;
 
@@ -207,22 +207,37 @@ export const runLoop = (): ResultAsync<void, Error> =>
                 message: commitResult.message,
               };
             }
+
             await unwrapOrThrow(applyDecision('accept', commitResult?.hash));
+
+            // Track iteration
+            manifestData.iterations.push(iterationData);
+            manifestData.totalIterations = iteration;
+            await logger.writeManifest(manifestData);
+
+            await unwrapOrThrow(incrementIteration());
+
+            // Check if all tasks are completed
+            const state = await unwrapOrThrow(readState());
+            if (state.status === 'completed') {
+              await writeManifestSafe('completed');
+              return;
+            }
+
+            // Generate task for the next plan step
+            const nextTask = await unwrapOrThrow(generateInitialTask());
+            await unwrapOrThrow(saveTaskMarkdown(nextTask));
           } else {
+            // On reject, save the correction instructions to task.md
+            await unwrapOrThrow(saveTaskMarkdown(reviewOutput.task));
             await unwrapOrThrow(applyDecision('reject'));
-          }
 
-          // Track iteration
-          manifestData.iterations.push(iterationData);
-          manifestData.totalIterations = iteration;
-          await logger.writeManifest(manifestData);
+            // Track iteration
+            manifestData.iterations.push(iterationData);
+            manifestData.totalIterations = iteration;
+            await logger.writeManifest(manifestData);
 
-          await unwrapOrThrow(incrementIteration());
-
-          const state = await unwrapOrThrow(readState());
-          if (state.status === 'completed') {
-            await writeManifestSafe('completed');
-            return;
+            await unwrapOrThrow(incrementIteration());
           }
         }
       } catch (error) {
@@ -232,7 +247,6 @@ export const runLoop = (): ResultAsync<void, Error> =>
         if (stateInitialized && !loopFailed) {
           const failResult = await failLoop();
           if (failResult.isErr()) {
-            // Silently handle - we're already in error state
           }
         }
         throw error;
