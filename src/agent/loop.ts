@@ -15,6 +15,7 @@ import { createCommitForTask } from './commitAgent.js';
 import { reviewAndGenerateTask } from './masterAgent.js';
 import type { MasterAgentOutput } from './types.js';
 import { isObject, toError } from './utils.js';
+import { purgeAndInitLogger, type ManifestData } from './logger.js';
 
 const parseMasterOutput = (raw: string): MasterAgentOutput => {
   let parsed: unknown;
@@ -92,8 +93,36 @@ export const runLoop = (): ResultAsync<void, Error> =>
     (async () => {
       let stateInitialized = false;
       let loopFailed = false;
+      let iteration = 0;
+      const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const startedAt = new Date();
+
+      // Initialize manifest data for tracking
+      const manifestData: ManifestData = {
+        runId,
+        startedAt,
+        status: 'in_progress',
+        totalIterations: 0,
+        inputSizes: { spec: 0, plan: 0, summary: 0 },
+        iterations: [],
+      };
+
+      // Purge old logs and initialize new logger
+      const logger = await purgeAndInitLogger(runId);
+
+      const writeManifestSafe = async (
+        status: ManifestData['status'],
+        error?: string
+      ): Promise<void> => {
+        manifestData.status = status;
+        manifestData.endedAt = new Date();
+        manifestData.totalIterations = iteration;
+        if (error) manifestData.error = error;
+        await logger.writeManifest(manifestData);
+      };
 
       try {
+        // Load inputs
         const [spec, plan, summary] = await unwrapOrThrow(
           ResultAsync.combine([
             workspace.spec.read().mapErr((e) => new Error(`Could not read spec.md: ${e.message}`)),
@@ -103,6 +132,12 @@ export const runLoop = (): ResultAsync<void, Error> =>
               .mapErr((e) => new Error(`Could not read summary.md: ${e.message}`)),
           ])
         );
+
+        manifestData.inputSizes = {
+          spec: spec.length,
+          plan: plan.length,
+          summary: summary.length,
+        };
 
         if (!spec.trim()) {
           throw new Error('spec.md is empty. Please add a specification first.');
@@ -116,17 +151,32 @@ export const runLoop = (): ResultAsync<void, Error> =>
           throw new Error('summary.md is empty. Please generate a summary first.');
         }
 
+        // Initialize state
         await unwrapOrThrow(initializeState());
         stateInitialized = true;
         await unwrapOrThrow(startExecution());
         await unwrapOrThrow(workspace.task.write(''));
         await unwrapOrThrow(workspace.report.write(''));
 
-        const seedRaw = await unwrapOrThrow(reviewAndGenerateTask());
+        // Write initial manifest
+        await logger.writeManifest(manifestData);
+
+        // Generate seed task (iteration 0)
+        const seedRaw = await unwrapOrThrow(reviewAndGenerateTask(0));
         const seedOutput = parseMasterOutput(seedRaw);
         await unwrapOrThrow(saveTaskMarkdown(seedOutput.task));
 
+        // Main loop
         while (true) {
+          iteration += 1;
+
+          // Get current plan step from state
+          const currentState = await unwrapOrThrow(readState());
+          const planStep = currentState.currentTaskNumber;
+
+          const iterationData: ManifestData['iterations'][0] = { iteration, planStep };
+
+          // Check limits
           const limits = await unwrapOrThrow(checkLimits());
           if (limits.exceeded) {
             await unwrapOrThrow(failLoop());
@@ -134,32 +184,55 @@ export const runLoop = (): ResultAsync<void, Error> =>
             throw new Error(limits.reason ?? 'Loop limits exceeded');
           }
 
-          const report = await unwrapOrThrow(executeCodingAgent());
+          // Execute coding agent
+          const codingStartedAt = Date.now();
+          const report = await unwrapOrThrow(executeCodingAgent(iteration));
           await unwrapOrThrow(saveReport(report));
+          iterationData.codingDurationMs = Date.now() - codingStartedAt;
 
-          const reviewRaw = await unwrapOrThrow(reviewAndGenerateTask());
+          // Master review
+          const reviewStartedAt = Date.now();
+          const reviewRaw = await unwrapOrThrow(reviewAndGenerateTask(iteration));
           const reviewOutput = parseMasterOutput(reviewRaw);
           await unwrapOrThrow(saveTaskMarkdown(reviewOutput.task));
+          iterationData.masterDurationMs = Date.now() - reviewStartedAt;
+          iterationData.decision = reviewOutput.decision;
 
+          // Handle decision
           if (reviewOutput.decision === 'accept') {
-            const commitHash = await unwrapOrThrow(createCommitForTask());
-            await unwrapOrThrow(applyDecision('accept', commitHash));
+            const commitResult = await unwrapOrThrow(createCommitForTask());
+            if (commitResult) {
+              iterationData.commit = {
+                hash: commitResult.hash,
+                message: commitResult.message,
+              };
+            }
+            await unwrapOrThrow(applyDecision('accept', commitResult?.hash));
           } else {
             await unwrapOrThrow(applyDecision('reject'));
           }
+
+          // Track iteration
+          manifestData.iterations.push(iterationData);
+          manifestData.totalIterations = iteration;
+          await logger.writeManifest(manifestData);
 
           await unwrapOrThrow(incrementIteration());
 
           const state = await unwrapOrThrow(readState());
           if (state.status === 'completed') {
+            await writeManifestSafe('completed');
             return;
           }
         }
       } catch (error) {
+        const errorMessage = toError(error).message;
+        await writeManifestSafe('failed', errorMessage);
+
         if (stateInitialized && !loopFailed) {
           const failResult = await failLoop();
           if (failResult.isErr()) {
-            console.error('Failed to mark loop as failed:', failResult.error.message);
+            // Silently handle - we're already in error state
           }
         }
         throw error;

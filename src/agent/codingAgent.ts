@@ -10,7 +10,9 @@ import {
   getModelConfig,
   loadPromptFile,
   validateModel,
+  extractToolCalls,
 } from './utils.js';
+import { getLogger } from './logger.js';
 import type { ModelConfig } from './types.js';
 
 const CODING_DEFAULT_MODEL: ModelConfig = {
@@ -22,8 +24,9 @@ const CODING_DEFAULT_MODEL: ModelConfig = {
  * Executes the coding agent to implement the current plan step.
  * Reads task, summary, and current plan step, then runs the agent.
  * Returns the report content.
+ * @param iteration - The current loop iteration number
  */
-export const executeCodingAgent = (): ResultAsync<string, Error> => {
+export const executeCodingAgent = (iteration: number): ResultAsync<string, Error> => {
   const codingModel = getModelConfig('CODING_AGENT_MODEL', CODING_DEFAULT_MODEL);
 
   return ResultAsync.fromPromise(getOpencodeClient(), toError).andThen((client) =>
@@ -66,9 +69,11 @@ ${currentStep}
 
 Please implement this step and provide a report following the format specified in your instructions.`;
 
-          // Create session and run the agent
-          return createSession('Coding Agent Execution').andThen((session) =>
-            ResultAsync.fromPromise(
+          return createSession('Coding Agent Execution').andThen((session) => {
+            const startedAt = new Date();
+            const planStep = state.currentTaskNumber;
+
+            return ResultAsync.fromPromise(
               session.client.session.prompt({
                 path: { id: session.id },
                 body: {
@@ -85,20 +90,56 @@ Please implement this step and provide a report following the format specified i
               }),
               toError
             )
-              .andThen((promptResponse) =>
-                parseTextResponse(promptResponse, {
+              .andThen((promptResponse) => {
+                const toolCalls = extractToolCalls(promptResponse);
+                return parseTextResponse(promptResponse, {
                   invalidResponseMessage:
                     'Failed to execute coding agent: Invalid response structure',
                   emptyResponseMessage: 'No text content in response',
                   trim: true,
-                  onInvalidResponse: (response) => {
-                    console.error('Invalid response structure:', JSON.stringify(response, null, 2));
-                  },
-                })
-              )
+                }).map((report) => ({ report, toolCalls }));
+              })
+              .andThen(({ report, toolCalls }) => {
+                // Log the agent call
+                const endedAt = new Date();
+                const logger = getLogger();
+                return ResultAsync.fromPromise(
+                  logger.logAgentCall({
+                    agent: 'codingAgent',
+                    iteration,
+                    planStep,
+                    model: codingModel,
+                    sessionId: session.id,
+                    startedAt,
+                    endedAt,
+                    response: report,
+                    toolCalls,
+                  }),
+                  toError
+                ).map(() => report);
+              })
               .andThen((report) => deleteSession(session).map(() => report))
-              .orElse((error) => deleteSession(session).andThen(() => err(error)))
-          );
+              .orElse((error) => {
+                // Log error case
+                const endedAt = new Date();
+                const logger = getLogger();
+                logger
+                  .logAgentCall({
+                    agent: 'codingAgent',
+                    iteration,
+                    planStep,
+                    model: codingModel,
+                    sessionId: session.id,
+                    startedAt,
+                    endedAt,
+                    response: '',
+                    toolCalls: [],
+                    error: error.message,
+                  })
+                  .catch(() => {});
+                return deleteSession(session).andThen(() => err(error));
+              });
+          });
         });
       });
     })

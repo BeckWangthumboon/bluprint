@@ -12,6 +12,11 @@ const COMMIT_DEFAULT_MODEL: ModelConfig = {
   modelID: 'gemini-3-flash',
 };
 
+export interface CommitResult {
+  hash: string;
+  message: string;
+}
+
 /**
  * Stages all changes and retrieves git status and diff
  */
@@ -104,9 +109,9 @@ If you need more context about any files, use your tools to read them.`;
 };
 
 /**
- * Commits the staged changes and returns the commit hash
+ * Commits the staged changes and returns the commit hash and cleaned message
  */
-const commitAndGetHash = (commitMessage: string): ResultAsync<string, Error> => {
+const commitAndGetResult = (commitMessage: string): ResultAsync<CommitResult, Error> => {
   const cleanMessage = commitMessage
     .replace(/^```[^\n]*\n?/, '')
     .replace(/\n?```$/, '')
@@ -114,21 +119,24 @@ const commitAndGetHash = (commitMessage: string): ResultAsync<string, Error> => 
 
   return exec('git', ['commit', '-m', cleanMessage])
     .andThen(() => exec('git', ['rev-parse', 'HEAD']))
-    .map((result) => result.stdout.trim())
+    .map((result) => ({
+      hash: result.stdout.trim(),
+      message: cleanMessage,
+    }))
     .mapErr((error) => new Error(`Failed to commit: ${error.message}`));
 };
 
 /**
  * Creates a commit for the current task by reviewing uncommitted changes
- * and the current plan step. Returns the commit hash, or empty string if
- * there are no changes to commit.
+ * and the current plan step. Returns the commit result with hash and message,
+ * or null if there are no changes to commit.
  */
-const createCommitForTask = (): ResultAsync<string, Error> => {
+const createCommitForTask = (): ResultAsync<CommitResult | null, Error> => {
   const model = getModelConfig('COMMIT_AGENT_MODEL', COMMIT_DEFAULT_MODEL);
 
   return stageAndGetGitInfo().andThen((gitInfo) => {
     if (!gitInfo) {
-      return ok('');
+      return ok(null);
     }
 
     const { gitStatus, gitDiff } = gitInfo;
@@ -143,18 +151,19 @@ const createCommitForTask = (): ResultAsync<string, Error> => {
       .andThen(({ state, plan }) =>
         getPlanStep(plan, state.currentTaskNumber, {
           missingStep: (stepNumber) => `Could not find task ${stepNumber} in plan.md`,
-        }).map((currentStep) => ({ currentStep }))
+        }).map((currentStep) => currentStep)
       )
-      .andThen(({ currentStep }) =>
+      .andThen((currentStep) =>
         loadPromptFile('commitAgent.txt').map((systemPrompt) => ({
           currentStep,
           systemPrompt,
         }))
       )
       .andThen(({ currentStep, systemPrompt }) =>
-        generateCommitMessage(systemPrompt, currentStep, gitStatus, gitDiff, model)
-      )
-      .andThen((commitMessage) => commitAndGetHash(commitMessage));
+        generateCommitMessage(systemPrompt, currentStep, gitStatus, gitDiff, model).andThen(
+          (commitMessage) => commitAndGetResult(commitMessage)
+        )
+      );
   });
 };
 

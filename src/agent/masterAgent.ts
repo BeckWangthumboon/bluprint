@@ -7,11 +7,13 @@ import {
   getModelConfig,
   loadPromptFile,
   validateModel,
+  extractToolCalls,
 } from './utils.js';
 import { getOpencodeClient } from './session.js';
 import { readState } from '../state.js';
 import { exec } from '../shell.js';
 import { findPlanStep, getPlanStep } from './planUtils.js';
+import { getLogger, type ToolCallSummary } from './logger.js';
 import type { ModelConfig, MasterAgentOutput } from './types.js';
 import { isObject } from './utils.js';
 
@@ -91,7 +93,10 @@ const callModelWithRepair = (
   systemPrompt: string,
   userPrompt: string,
   attemptNumber = 1
-): ResultAsync<MasterAgentOutput, Error> => {
+): ResultAsync<
+  { output: MasterAgentOutput; rawResponse: string; toolCalls: ToolCallSummary[] },
+  Error
+> => {
   return ResultAsync.fromPromise(
     client.session.prompt({
       path: { id: sessionId },
@@ -108,8 +113,9 @@ const callModelWithRepair = (
       },
     }),
     toError
-  ).andThen((promptResponse: unknown) =>
-    parseTextResponse(promptResponse, {
+  ).andThen((promptResponse: unknown) => {
+    const toolCalls = extractToolCalls(promptResponse);
+    return parseTextResponse(promptResponse, {
       invalidResponseMessage:
         'Failed to get response from master agent: Invalid response structure',
       emptyResponseMessage: 'No text content in master agent response',
@@ -167,15 +173,20 @@ const callModelWithRepair = (
         );
       }
 
-      return ok(validation.value);
-    })
-  );
+      return ok({
+        output: validation.value,
+        rawResponse: rawOutput,
+        toolCalls,
+      });
+    });
+  });
 };
 
 /**
  * Main master agent function that reviews code changes and generates next task
+ * @param iteration - The current loop iteration number
  */
-export const reviewAndGenerateTask = (): ResultAsync<string, Error> => {
+export const reviewAndGenerateTask = (iteration: number): ResultAsync<string, Error> => {
   const model = getModelConfig('MASTER_AGENT_MODEL', MASTER_DEFAULT_MODEL);
 
   return ResultAsync.fromPromise(getOpencodeClient(), toError).andThen((client) =>
@@ -308,11 +319,53 @@ ${hasNextStep ? `## Next Plan Step (Task ${nextStepNumber})\n${nextStepContent}`
 
 Review the current task implementation and decide whether to accept or reject. Output ONLY valid JSON.`;
 
+                const startedAt = new Date();
+                const planStep = state.currentTaskNumber;
+
                 // Call model with repair capability
                 return createSession('Master Agent Review').andThen((session) =>
                   callModelWithRepair(session.id, session.client, model, systemPrompt, userPrompt)
+                    .andThen(({ output, rawResponse, toolCalls }) => {
+                      // Log the agent call
+                      const endedAt = new Date();
+                      const logger = getLogger();
+                      return ResultAsync.fromPromise(
+                        logger.logAgentCall({
+                          agent: 'masterAgent',
+                          iteration,
+                          planStep,
+                          model,
+                          sessionId: session.id,
+                          startedAt,
+                          endedAt,
+                          response: rawResponse,
+                          toolCalls,
+                          decision: output.decision,
+                        }),
+                        toError
+                      ).map(() => output);
+                    })
                     .andThen((output) => deleteSession(session).map(() => output))
-                    .orElse((error) => deleteSession(session).andThen(() => err(error)))
+                    .orElse((error) => {
+                      // Log error case
+                      const endedAt = new Date();
+                      const logger = getLogger();
+                      logger
+                        .logAgentCall({
+                          agent: 'masterAgent',
+                          iteration,
+                          planStep,
+                          model,
+                          sessionId: session.id,
+                          startedAt,
+                          endedAt,
+                          response: '',
+                          toolCalls: [],
+                          error: error.message,
+                        })
+                        .catch(() => {});
+                      return deleteSession(session).andThen(() => err(error));
+                    })
                     .map((output) => JSON.stringify(output, null, 2))
                 );
               }
