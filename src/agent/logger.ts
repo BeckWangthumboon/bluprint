@@ -5,11 +5,6 @@ import type { ModelConfig } from './types.js';
 
 const { LOGS_DIR } = workspaceConstants;
 
-export interface ToolCallSummary {
-  tool: string;
-  title: string;
-}
-
 export interface AgentCallData {
   agent: 'codingAgent' | 'masterAgent';
   iteration: number;
@@ -19,7 +14,6 @@ export interface AgentCallData {
   startedAt: Date;
   endedAt: Date;
   response: string;
-  toolCalls: ToolCallSummary[];
   error?: string;
   decision?: 'accept' | 'reject';
 }
@@ -145,19 +139,10 @@ class RunLogger {
 
     const agentTitle = data.agent === 'codingAgent' ? 'Coding Agent' : 'Master Agent';
 
-    // Build tool calls section
-    let toolCallsSection = '';
-    if (data.toolCalls.length > 0) {
-      const toolLines = data.toolCalls.map((tc) => `- ${tc.tool}: ${tc.title}`).join('\n');
-      toolCallsSection = `## Tool Calls\n\n${toolLines}\n\n`;
-    } else {
-      toolCallsSection = '## Tool Calls\n\nNo tool calls\n\n';
-    }
-
     const body = `
 # ${agentTitle} - Iteration ${data.iteration} (Plan Step ${data.planStep})
 
-${toolCallsSection}## Response
+## Response
 
 \`\`\`
 ${data.response}

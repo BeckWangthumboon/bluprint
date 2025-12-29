@@ -7,13 +7,12 @@ import {
   getModelConfig,
   loadPromptFile,
   validateModel,
-  extractToolCalls,
 } from './utils.js';
 import { getOpencodeClient } from './session.js';
 import { readState } from '../state.js';
 import { exec } from '../shell.js';
 import { findPlanStep, getPlanStep } from './planUtils.js';
-import { getLogger, type ToolCallSummary } from './logger.js';
+import { getLogger } from './logger.js';
 import type { ModelConfig, MasterAgentOutput, FirstIterationOutput } from './types.js';
 import { isObject } from './utils.js';
 
@@ -147,10 +146,7 @@ const callModelWithRepair = (
   systemPrompt: string,
   userPrompt: string,
   attemptNumber = 1
-): ResultAsync<
-  { output: MasterAgentOutput; rawResponse: string; toolCalls: ToolCallSummary[] },
-  Error
-> => {
+): ResultAsync<{ output: MasterAgentOutput; rawResponse: string }, Error> => {
   return ResultAsync.fromPromise(
     client.session.prompt({
       path: { id: sessionId },
@@ -168,7 +164,6 @@ const callModelWithRepair = (
     }),
     toError
   ).andThen((promptResponse: unknown) => {
-    const toolCalls = extractToolCalls(promptResponse);
     return parseTextResponse(promptResponse, {
       invalidResponseMessage:
         'Failed to get response from master agent: Invalid response structure',
@@ -230,7 +225,6 @@ const callModelWithRepair = (
       return ok({
         output: validation.value,
         rawResponse: rawOutput,
-        toolCalls,
       });
     });
   });
@@ -379,7 +373,7 @@ Review the current task implementation and decide whether to accept or reject. O
                 // Call model with repair capability
                 return createSession('Master Agent Review').andThen((session) =>
                   callModelWithRepair(session.id, session.client, model, systemPrompt, userPrompt)
-                    .andThen(({ output, rawResponse, toolCalls }) => {
+                    .andThen(({ output, rawResponse }) => {
                       // Log the agent call
                       const endedAt = new Date();
                       const logger = getLogger();
@@ -393,7 +387,6 @@ Review the current task implementation and decide whether to accept or reject. O
                           startedAt,
                           endedAt,
                           response: rawResponse,
-                          toolCalls,
                           decision: output.decision,
                         }),
                         toError
@@ -414,7 +407,6 @@ Review the current task implementation and decide whether to accept or reject. O
                           startedAt,
                           endedAt,
                           response: '',
-                          toolCalls: [],
                           error: error.message,
                         })
                         .catch(() => {});
@@ -439,10 +431,7 @@ const callFirstIterationModelWithRepair = (
   systemPrompt: string,
   userPrompt: string,
   attemptNumber = 1
-): ResultAsync<
-  { output: FirstIterationOutput; rawResponse: string; toolCalls: ToolCallSummary[] },
-  Error
-> => {
+): ResultAsync<{ output: FirstIterationOutput; rawResponse: string }, Error> => {
   return ResultAsync.fromPromise(
     client.session.prompt({
       path: { id: sessionId },
@@ -460,7 +449,6 @@ const callFirstIterationModelWithRepair = (
     }),
     toError
   ).andThen((promptResponse: unknown) => {
-    const toolCalls = extractToolCalls(promptResponse);
     return parseTextResponse(promptResponse, {
       invalidResponseMessage:
         'Failed to get response from master agent: Invalid response structure',
@@ -526,7 +514,6 @@ const callFirstIterationModelWithRepair = (
       return ok({
         output: validation.value,
         rawResponse: rawOutput,
-        toolCalls,
       });
     });
   });
@@ -609,7 +596,7 @@ Generate detailed task instructions for the coding agent to implement this plan 
               systemPrompt,
               userPrompt
             )
-              .andThen(({ output, rawResponse, toolCalls }) => {
+              .andThen(({ output, rawResponse }) => {
                 // Log the agent call
                 const endedAt = new Date();
                 const logger = getLogger();
@@ -623,7 +610,6 @@ Generate detailed task instructions for the coding agent to implement this plan 
                     startedAt,
                     endedAt,
                     response: rawResponse,
-                    toolCalls,
                   }),
                   toError
                 ).map(() => output);
@@ -643,7 +629,6 @@ Generate detailed task instructions for the coding agent to implement this plan 
                     startedAt,
                     endedAt,
                     response: '',
-                    toolCalls: [],
                     error: error.message,
                   })
                   .catch(() => {});

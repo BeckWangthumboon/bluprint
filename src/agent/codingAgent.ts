@@ -10,7 +10,6 @@ import {
   getModelConfig,
   loadPromptFile,
   validateModel,
-  extractToolCalls,
 } from './utils.js';
 import { getLogger } from './logger.js';
 import type { ModelConfig } from './types.js';
@@ -91,15 +90,14 @@ Please implement this step and provide a report following the format specified i
               toError
             )
               .andThen((promptResponse) => {
-                const toolCalls = extractToolCalls(promptResponse);
                 return parseTextResponse(promptResponse, {
                   invalidResponseMessage:
                     'Failed to execute coding agent: Invalid response structure',
                   emptyResponseMessage: 'No text content in response',
                   trim: true,
-                }).map((report) => ({ report, toolCalls }));
+                });
               })
-              .andThen(({ report, toolCalls }) => {
+              .andThen((report) => {
                 // Log the agent call
                 const endedAt = new Date();
                 const logger = getLogger();
@@ -113,7 +111,6 @@ Please implement this step and provide a report following the format specified i
                     startedAt,
                     endedAt,
                     response: report,
-                    toolCalls,
                   }),
                   toError
                 ).map(() => report);
@@ -133,7 +130,6 @@ Please implement this step and provide a report following the format specified i
                     startedAt,
                     endedAt,
                     response: '',
-                    toolCalls: [],
                     error: error.message,
                   })
                   .catch(() => {});
