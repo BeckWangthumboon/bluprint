@@ -10,6 +10,9 @@ import {
   getModelConfig,
   loadPromptFile,
   validateModel,
+  withTimeout,
+  getTimeoutMs,
+  getOpenCodeError,
 } from './utils.js';
 import { getLogger } from './logger.js';
 import type { ModelConfig } from './types.js';
@@ -71,25 +74,32 @@ Please implement this step and provide a report following the format specified i
           return createSession('Coding Agent Execution').andThen((session) => {
             const startedAt = new Date();
             const planStep = state.currentTaskNumber;
+            const timeoutMs = getTimeoutMs('CODING_AGENT_TIMEOUT_MS');
 
             return ResultAsync.fromPromise(
-              session.client.session.prompt({
-                path: { id: session.id },
-                body: {
-                  agent: 'build',
-                  model: codingModel,
-                  system: systemPrompt,
-                  parts: [
-                    {
-                      type: 'text',
-                      text: userPrompt,
-                    },
-                  ],
-                },
-              }),
+              withTimeout(
+                session.client.session.prompt({
+                  path: { id: session.id },
+                  body: {
+                    agent: 'build',
+                    model: codingModel,
+                    system: systemPrompt,
+                    parts: [
+                      {
+                        type: 'text',
+                        text: userPrompt,
+                      },
+                    ],
+                  },
+                }),
+                timeoutMs,
+                `Coding agent prompt (iteration ${iteration})`
+              ),
               toError
             )
               .andThen((promptResponse) => {
+                const error = getOpenCodeError(promptResponse, 'Coding agent failed');
+                if (error) return err(error);
                 return parseTextResponse(promptResponse, {
                   invalidResponseMessage:
                     'Failed to execute coding agent: Invalid response structure',

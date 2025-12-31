@@ -7,6 +7,9 @@ import {
   getModelConfig,
   loadPromptFile,
   validateModel,
+  withTimeout,
+  getTimeoutMs,
+  getOpenCodeError,
 } from './utils.js';
 import { getOpencodeClient } from './session.js';
 import { readState } from '../state.js';
@@ -147,23 +150,32 @@ const callModelWithRepair = (
   userPrompt: string,
   attemptNumber = 1
 ): ResultAsync<{ output: MasterAgentOutput; rawResponse: string }, Error> => {
+  const timeoutMs = getTimeoutMs('MASTER_AGENT_TIMEOUT_MS');
+
   return ResultAsync.fromPromise(
-    client.session.prompt({
-      path: { id: sessionId },
-      body: {
-        agent: 'plan',
-        model,
-        system: systemPrompt,
-        parts: [
-          {
-            type: 'text',
-            text: userPrompt,
-          },
-        ],
-      },
-    }),
+    withTimeout(
+      client.session.prompt({
+        path: { id: sessionId },
+        body: {
+          agent: 'plan',
+          model,
+          system: systemPrompt,
+          parts: [
+            {
+              type: 'text',
+              text: userPrompt,
+            },
+          ],
+        },
+      }),
+      timeoutMs,
+      `Master agent prompt (attempt ${attemptNumber})`
+    ),
     toError
   ).andThen((promptResponse: unknown) => {
+    const error = getOpenCodeError(promptResponse, 'Master agent failed');
+    if (error) return err(error);
+
     return parseTextResponse(promptResponse, {
       invalidResponseMessage:
         'Failed to get response from master agent: Invalid response structure',
@@ -432,23 +444,32 @@ const callFirstIterationModelWithRepair = (
   userPrompt: string,
   attemptNumber = 1
 ): ResultAsync<{ output: FirstIterationOutput; rawResponse: string }, Error> => {
+  const timeoutMs = getTimeoutMs('MASTER_AGENT_TIMEOUT_MS');
+
   return ResultAsync.fromPromise(
-    client.session.prompt({
-      path: { id: sessionId },
-      body: {
-        agent: 'plan',
-        model,
-        system: systemPrompt,
-        parts: [
-          {
-            type: 'text',
-            text: userPrompt,
-          },
-        ],
-      },
-    }),
+    withTimeout(
+      client.session.prompt({
+        path: { id: sessionId },
+        body: {
+          agent: 'plan',
+          model,
+          system: systemPrompt,
+          parts: [
+            {
+              type: 'text',
+              text: userPrompt,
+            },
+          ],
+        },
+      }),
+      timeoutMs,
+      `Master agent first iteration prompt (attempt ${attemptNumber})`
+    ),
     toError
   ).andThen((promptResponse: unknown) => {
+    const error = getOpenCodeError(promptResponse, 'Master agent failed');
+    if (error) return err(error);
+
     return parseTextResponse(promptResponse, {
       invalidResponseMessage:
         'Failed to get response from master agent: Invalid response structure',

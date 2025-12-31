@@ -1,11 +1,11 @@
 import { join } from 'path';
-import { writeFile, removeDir } from '../fs.js';
+import { writeFile, appendFile, removeDir } from '../fs.js';
 import { workspaceConstants } from '../workspace.js';
 import type { ModelConfig } from './types.js';
 
 const { LOGS_DIR } = workspaceConstants;
 
-export interface AgentCallData {
+interface AgentCallData {
   agent: 'codingAgent' | 'masterAgent';
   iteration: number;
   planStep: number;
@@ -18,7 +18,7 @@ export interface AgentCallData {
   decision?: 'accept' | 'reject';
 }
 
-export interface ManifestData {
+interface ManifestData {
   runId: string;
   startedAt: Date;
   endedAt?: Date;
@@ -89,15 +89,20 @@ const toFrontmatter = (data: Record<string, unknown>): string => {
   return `---\n${lines.join('\n')}\n---`;
 };
 
-class RunLogger {
+/**
+ * Combined logger for run logs and debug events
+ */
+class Logger {
   private runId: string;
   private runDir: string;
   private agentsDir: string;
+  private debugLogPath: string;
 
   constructor(runId: string) {
     this.runId = runId;
     this.runDir = join(LOGS_DIR, runId);
     this.agentsDir = join(this.runDir, 'agents');
+    this.debugLogPath = join(this.runDir, 'debug.log');
   }
 
   /**
@@ -105,6 +110,18 @@ class RunLogger {
    */
   async purge(): Promise<void> {
     await removeDir(LOGS_DIR);
+  }
+
+  /**
+   * Log a debug event with optional data (fire and forget)
+   */
+  debug(event: string, data?: Record<string, unknown>): void {
+    const entry = {
+      ts: new Date().toISOString(),
+      event,
+      ...data,
+    };
+    appendFile(this.debugLogPath, JSON.stringify(entry) + '\n').mapErr(() => {});
   }
 
   /**
@@ -230,33 +247,26 @@ ${data.error ? `\n## Error\n\n\`\`\`\n${data.error}\n\`\`\`` : ''}
   }
 }
 
-let currentLogger: RunLogger | null = null;
-
-/**
- * Initialize the logger for a new run. Call this at the start of the loop.
- */
-export const initLogger = (runId: string): RunLogger => {
-  currentLogger = new RunLogger(runId);
-  return currentLogger;
-};
+let currentLogger: Logger | null = null;
 
 /**
  * Get the current logger instance. Throws if not initialized.
  */
-export const getLogger = (): RunLogger => {
+const getLogger = (): Logger => {
   if (!currentLogger) {
-    throw new Error('Logger not initialized - call initLogger() first');
+    throw new Error('Logger not initialized - call purgeAndInitLogger() first');
   }
   return currentLogger;
 };
 
 /**
- * Purge all logs and initialize a new logger.
+ * Purge all logs and initialize a new logger
  */
-export const purgeAndInitLogger = async (runId: string): Promise<RunLogger> => {
-  const logger = initLogger(runId);
-  await logger.purge();
-  return logger;
+const purgeAndInitLogger = async (runId: string): Promise<Logger> => {
+  currentLogger = new Logger(runId);
+  await currentLogger.purge();
+  return currentLogger;
 };
 
-export { LOGS_DIR };
+export type { AgentCallData, ManifestData };
+export { getLogger, purgeAndInitLogger, LOGS_DIR };
