@@ -25,16 +25,34 @@ export const getTimeoutMs = (envVarName: string): number => {
   return parsed;
 };
 
+type TimeoutOptions = {
+  ms: number;
+  label: string;
+  onTimeout?: () => void;
+};
+
 /**
  * Wrap a promise with a timeout
+ * Clears the timeout when the promise resolves/rejects to avoid leaks.
+ * Optionally calls onTimeout (e.g., to abort a running session) when timeout occurs.
  */
-export const withTimeout = <T>(promise: Promise<T>, ms: number, label: string): Promise<T> =>
-  Promise.race([
-    promise,
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
-    ),
-  ]);
+export const withTimeout = async <T>(promise: Promise<T>, options: TimeoutOptions): Promise<T> => {
+  const { ms, label, onTimeout } = options;
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      onTimeout?.();
+      reject(new Error(`${label} timed out after ${ms}ms`));
+    }, ms);
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId);
+    }
+  });
+};
 
 /**
  * Check if response is an OpenCode SDK error response

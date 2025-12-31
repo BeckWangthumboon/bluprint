@@ -92,8 +92,11 @@ Please implement this step and provide a report following the format specified i
                     ],
                   },
                 }),
-                timeoutMs,
-                `Coding agent prompt (iteration ${iteration})`
+                {
+                  ms: timeoutMs,
+                  label: `Coding agent prompt (iteration ${iteration})`,
+                  onTimeout: () => session.client.session.abort({ path: { id: session.id } }),
+                }
               ),
               toError
             )

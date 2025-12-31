@@ -168,8 +168,11 @@ const callModelWithRepair = (
           ],
         },
       }),
-      timeoutMs,
-      `Master agent prompt (attempt ${attemptNumber})`
+      {
+        ms: timeoutMs,
+        label: `Master agent prompt (attempt ${attemptNumber})`,
+        onTimeout: () => client.session.abort({ path: { id: sessionId } }),
+      }
     ),
     toError
   ).andThen((promptResponse: unknown) => {
@@ -462,8 +465,11 @@ const callFirstIterationModelWithRepair = (
           ],
         },
       }),
-      timeoutMs,
-      `Master agent first iteration prompt (attempt ${attemptNumber})`
+      {
+        ms: timeoutMs,
+        label: `Master agent first iteration prompt (attempt ${attemptNumber})`,
+        onTimeout: () => client.session.abort({ path: { id: sessionId } }),
+      }
     ),
     toError
   ).andThen((promptResponse: unknown) => {
