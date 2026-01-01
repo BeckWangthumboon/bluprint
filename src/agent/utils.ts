@@ -29,6 +29,7 @@ type TimeoutOptions = {
   ms: number;
   label: string;
   onTimeout?: () => void;
+  onTimeoutError?: (error: Error) => void;
 };
 
 /**
@@ -37,12 +38,28 @@ type TimeoutOptions = {
  * Optionally calls onTimeout (e.g., to abort a running session) when timeout occurs.
  */
 export const withTimeout = async <T>(promise: Promise<T>, options: TimeoutOptions): Promise<T> => {
-  const { ms, label, onTimeout } = options;
+  const { ms, label, onTimeout, onTimeoutError } = options;
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  const handleTimeoutError = (err: unknown): void => {
+    const error = toError(err);
+    try {
+      onTimeoutError?.(error);
+    } catch (handlerErr) {
+      console.error('onTimeoutError handler failed:', handlerErr);
+    }
+  };
 
   const timeoutPromise = new Promise<never>((_, reject) => {
     timeoutId = setTimeout(() => {
-      onTimeout?.();
+      try {
+        const result = onTimeout?.();
+        if (result && typeof (result as Promise<unknown>).catch === 'function') {
+          (result as Promise<unknown>).catch(handleTimeoutError);
+        }
+      } catch (err) {
+        handleTimeoutError(err);
+      }
       reject(new Error(`${label} timed out after ${ms}ms`));
     }, ms);
   });
