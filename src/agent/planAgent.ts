@@ -83,8 +83,10 @@ export const generatePlan = (): ResultAsync<void, Error> => {
                 })
               )
 
-              .andThen((plan) => deleteSession(session).map(() => plan))
-              .orElse((error) => deleteSession(session).andThen(() => err(error)))
+              .andThen((plan) => deleteSession(session, { agent: 'planAgent' }).map(() => plan))
+              .orElse((error) =>
+                deleteSession(session, { agent: 'planAgent' }).andThen(() => err(error))
+              )
           );
         })
         .andThen((plan) =>

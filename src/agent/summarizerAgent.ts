@@ -73,8 +73,12 @@ const generateSummary = (): ResultAsync<void, Error> => {
 
             return ResultAsync.fromSafePromise<string, Error>(Promise.resolve(summary));
           })
-          .andThen((summary) => deleteSession(session).map(() => summary))
-          .orElse((error) => deleteSession(session).andThen(() => err(error)))
+          .andThen((summary) =>
+            deleteSession(session, { agent: 'summarizerAgent' }).map(() => summary)
+          )
+          .orElse((error) =>
+            deleteSession(session, { agent: 'summarizerAgent' }).andThen(() => err(error))
+          )
       );
     })
     .andThen((summary) =>

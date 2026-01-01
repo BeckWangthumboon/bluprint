@@ -128,7 +128,9 @@ Please implement this step and provide a report following the format specified i
                   toError
                 ).map(() => report);
               })
-              .andThen((report) => deleteSession(session).map(() => report))
+              .andThen((report) =>
+                deleteSession(session, { agent: 'codingAgent', iteration }).map(() => report)
+              )
               .orElse((error) => {
                 // Log error case
                 const endedAt = new Date();
@@ -146,7 +148,9 @@ Please implement this step and provide a report following the format specified i
                     error: error.message,
                   })
                   .catch(() => {});
-                return deleteSession(session).andThen(() => err(error));
+                return deleteSession(session, { agent: 'codingAgent', iteration }).andThen(() =>
+                  err(error)
+                );
               });
           });
         });

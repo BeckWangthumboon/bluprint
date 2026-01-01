@@ -407,7 +407,9 @@ Review the current task implementation and decide whether to accept or reject. O
                         toError
                       ).map(() => output);
                     })
-                    .andThen((output) => deleteSession(session).map(() => output))
+                    .andThen((output) =>
+                      deleteSession(session, { agent: 'masterAgent', iteration }).map(() => output)
+                    )
                     .orElse((error) => {
                       // Log error case
                       const endedAt = new Date();
@@ -425,7 +427,9 @@ Review the current task implementation and decide whether to accept or reject. O
                           error: error.message,
                         })
                         .catch(() => {});
-                      return deleteSession(session).andThen(() => err(error));
+                      return deleteSession(session, { agent: 'masterAgent', iteration }).andThen(
+                        () => err(error)
+                      );
                     })
                     .map((output) => JSON.stringify(output, null, 2))
                 );
@@ -641,7 +645,9 @@ Generate detailed task instructions for the coding agent to implement this plan 
                   toError
                 ).map(() => output);
               })
-              .andThen((output) => deleteSession(session).map(() => output))
+              .andThen((output) =>
+                deleteSession(session, { agent: 'masterAgent', iteration: 0 }).map(() => output)
+              )
               .orElse((error) => {
                 // Log error case
                 const endedAt = new Date();
@@ -659,7 +665,9 @@ Generate detailed task instructions for the coding agent to implement this plan 
                     error: error.message,
                   })
                   .catch(() => {});
-                return deleteSession(session).andThen(() => err(error));
+                return deleteSession(session, { agent: 'masterAgent', iteration: 0 }).andThen(() =>
+                  err(error)
+                );
               })
               .map((output) => output.task)
           );

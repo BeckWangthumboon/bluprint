@@ -5,8 +5,7 @@ import { ResultAsync } from 'neverthrow';
 
 const execFileAsync = promisify(execFile);
 
-const toError = (err: unknown): Error =>
-  err instanceof Error ? err : new Error(String(err));
+const toError = (err: unknown): Error => (err instanceof Error ? err : new Error(String(err)));
 
 export type ExecResult = {
   stdout: string;
@@ -16,12 +15,11 @@ export type ExecResult = {
 export const exec = (
   command: string,
   args: string[] = [],
-  options?: ExecFileOptions,
+  options?: ExecFileOptions
 ): ResultAsync<ExecResult, Error> =>
-  ResultAsync.fromPromise(
-    execFileAsync(command, args, { ...options }),
-    toError,
-  ).map(({ stdout, stderr }) => ({
-    stdout: typeof stdout === 'string' ? stdout : stdout.toString(),
-    stderr: typeof stderr === 'string' ? stderr : stderr.toString(),
-  }));
+  ResultAsync.fromPromise(execFileAsync(command, args, { ...options }), toError).map(
+    ({ stdout, stderr }) => ({
+      stdout: typeof stdout === 'string' ? stdout : stdout.toString(),
+      stderr: typeof stderr === 'string' ? stderr : stderr.toString(),
+    })
+  );

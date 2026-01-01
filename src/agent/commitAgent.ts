@@ -103,8 +103,10 @@ If you need more context about any files, use your tools to read them.`;
           trim: true,
         })
       )
-      .andThen((commitMessage) => deleteSession(session).map(() => commitMessage))
-      .orElse((error) => deleteSession(session).andThen(() => err(error)))
+      .andThen((commitMessage) =>
+        deleteSession(session, { agent: 'commitAgent' }).map(() => commitMessage)
+      )
+      .orElse((error) => deleteSession(session, { agent: 'commitAgent' }).andThen(() => err(error)))
   );
 };
 

@@ -2,6 +2,7 @@ import { join } from 'path';
 import { writeFile, appendFile, removeDir } from '../fs.js';
 import { workspaceConstants } from '../workspace.js';
 import type { ModelConfig } from './types.js';
+import type { Session as SDKSession } from '@opencode-ai/sdk';
 
 const { LOGS_DIR } = workspaceConstants;
 
@@ -96,12 +97,14 @@ class Logger {
   private runId: string;
   private runDir: string;
   private agentsDir: string;
+  private sessionsDir: string;
   private debugLogPath: string;
 
   constructor(runId: string) {
     this.runId = runId;
     this.runDir = join(LOGS_DIR, runId);
     this.agentsDir = join(this.runDir, 'agents');
+    this.sessionsDir = join(this.runDir, 'sessions');
     this.debugLogPath = join(this.runDir, 'debug.log');
   }
 
@@ -122,6 +125,21 @@ class Logger {
       ...data,
     };
     appendFile(this.debugLogPath, JSON.stringify(entry) + '\n').mapErr(() => {});
+  }
+
+  /**
+   * Log a full session object as JSON
+   */
+  async logSession(
+    sessionId: string,
+    sessionData: SDKSession,
+    meta: { agent: string; iteration?: number }
+  ): Promise<void> {
+    const prefix = String(meta.iteration ?? 0).padStart(3, '0');
+    const agentShort = meta.agent.replace('Agent', '');
+    const filename = `${prefix}-${agentShort}-${sessionId}.json`;
+    const filepath = join(this.sessionsDir, filename);
+    await writeFile(filepath, JSON.stringify(sessionData, null, 2));
   }
 
   /**
@@ -277,4 +295,4 @@ const purgeAndInitLogger = async (runId: string): Promise<Logger> => {
 };
 
 export type { AgentCallData, ManifestData };
-export { getLogger, getDebugLogger, purgeAndInitLogger, LOGS_DIR };
+export { Logger, getLogger, getDebugLogger, purgeAndInitLogger, LOGS_DIR };
