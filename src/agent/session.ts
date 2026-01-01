@@ -1,6 +1,6 @@
 import { createOpencode } from '@opencode-ai/sdk';
 import { ResultAsync } from 'neverthrow';
-import { getLogger } from './logger.js';
+import { getDebugLogger } from './logger.js';
 import type { OpencodeClient } from '@opencode-ai/sdk';
 
 type Opencode = Awaited<ReturnType<typeof createOpencode>>;
@@ -19,7 +19,7 @@ const subscribeToEvents = (client: OpencodeClient): ResultAsync<void, Error> =>
     ResultAsync.fromPromise(
       (async () => {
         for await (const event of events.stream) {
-          const logger = getLogger();
+          const logger = getDebugLogger();
           logger.debug('SDK_EVENT', {
             type: event.type,
             properties: event.properties,

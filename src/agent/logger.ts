@@ -249,6 +249,8 @@ ${data.error ? `\n## Error\n\n\`\`\`\n${data.error}\n\`\`\`` : ''}
 
 let currentLogger: Logger | null = null;
 
+const noopLogger = { debug: () => {} } as Pick<Logger, 'debug'>;
+
 /**
  * Get the current logger instance. Throws if not initialized.
  */
@@ -260,6 +262,12 @@ const getLogger = (): Logger => {
 };
 
 /**
+ * Get a debug-only logger that returns a no-op if not initialized.
+ * Safe to call before purgeAndInitLogger().
+ */
+const getDebugLogger = (): Pick<Logger, 'debug'> => currentLogger ?? noopLogger;
+
+/**
  * Purge all logs and initialize a new logger
  */
 const purgeAndInitLogger = async (runId: string): Promise<Logger> => {
@@ -269,4 +277,4 @@ const purgeAndInitLogger = async (runId: string): Promise<Logger> => {
 };
 
 export type { AgentCallData, ManifestData };
-export { getLogger, purgeAndInitLogger, LOGS_DIR };
+export { getLogger, getDebugLogger, purgeAndInitLogger, LOGS_DIR };
