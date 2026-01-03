@@ -13,7 +13,7 @@ import {
 } from '../state.js';
 import { executeCodingAgent } from './codingAgent.js';
 import { createCommitForTask } from './commitAgent.js';
-import { reviewAndGenerateTask, generateInitialTask } from './masterAgent.js';
+import { reviewAndGenerateTask } from './masterAgent.js';
 import type { MasterAgentOutput } from './types.js';
 import { isObject, toError } from './utils.js';
 import { purgeAndInitLogger, type ManifestData } from './logger.js';
@@ -160,13 +160,7 @@ export const runLoop = (): ResultAsync<void, Error> =>
         await unwrapOrThrow(startExecution());
         await unwrapOrThrow(workspace.task.write(''));
         await unwrapOrThrow(workspace.report.write(''));
-
-        // Write initial manifest
         await logger.writeManifest(manifestData);
-
-        // Generate seed task (iteration 0), use first iteration prompt
-        const seedTask = await unwrapOrThrow(generateInitialTask());
-        await unwrapOrThrow(saveTaskMarkdown(seedTask));
 
         // Main loop
         while (true) {
@@ -227,9 +221,7 @@ export const runLoop = (): ResultAsync<void, Error> =>
               return;
             }
 
-            // Generate task for the next plan step
-            const nextTask = await unwrapOrThrow(generateInitialTask());
-            await unwrapOrThrow(saveTaskMarkdown(nextTask));
+            await unwrapOrThrow(saveTaskMarkdown(''));
           } else {
             // On reject, save the correction instructions to task.md
             await unwrapOrThrow(saveTaskMarkdown(reviewOutput.task));

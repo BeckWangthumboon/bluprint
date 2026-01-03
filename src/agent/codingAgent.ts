@@ -3,7 +3,7 @@ import { createSession, deleteSession } from './sessionManager.js';
 import { workspace } from '../workspace.js';
 import { readState } from '../state.js';
 import { getOpencodeClient } from './session.js';
-import { getPlanStep } from './planUtils.js';
+import { getPlanStep, extractPlanOutline, formatStepHeader } from './planUtils.js';
 import {
   parseTextResponse,
   toError,
@@ -24,7 +24,7 @@ const CODING_DEFAULT_MODEL: ModelConfig = {
 
 /**
  * Executes the coding agent to implement the current plan step.
- * Reads task, summary, and current plan step, then runs the agent.
+ * Reads feedback (from task.md), summary, and current plan step, then runs the agent.
  * Returns the report content.
  * @param iteration - The current loop iteration number
  */
@@ -44,14 +44,17 @@ export const executeCodingAgent = (iteration: number): ResultAsync<string, Error
 
       // Read all required inputs in parallel
       return ResultAsync.combine([
-        workspace.task.read().mapErr((e) => new Error(`Could not read task.md: ${e.message}`)),
+        workspace.task
+          .read()
+          .mapErr((e) => new Error(`Could not read task.md: ${e.message}`))
+          .map((content) => content.trim()), // task.md contains feedback (empty on first iteration)
         workspace.summary
           .read()
           .mapErr((e) => new Error(`Could not read summary.md: ${e.message}`)),
         workspace.plan.read().mapErr((e) => new Error(`Could not read plan.md: ${e.message}`)),
         readState().mapErr((e) => new Error(`Could not read state: ${e.message}`)),
         loadPromptFile('codingAgent.txt'),
-      ]).andThen(([task, summary, plan, state, systemPrompt]) => {
+      ]).andThen(([feedback, summary, plan, state, systemPrompt]) => {
         return getPlanStep(plan, state.currentTaskNumber, {
           invalidStepNumber: (stepNumber) =>
             `Invalid current task number: ${stepNumber}. Must be a positive integer.`,
@@ -59,17 +62,47 @@ export const executeCodingAgent = (iteration: number): ResultAsync<string, Error
             `Current task number ${stepNumber} not found in plan.md. The plan may be out of sync with state.`,
           emptyStep: (stepNumber) => `Plan step ${stepNumber} is empty`,
         }).andThen((currentStep) => {
-          // Construct the prompt with injected context
-          const userPrompt = `# Task
-${task}
+          // Extract plan outline for context (only headers in range around current step)
+          const currentStepNumber = state.currentTaskNumber;
+          const totalSteps = state.tasks.length;
+          const contextHeaders = extractPlanOutline(plan, {
+            currentStep: currentStepNumber,
+            range: 1,
+          });
 
-# Plan Summary
+          // Find previous and next step headers from the filtered context
+          const previousHeader = contextHeaders.find((h) => h.stepNumber === currentStepNumber - 1);
+          const nextHeader = contextHeaders.find((h) => h.stepNumber === currentStepNumber + 1);
+
+          // Format previous/next step context
+          const previousStepText = previousHeader
+            ? formatStepHeader(previousHeader)
+            : 'None - this is the first step';
+          const nextStepText = nextHeader
+            ? formatStepHeader(nextHeader)
+            : 'None - this is the final step';
+
+          // Construct the prompt with new structure
+          const userPrompt = `# Plan Summary
 ${summary}
 
-# Current Plan Step
+# Plan Context
+You are implementing step ${currentStepNumber} of ${totalSteps}.
+
+## Previous Step (for context only - Completed)
+${previousStepText}
+
+## Current Step (Your Task)
 ${currentStep}
 
-Please implement this step and provide a report following the format specified in your instructions.`;
+## Next Step (for context only - Do NOT Implement)
+${nextStepText}
+
+# Feedback 
+${feedback || 'None'}
+
+---
+Implement ONLY the current step. If feedback is provided, address it first.`;
 
           return createSession('Coding Agent Execution').andThen((session) => {
             const startedAt = new Date();
