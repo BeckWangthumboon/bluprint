@@ -329,7 +329,10 @@ const toError = (e: unknown): Error => (e instanceof Error ? e : new Error(Strin
 const logSessionData = (session: Session, meta: SessionMetaData): ResultAsync<void, Error> =>
   ResultAsync.combine([session.getData(), session.messages()])
     .andThen(([sessionData, messages]) => {
-      const logger = getLogger();
+      const logger = currentLogger;
+      if (!logger) {
+        return ok(undefined);
+      }
       return ResultAsync.fromThrowable(
         async () =>
           logger.logSession(session.id, { ...sessionData, messages } as OpenCodeSDKSession, meta),
