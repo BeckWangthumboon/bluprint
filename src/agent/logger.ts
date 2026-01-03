@@ -1,4 +1,5 @@
 import { join } from 'path';
+import { Result } from 'neverthrow';
 import { writeFile, appendFile, removeDir } from '../fs.js';
 import { workspaceConstants } from '../workspace.js';
 import type { ModelConfig } from './types.js';
@@ -93,6 +94,28 @@ const toFrontmatter = (data: Record<string, unknown>): string => {
 /**
  * Combined logger for run logs and debug events
  */
+const formatMasterAgentResponse = (response: string): string => {
+  const parsedJson = Result.fromThrowable(
+    () => JSON.parse(response),
+    () => new Error('Invalid JSON')
+  )();
+
+  if (parsedJson.isErr()) {
+    return response;
+  } else {
+    const { decision, task } = parsedJson.value;
+    let returnString = `Decision: ${decision}`;
+    if (decision === 'reject' && task) {
+      returnString += ` \n \n Task: ${task}`;
+    }
+    return returnString;
+  }
+};
+
+const formatCodingAgentResponse = (response: string): string => {
+  return response;
+};
+
 class Logger {
   private runId: string;
   private runDir: string;
@@ -179,10 +202,8 @@ class Logger {
 
 ## Response
 
-\`\`\`
-${data.response}
-\`\`\`
-${data.error ? `\n## Error\n\n\`\`\`\n${data.error}\n\`\`\`` : ''}`;
+${data.agent === 'masterAgent' ? formatMasterAgentResponse(data.response) : formatCodingAgentResponse(data.response)}
+${data.error ? `\n## Error\n\n${data.error}` : ''}`;
 
     await writeFile(join(this.agentsDir, filename), frontmatter + body);
   }
