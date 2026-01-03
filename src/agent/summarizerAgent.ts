@@ -1,7 +1,14 @@
 import { ResultAsync, err } from 'neverthrow';
-import { createSession, deleteSession } from './sessionManager.js';
 import { workspace } from '../workspace.js';
-import { toError, getModelConfig, loadPromptFile } from './utils.js';
+import {
+  toError,
+  getModelConfig,
+  loadPromptFile,
+  parseTextResponse,
+  unwrapResultAsync,
+  cleanupSession,
+} from './utils.js';
+import { getOpenCodeLib, type Session } from './opencodesdk.js';
 import type { ModelConfig } from './types.js';
 
 export const SUMMARIZER_DEFAULT_MODEL: ModelConfig = {
@@ -35,50 +42,37 @@ const generateSummary = (): ResultAsync<void, Error> => {
       }));
     })
     .andThen(({ spec, plan, systemPrompt }) => {
-      return createSession('Summary Generation').andThen((session) =>
-        ResultAsync.fromPromise(
-          session.client.session.prompt({
-            path: { id: session.id },
-            body: {
-              agent: 'build',
-              model,
-              system: systemPrompt,
-              parts: [
+      return getOpenCodeLib().andThen((lib) =>
+        lib.session.create('Summary Generation').andThen((session) =>
+          ResultAsync.fromPromise(
+            unwrapResultAsync(
+              session.prompt({
+                agent: 'build',
+                model,
+                system: systemPrompt,
+                parts: [
+                  {
+                    type: 'text',
+                    text: `Here is the specification:\n\n${spec}\n\nHere is the implementation plan:\n\n${plan}\n\nPlease create a concise summary following the format in your instructions.`,
+                  },
+                ],
+              })
+            ),
+            toError
+          )
+            .andThen((promptResponse) =>
+              parseTextResponse(
+                { data: promptResponse },
                 {
-                  type: 'text',
-                  text: `Here is the specification:\n\n${spec}\n\nHere is the implementation plan:\n\n${plan}\n\nPlease create a concise summary following the format in your instructions.`,
-                },
-              ],
-            },
-          }),
-          toError
+                  invalidResponseMessage: 'Failed to generate summary: No response from model',
+                  emptyResponseMessage: 'No text content in response',
+                  trim: true,
+                }
+              )
+            )
+            .andThen((summary) => cleanupSession(session, 'summarizerAgent').map(() => summary))
+            .orElse((error) => cleanupSession(session, 'summarizerAgent').andThen(() => err(error)))
         )
-          .andThen((promptResponse) => {
-            if (!promptResponse.data || !promptResponse.data.parts) {
-              return err(new Error('Failed to generate summary: No response from model'));
-            }
-
-            const textParts = promptResponse.data.parts.filter(
-              (part: { type: string }) => part.type === 'text'
-            );
-
-            if (textParts.length === 0) {
-              return err(new Error('No text content in response'));
-            }
-
-            const summary = textParts
-              .map((part: { type: string; text?: string }) => part.text ?? '')
-              .join('\n\n')
-              .trim();
-
-            return ResultAsync.fromSafePromise<string, Error>(Promise.resolve(summary));
-          })
-          .andThen((summary) =>
-            deleteSession(session, { agent: 'summarizerAgent' }).map(() => summary)
-          )
-          .orElse((error) =>
-            deleteSession(session, { agent: 'summarizerAgent' }).andThen(() => err(error))
-          )
       );
     })
     .andThen((summary) =>

@@ -1,9 +1,9 @@
 import { join } from 'path';
-import { Result } from 'neverthrow';
+import { Result, ResultAsync, ok } from 'neverthrow';
 import { writeFile, appendFile, removeDir } from '../fs.js';
 import { workspaceConstants } from '../workspace.js';
 import type { ModelConfig } from './types.js';
-import type { Session as SDKSession } from '@opencode-ai/sdk';
+import type { Session, OpenCodeSDKSession } from './opencodesdk.js';
 
 const { LOGS_DIR } = workspaceConstants;
 
@@ -155,7 +155,7 @@ class Logger {
    */
   async logSession(
     sessionId: string,
-    sessionData: SDKSession,
+    sessionData: OpenCodeSDKSession,
     meta: { agent: string; iteration?: number }
   ): Promise<void> {
     const prefix = String(meta.iteration ?? 0).padStart(3, '0');
@@ -315,5 +315,31 @@ const purgeAndInitLogger = async (runId: string): Promise<Logger> => {
   return currentLogger;
 };
 
-export type { AgentCallData, ManifestData };
-export { Logger, getLogger, getDebugLogger, purgeAndInitLogger, LOGS_DIR };
+interface SessionMetaData {
+  agent: string;
+  iteration?: number;
+}
+
+const toError = (e: unknown): Error => (e instanceof Error ? e : new Error(String(e)));
+
+/**
+ * Log session data before cleanup.
+ * Fetches session data and messages, logs them, and handles errors gracefully.
+ */
+const logSessionData = (session: Session, meta: SessionMetaData): ResultAsync<void, Error> =>
+  ResultAsync.combine([session.getData(), session.messages()])
+    .andThen(([sessionData, messages]) => {
+      const logger = getLogger();
+      return ResultAsync.fromThrowable(
+        async () =>
+          logger.logSession(session.id, { ...sessionData, messages } as OpenCodeSDKSession, meta),
+        toError
+      )();
+    })
+    .orElse((error) => {
+      console.warn(`[logger] Failed to log session ${session.id}: ${error.message}`);
+      return ok(undefined);
+    });
+
+export type { AgentCallData, ManifestData, SessionMetaData };
+export { Logger, getLogger, getDebugLogger, purgeAndInitLogger, logSessionData, LOGS_DIR };

@@ -1,23 +1,22 @@
 import { ResultAsync, err, ok } from 'neverthrow';
-import { createSession, deleteSession, type OpencodeClient } from './sessionManager.js';
 import { workspace } from '../workspace.js';
 import {
   parseTextResponse,
   toError,
   getModelConfig,
   loadPromptFile,
-  validateModel,
   withTimeout,
   getTimeoutMs,
-  getOpenCodeError,
+  isObject,
+  unwrapResultAsync,
+  cleanupSession,
 } from './utils.js';
-import { getOpencodeClient } from './session.js';
+import { getOpenCodeLib, type Session, type PromptResponse } from './opencodesdk.js';
 import { readState } from '../state.js';
 import { exec } from '../shell.js';
 import { findPlanStep, getPlanStep } from './planUtils.js';
 import { getLogger } from './logger.js';
 import type { ModelConfig, MasterAgentOutput } from './types.js';
-import { isObject } from './utils.js';
 
 const MASTER_DEFAULT_MODEL: ModelConfig = {
   providerID: 'google',
@@ -93,8 +92,7 @@ Now output ONLY valid JSON:`;
  * Calls the model and attempts to repair invalid output
  */
 const callModelWithRepair = (
-  sessionId: string,
-  client: OpencodeClient,
+  session: Session,
   model: ModelConfig,
   systemPrompt: string,
   userPrompt: string,
@@ -103,10 +101,9 @@ const callModelWithRepair = (
   const timeoutMs = getTimeoutMs('MASTER_AGENT_TIMEOUT_MS');
 
   return ResultAsync.fromPromise(
-    withTimeout(
-      client.session.prompt({
-        path: { id: sessionId },
-        body: {
+    withTimeout<PromptResponse>(
+      unwrapResultAsync(
+        session.prompt({
           agent: 'plan',
           model,
           system: systemPrompt,
@@ -116,25 +113,26 @@ const callModelWithRepair = (
               text: userPrompt,
             },
           ],
-        },
-      }),
+        })
+      ),
       {
         ms: timeoutMs,
         label: `Master agent prompt (attempt ${attemptNumber})`,
-        onTimeout: () => client.session.abort({ path: { id: sessionId } }),
+        onTimeout: () => session.abort(),
       }
     ),
     toError
-  ).andThen((promptResponse: unknown) => {
-    const error = getOpenCodeError(promptResponse, 'Master agent failed');
-    if (error) return err(error);
-
-    return parseTextResponse(promptResponse, {
-      invalidResponseMessage:
-        'Failed to get response from master agent: Invalid response structure',
-      emptyResponseMessage: 'No text content in master agent response',
-      trim: true,
-    }).andThen((rawOutput) => {
+  ).andThen((promptResponse: PromptResponse) => {
+    // Wrap response for parseTextResponse compatibility
+    return parseTextResponse(
+      { data: promptResponse },
+      {
+        invalidResponseMessage:
+          'Failed to get response from master agent: Invalid response structure',
+        emptyResponseMessage: 'No text content in master agent response',
+        trim: true,
+      }
+    ).andThen((rawOutput) => {
       // Try to parse JSON
       let parsed: unknown;
       try {
@@ -154,14 +152,7 @@ const callModelWithRepair = (
           userPrompt,
           rawOutput
         );
-        return callModelWithRepair(
-          sessionId,
-          client,
-          model,
-          systemPrompt,
-          repairPrompt,
-          attemptNumber + 1
-        );
+        return callModelWithRepair(session, model, systemPrompt, repairPrompt, attemptNumber + 1);
       }
 
       // Validate schema
@@ -177,14 +168,7 @@ const callModelWithRepair = (
 
         // Attempt repair
         const repairPrompt = createRepairPrompt(validation.reason, userPrompt, rawOutput);
-        return callModelWithRepair(
-          sessionId,
-          client,
-          model,
-          systemPrompt,
-          repairPrompt,
-          attemptNumber + 1
-        );
+        return callModelWithRepair(session, model, systemPrompt, repairPrompt, attemptNumber + 1);
       }
 
       return ok({
@@ -202,11 +186,8 @@ const callModelWithRepair = (
 export const reviewAndGenerateTask = (iteration: number): ResultAsync<string, Error> => {
   const model = getModelConfig('MASTER_AGENT_MODEL', MASTER_DEFAULT_MODEL);
 
-  return ResultAsync.fromPromise(getOpencodeClient(), toError).andThen((client) =>
-    ResultAsync.fromPromise(
-      validateModel(client, model.providerID, model.modelID),
-      toError
-    ).andThen((isValid) => {
+  return getOpenCodeLib().andThen((lib) =>
+    lib.provider.validate(model.providerID, model.modelID).andThen((isValid) => {
       if (!isValid) {
         return err(new Error(`Invalid master model: ${model.providerID}/${model.modelID}`));
       }
@@ -336,8 +317,8 @@ Review the current task implementation and decide whether to accept or reject. O
                 const planStep = state.currentTaskNumber;
 
                 // Call model with repair capability
-                return createSession('Master Agent Review').andThen((session) =>
-                  callModelWithRepair(session.id, session.client, model, systemPrompt, userPrompt)
+                return lib.session.create('Master Agent Review').andThen((session) =>
+                  callModelWithRepair(session, model, systemPrompt, userPrompt)
                     .andThen(({ output, rawResponse }) => {
                       // Log the agent call
                       const endedAt = new Date();
@@ -358,7 +339,7 @@ Review the current task implementation and decide whether to accept or reject. O
                       ).map(() => output);
                     })
                     .andThen((output) =>
-                      deleteSession(session, { agent: 'masterAgent', iteration }).map(() => output)
+                      cleanupSession(session, 'masterAgent', iteration).map(() => output)
                     )
                     .orElse((error) => {
                       // Log error case
@@ -377,8 +358,8 @@ Review the current task implementation and decide whether to accept or reject. O
                           error: error.message,
                         })
                         .catch(() => {});
-                      return deleteSession(session, { agent: 'masterAgent', iteration }).andThen(
-                        () => err(error)
+                      return cleanupSession(session, 'masterAgent', iteration).andThen(() =>
+                        err(error)
                       );
                     })
                     .map((output) => JSON.stringify(output, null, 2))

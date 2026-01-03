@@ -1,14 +1,14 @@
 import { ResultAsync, err } from 'neverthrow';
-import { createSession, deleteSession } from './sessionManager.js';
 import { workspace } from '../workspace.js';
 import { generateSummary, SUMMARIZER_DEFAULT_MODEL } from './summarizerAgent.js';
-import { getOpencodeClient } from './session.js';
+import { getOpenCodeLib, type Session } from './opencodesdk.js';
 import {
   parseTextResponse,
   toError,
   getModelConfig,
   loadPromptFile,
-  validateModel,
+  unwrapResultAsync,
+  cleanupSession,
 } from './utils.js';
 import type { ModelConfig } from './types.js';
 
@@ -23,14 +23,11 @@ export const generatePlan = (): ResultAsync<void, Error> => {
   const summaryModel = getModelConfig('SUMMARIZER_AGENT_MODEL', SUMMARIZER_DEFAULT_MODEL);
 
   // Validate both models upfront before doing any work
-  return ResultAsync.fromPromise(getOpencodeClient(), toError).andThen((client) =>
-    ResultAsync.fromPromise(
-      Promise.all([
-        validateModel(client, planModel.providerID, planModel.modelID),
-        validateModel(client, summaryModel.providerID, summaryModel.modelID),
-      ]),
-      toError
-    ).andThen(([planValid, summaryValid]) => {
+  return getOpenCodeLib().andThen((lib) =>
+    ResultAsync.combine([
+      lib.provider.validate(planModel.providerID, planModel.modelID),
+      lib.provider.validate(summaryModel.providerID, summaryModel.modelID),
+    ]).andThen(([planValid, summaryValid]) => {
       if (!planValid) {
         return err(new Error(`Invalid plan model: ${planModel.providerID}/${planModel.modelID}`));
       }
@@ -54,11 +51,10 @@ export const generatePlan = (): ResultAsync<void, Error> => {
           }));
         })
         .andThen(({ spec, systemPrompt }) => {
-          return createSession('Plan Generation').andThen((session) =>
+          return lib.session.create('Plan Generation').andThen((session) =>
             ResultAsync.fromPromise(
-              session.client.session.prompt({
-                path: { id: session.id },
-                body: {
+              unwrapResultAsync(
+                session.prompt({
                   agent: 'plan',
                   model: planModel,
                   system: systemPrompt,
@@ -68,25 +64,25 @@ export const generatePlan = (): ResultAsync<void, Error> => {
                       text: `Here is the specification to analyze:\n\n${spec}\n\nPlease create a detailed implementation plan following the format specified in your instructions.`,
                     },
                   ],
-                },
-              }),
+                })
+              ),
               toError
             )
               .andThen((promptResponse) =>
-                parseTextResponse(promptResponse, {
-                  invalidResponseMessage: 'Failed to generate plan: No response from model',
-                  emptyResponseMessage: 'No text content in response',
-                  trim: false,
-                }).map((rawPlan) => {
+                parseTextResponse(
+                  { data: promptResponse },
+                  {
+                    invalidResponseMessage: 'Failed to generate plan: No response from model',
+                    emptyResponseMessage: 'No text content in response',
+                    trim: false,
+                  }
+                ).map((rawPlan) => {
                   const firstHeaderIndex = rawPlan.indexOf('##');
                   return firstHeaderIndex !== -1 ? rawPlan.slice(firstHeaderIndex) : rawPlan;
                 })
               )
-
-              .andThen((plan) => deleteSession(session, { agent: 'planAgent' }).map(() => plan))
-              .orElse((error) =>
-                deleteSession(session, { agent: 'planAgent' }).andThen(() => err(error))
-              )
+              .andThen((plan) => cleanupSession(session, 'planAgent').map(() => plan))
+              .orElse((error) => cleanupSession(session, 'planAgent').andThen(() => err(error)))
           );
         })
         .andThen((plan) =>

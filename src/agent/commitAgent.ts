@@ -1,10 +1,17 @@
 import { ResultAsync, err, ok } from 'neverthrow';
-import { createSession, deleteSession } from './sessionManager.js';
 import { exec } from '../shell.js';
-import { parseTextResponse, toError, getModelConfig, loadPromptFile } from './utils.js';
+import {
+  parseTextResponse,
+  toError,
+  getModelConfig,
+  loadPromptFile,
+  unwrapResultAsync,
+  cleanupSession,
+} from './utils.js';
 import { readState } from '../state.js';
 import { workspace } from '../workspace.js';
 import { getPlanStep } from './planUtils.js';
+import { getOpenCodeLib } from './opencodesdk.js';
 import type { ModelConfig } from './types.js';
 
 const COMMIT_DEFAULT_MODEL: ModelConfig = {
@@ -79,37 +86,41 @@ The plan step is provided for context, but your commit message should describe w
 
 If you need more context about any files, use your tools to read them.`;
 
-  return createSession('Commit Message Generation').andThen((session) =>
-    ResultAsync.fromPromise(
-      session.client.session.prompt({
-        path: { id: session.id },
-        body: {
-          agent: 'plan',
-          model,
-          system: systemPrompt,
-          parts: [
+  return getOpenCodeLib().andThen((lib) =>
+    lib.session.create('Commit Message Generation').andThen((session) =>
+      ResultAsync.fromPromise(
+        unwrapResultAsync(
+          session.prompt({
+            agent: 'plan',
+            model,
+            system: systemPrompt,
+            parts: [
+              {
+                type: 'text',
+                text: userPrompt,
+              },
+            ],
+          })
+        ),
+        toError
+      )
+        .andThen((promptResponse) =>
+          parseTextResponse(
+            { data: promptResponse },
             {
-              type: 'text',
-              text: userPrompt,
-            },
-          ],
-        },
-      }),
-      toError
+              invalidResponseMessage: 'Failed to generate commit message: No response from model',
+              emptyResponseMessage: 'No text content in response',
+              trim: true,
+            }
+          )
+        )
+        .andThen((commitMessage) =>
+          cleanupSession(session, 'commitAgent', iteration).map(() => commitMessage)
+        )
+        .orElse((error) =>
+          cleanupSession(session, 'commitAgent', iteration).andThen(() => err(error))
+        )
     )
-      .andThen((promptResponse) =>
-        parseTextResponse(promptResponse, {
-          invalidResponseMessage: 'Failed to generate commit message: No response from model',
-          emptyResponseMessage: 'No text content in response',
-          trim: true,
-        })
-      )
-      .andThen((commitMessage) =>
-        deleteSession(session, { agent: 'commitAgent', iteration }).map(() => commitMessage)
-      )
-      .orElse((error) =>
-        deleteSession(session, { agent: 'commitAgent', iteration }).andThen(() => err(error))
-      )
   );
 };
 

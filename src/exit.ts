@@ -1,4 +1,4 @@
-import { getOpencodeServer, isOpencodeInitialized } from './agent/session.js';
+import { getOpencodeServer, isOpencodeInitialized } from './agent/opencodesdk.js';
 
 let isExiting = false;
 

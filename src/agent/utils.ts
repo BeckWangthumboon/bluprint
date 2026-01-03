@@ -2,6 +2,8 @@ import { ResultAsync, errAsync } from 'neverthrow';
 import { readFile } from '../fs.js';
 import { join, dirname } from 'path';
 import type { ModelConfig } from './types.js';
+import type { Session } from './opencodesdk.js';
+import { logSessionData } from './logger.js';
 
 export const toError = (e: unknown): Error => (e instanceof Error ? e : new Error(String(e)));
 
@@ -71,34 +73,8 @@ export const withTimeout = async <T>(promise: Promise<T>, options: TimeoutOption
   });
 };
 
-/**
- * Check if response is an OpenCode SDK error response
- * Error types: ProviderAuthError | UnknownError | MessageOutputLengthError | MessageAbortedError | ApiError
- */
-const isOpenCodeError = (response: unknown): boolean =>
-  isObject(response) && 'error' in response && response.error != null;
-
-/**
- * Check if response is an OpenCode SDK error and return an Error if present
- * @param response - The response to check
- * @param context - Optional context message to prefix the error
- * @returns Error if response is an error, null otherwise
- */
-export const getOpenCodeError = (response: unknown, context?: string): Error | null => {
-  if (!isOpenCodeError(response)) return null;
-
-  const err = (response as { error: unknown }).error;
-  let message: string;
-  if (isObject(err)) {
-    const type = (err.type as string) ?? 'UnknownError';
-    const msg = (err.message as string) ?? JSON.stringify(err);
-    message = `[${type}] ${msg}`;
-  } else {
-    message = String(err);
-  }
-
-  return new Error(context ? `${context}: ${message}` : message);
-};
+export const isObject = (data: unknown): data is Record<string, unknown> =>
+  typeof data === 'object' && data !== null;
 
 export const parseModelFromEnv = (envVarName: string): ModelConfig | null => {
   const modelEnv = process.env[envVarName];
@@ -135,10 +111,6 @@ type TextResponseParseOptions = {
   onInvalidResponse?: (response: unknown) => void;
 };
 
-export const isObject = (data: unknown): data is Record<string, unknown> => {
-  return typeof data === 'object' && data !== null;
-};
-
 export const hasValidResponseData = (response: unknown): response is PromptTextResponse => {
   if (!isObject(response)) return false;
   if (!isObject(response.data)) return false;
@@ -168,31 +140,23 @@ export const parseTextResponse = (
   return ResultAsync.fromSafePromise(Promise.resolve(text));
 };
 
-export async function validateModel(
-  client: any,
-  providerID: string,
-  modelID: string
-): Promise<boolean> {
-  const providersResp = await client.provider.list({});
-  const providers = providersResp.data?.all ?? [];
-  const provider = providers.find((p: any) => p.id === providerID);
-
-  if (!provider) {
-    console.error(
-      `Provider "${providerID}" not found. Known providers:`,
-      providers.map((p: any) => p.id)
-    );
-    return false;
+/**
+ * Convert a ResultAsync to a Promise that throws on error
+ */
+export const unwrapResultAsync = async <T>(result: ResultAsync<T, Error>): Promise<T> => {
+  const resolved = await result;
+  if (resolved.isErr()) {
+    throw resolved.error;
   }
+  return resolved.value;
+};
 
-  const models = provider.models ?? {};
-  if (!models[modelID]) {
-    console.error(
-      `Model "${modelID}" not found for provider "${providerID}". Available:`,
-      Object.keys(models)
-    );
-    return false;
-  }
-
-  return true;
-}
+/**
+ * Helper to log and delete a session
+ */
+export const cleanupSession = (
+  session: Session,
+  agent: string,
+  iteration?: number
+): ResultAsync<void, Error> =>
+  logSessionData(session, { agent, iteration }).andThen(() => session.delete());

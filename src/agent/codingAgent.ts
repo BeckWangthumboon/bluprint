@@ -1,18 +1,17 @@
 import { ResultAsync, err } from 'neverthrow';
-import { createSession, deleteSession } from './sessionManager.js';
 import { workspace } from '../workspace.js';
 import { readState } from '../state.js';
-import { getOpencodeClient } from './session.js';
+import { getOpenCodeLib } from './opencodesdk.js';
 import { getPlanStep, extractPlanOutline, formatStepHeader } from './planUtils.js';
 import {
   parseTextResponse,
   toError,
   getModelConfig,
   loadPromptFile,
-  validateModel,
   withTimeout,
   getTimeoutMs,
-  getOpenCodeError,
+  unwrapResultAsync,
+  cleanupSession,
 } from './utils.js';
 import { getLogger } from './logger.js';
 import type { ModelConfig } from './types.js';
@@ -31,11 +30,8 @@ const CODING_DEFAULT_MODEL: ModelConfig = {
 export const executeCodingAgent = (iteration: number): ResultAsync<string, Error> => {
   const codingModel = getModelConfig('CODING_AGENT_MODEL', CODING_DEFAULT_MODEL);
 
-  return ResultAsync.fromPromise(getOpencodeClient(), toError).andThen((client) =>
-    ResultAsync.fromPromise(
-      validateModel(client, codingModel.providerID, codingModel.modelID),
-      toError
-    ).andThen((isValid) => {
+  return getOpenCodeLib().andThen((lib) =>
+    lib.provider.validate(codingModel.providerID, codingModel.modelID).andThen((isValid) => {
       if (!isValid) {
         return err(
           new Error(`Invalid coding model: ${codingModel.providerID}/${codingModel.modelID}`)
@@ -47,7 +43,7 @@ export const executeCodingAgent = (iteration: number): ResultAsync<string, Error
         workspace.task
           .read()
           .mapErr((e) => new Error(`Could not read task.md: ${e.message}`))
-          .map((content) => content.trim()), // task.md contains feedback (empty on first iteration)
+          .map((content) => content.trim()),
         workspace.summary
           .read()
           .mapErr((e) => new Error(`Could not read summary.md: ${e.message}`)),
@@ -104,16 +100,15 @@ ${feedback || 'None'}
 ---
 Implement ONLY the current step. If feedback is provided, address it first.`;
 
-          return createSession('Coding Agent Execution').andThen((session) => {
+          return lib.session.create('Coding Agent Execution').andThen((session) => {
             const startedAt = new Date();
             const planStep = state.currentTaskNumber;
             const timeoutMs = getTimeoutMs('CODING_AGENT_TIMEOUT_MS');
 
             return ResultAsync.fromPromise(
               withTimeout(
-                session.client.session.prompt({
-                  path: { id: session.id },
-                  body: {
+                unwrapResultAsync(
+                  session.prompt({
                     agent: 'build',
                     model: codingModel,
                     system: systemPrompt,
@@ -123,25 +118,26 @@ Implement ONLY the current step. If feedback is provided, address it first.`;
                         text: userPrompt,
                       },
                     ],
-                  },
-                }),
+                  })
+                ),
                 {
                   ms: timeoutMs,
                   label: `Coding agent prompt (iteration ${iteration})`,
-                  onTimeout: () => session.client.session.abort({ path: { id: session.id } }),
+                  onTimeout: () => session.abort(),
                 }
               ),
               toError
             )
               .andThen((promptResponse) => {
-                const error = getOpenCodeError(promptResponse, 'Coding agent failed');
-                if (error) return err(error);
-                return parseTextResponse(promptResponse, {
-                  invalidResponseMessage:
-                    'Failed to execute coding agent: Invalid response structure',
-                  emptyResponseMessage: 'No text content in response',
-                  trim: true,
-                });
+                return parseTextResponse(
+                  { data: promptResponse },
+                  {
+                    invalidResponseMessage:
+                      'Failed to execute coding agent: Invalid response structure',
+                    emptyResponseMessage: 'No text content in response',
+                    trim: true,
+                  }
+                );
               })
               .andThen((report) => {
                 // Log the agent call
@@ -162,7 +158,7 @@ Implement ONLY the current step. If feedback is provided, address it first.`;
                 ).map(() => report);
               })
               .andThen((report) =>
-                deleteSession(session, { agent: 'codingAgent', iteration }).map(() => report)
+                cleanupSession(session, 'codingAgent', iteration).map(() => report)
               )
               .orElse((error) => {
                 // Log error case
@@ -181,9 +177,7 @@ Implement ONLY the current step. If feedback is provided, address it first.`;
                     error: error.message,
                   })
                   .catch(() => {});
-                return deleteSession(session, { agent: 'codingAgent', iteration }).andThen(() =>
-                  err(error)
-                );
+                return cleanupSession(session, 'codingAgent', iteration).andThen(() => err(error));
               });
           });
         });
