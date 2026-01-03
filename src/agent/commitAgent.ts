@@ -55,7 +55,8 @@ const generateCommitMessage = (
   currentStep: string,
   gitStatus: string,
   gitDiff: string,
-  model: ModelConfig
+  model: ModelConfig,
+  iteration: number
 ): ResultAsync<string, Error> => {
   // remove the "## N" header from plan step
   const stepContent = currentStep.replace(/^##\s+\d+\s+[^\n]*\n/, '').trim();
@@ -104,9 +105,11 @@ If you need more context about any files, use your tools to read them.`;
         })
       )
       .andThen((commitMessage) =>
-        deleteSession(session, { agent: 'commitAgent' }).map(() => commitMessage)
+        deleteSession(session, { agent: 'commitAgent', iteration }).map(() => commitMessage)
       )
-      .orElse((error) => deleteSession(session, { agent: 'commitAgent' }).andThen(() => err(error)))
+      .orElse((error) =>
+        deleteSession(session, { agent: 'commitAgent', iteration }).andThen(() => err(error))
+      )
   );
 };
 
@@ -133,7 +136,7 @@ const commitAndGetResult = (commitMessage: string): ResultAsync<CommitResult, Er
  * and the current plan step. Returns the commit result with hash and message,
  * or null if there are no changes to commit.
  */
-const createCommitForTask = (): ResultAsync<CommitResult | null, Error> => {
+const createCommitForTask = (iteration: number): ResultAsync<CommitResult | null, Error> => {
   const model = getModelConfig('COMMIT_AGENT_MODEL', COMMIT_DEFAULT_MODEL);
 
   return stageAndGetGitInfo().andThen((gitInfo) => {
@@ -162,9 +165,14 @@ const createCommitForTask = (): ResultAsync<CommitResult | null, Error> => {
         }))
       )
       .andThen(({ currentStep, systemPrompt }) =>
-        generateCommitMessage(systemPrompt, currentStep, gitStatus, gitDiff, model).andThen(
-          (commitMessage) => commitAndGetResult(commitMessage)
-        )
+        generateCommitMessage(
+          systemPrompt,
+          currentStep,
+          gitStatus,
+          gitDiff,
+          model,
+          iteration
+        ).andThen((commitMessage) => commitAndGetResult(commitMessage))
       );
   });
 };

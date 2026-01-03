@@ -197,7 +197,7 @@ export const runLoop = (): ResultAsync<void, Error> =>
 
           // Handle decision
           if (reviewOutput.decision === 'accept') {
-            const commitResult = await unwrapOrThrow(createCommitForTask());
+            const commitResult = await unwrapOrThrow(createCommitForTask(iteration));
             if (commitResult) {
               iterationData.commit = {
                 hash: commitResult.hash,
