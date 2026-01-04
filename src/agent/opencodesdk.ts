@@ -6,6 +6,7 @@ import {
 } from '@opencode-ai/sdk';
 import { getDebugLogger } from './logger.js';
 import type { ModelConfig } from './types.js';
+import { getAbortSignal } from '../exit.js';
 
 const isObject = (data: unknown): data is Record<string, unknown> =>
   typeof data === 'object' && data !== null;
@@ -160,12 +161,18 @@ const isOpencodeInitialized = (): boolean => opencode !== null;
 
 /**
  * Subscribe to SDK events and log them to debug.log
+ * @param client - The OpenCode client
+ * @param signal - Optional AbortSignal to cancel the event loop
  */
-const subscribeToEvents = (client: OpencodeClient): ResultAsync<void, Error> =>
+const subscribeToEvents = (
+  client: OpencodeClient,
+  signal?: AbortSignal
+): ResultAsync<void, Error> =>
   ResultAsync.fromPromise(client.event.subscribe(), toError).andThen((events) =>
     ResultAsync.fromPromise(
       (async () => {
         for await (const event of events.stream) {
+          if (signal?.aborted) break;
           const logger = getDebugLogger();
           logger.debug('SDK_EVENT', {
             type: event.type,
@@ -189,7 +196,7 @@ const getOpencode = async (): Promise<Opencode> => {
     } else {
       opencode = await createOpencode({ port: 0 });
     }
-    subscribeToEvents(opencode.client).mapErr(() => {});
+    subscribeToEvents(opencode.client, getAbortSignal()).mapErr(() => {});
   }
   return opencode;
 };
