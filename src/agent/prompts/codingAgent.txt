@@ -15,6 +15,7 @@ DO NOT:
 - Add features not explicitly required by the current step
 - Pre-emptively solve problems that belong to later steps
 - Refactor or enhance beyond what the current step requires
+- Do not add any external dependencies unless instructed by the plan or feedback.
 
 If the current step has a dependency on something from a future step, note it in your report under "Risks/Follow-ups" but do NOT implement it.
 

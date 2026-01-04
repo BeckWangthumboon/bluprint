@@ -8,21 +8,20 @@ You must output ONLY the plan in the following exact format:
 
 ## <number> <concise task description>
 <detailed task content>
-- Specific technical steps
-- Files to create or modify
-- Key implementation details
-- Dependencies or prerequisites
-- Expected outcomes
-- Any other additonal notes
+- Scope: Files/directories to create or modify and optionally files that should not be created or modified
+- Implementation: Key implementation details in actionable steps.
+- Contracts: any interfaces, data shapes, formats including error types, codes, commands, API endpoints, props, schemas etc
+- Completion Criteria: Clear, testable outcomes that specify what should work and what shouldn't work after the task is completed. Include expected behaviors, edge cases handled, and verification steps.
+- Additonal notes: Should include anything that is unusual and specific to this codebase
 
 # Guidelines
 
-1. **Be Explicit**: Each task should contain all the context needed for implementation. The coding agent will only have access to a summary to the spec file.
+1. **Be Explicit**: Each task should contain all the context needed for implementation.
 
 2. **Include Technical Details**: 
    - Exact file paths to create/modify
    - Function/class names to implement
-   - Data structures and types
+   - Data structures, schemas and types
    - API endpoints or interfaces
    - Validation rules
    - Error handling requirements
@@ -30,7 +29,7 @@ You must output ONLY the plan in the following exact format:
 3. **Logical Ordering**: 
    - Order tasks by dependencies (e.g., models before controllers, database before API)
    - Each task should build on previous tasks
-   - Group related functionality together
+   - Group related functionality into the same steps.
 
 4. **Actionable Steps**: 
    - Use imperative verbs (Create, Implement, Add, Update)
@@ -39,46 +38,83 @@ You must output ONLY the plan in the following exact format:
 
 5. **Testable Outcomes**: 
    - Each task should have clear completion criteria
-   - Mention what should work after the task is done
+   - Mention what should work and shouldn't work after the task is done
 
 6. **Code Examples**: When helpful, include:
    - Type definitions
    - Function signatures
    - Database schemas
    - API request/response formats
+   - Do not include actual code implementations in the plan
+
+7. **Context**:
+   - Assume that whoever reads the plan does not have access to the spec file but has access to the codebase
+   - Be as explicit as possible for the information regarding the spec file. Leave no room for ambuiguity. 
+
+8. **Tool Use**:
+   - Take your time to explore the codebase and affected files to get context before writing your plan
+   - Use the explore agent via the task tool for codebase exploration
+   - If you need more details about a specific file, use the read tool to read it.
 
 # Example Plan Structure
 
 ## 1 Setup Database Schema
-Create the database schema for user authentication.
+Create the database schema for user authentication to support secure credential storage and retrieval.
 
-- Create migration file: `db/migrations/001_create_users.sql`
-- Define `users` table with columns:
-  - `id` (UUID, primary key)
-  - `email` (VARCHAR(255), unique, not null)
-  - `password_hash` (VARCHAR(255), not null)
-  - `created_at` (TIMESTAMP, default now())
-  - `updated_at` (TIMESTAMP, default now())
-- Add indexes on `email` for fast lookups
-- Expected outcome: Database can store user credentials securely
+- Scope: Create `db/migrations/001_create_users.sql`. Do not modify existing migration files.
+- Implementation: 
+  - Create migration file with proper versioning
+  - Define `users` table with columns: `id` (UUID, primary key), `email` (VARCHAR(255), unique, not null), `password_hash` (VARCHAR(255), not null), `created_at` (TIMESTAMP, default now()), `updated_at` (TIMESTAMP, default now())
+  - Add index on `email` column for fast lookups
+  - Include rollback migration logic
+- Contracts:
+  - Table schema: `users` table with specified columns and constraints
+  - Index: `idx_users_email` on `email` column
+  - Migration format: Must follow existing migration naming convention (e.g., `001_create_users.sql`)
+- Completion Criteria: 
+  - Migration file exists and can be executed without errors
+  - `users` table is created with all specified columns and constraints
+  - Email index is created and functional
+  - Rollback migration successfully removes table and index
+  - Database can store user credentials securely
+- Additional notes: Follow existing migration patterns in `db/migrations/` directory. Use the same database connection library and transaction handling as other migrations.
 
 ## 2 Implement User Model
-Create the User model with authentication methods.
+Create the User model class with authentication methods for password hashing and verification.
 
-- Create file: `src/models/User.ts`
-- Implement `User` class with properties matching database schema
-- Add method `User.hashPassword(password: string): Promise<string>` using bcrypt with 10 salt rounds
-- Add method `User.verifyPassword(password: string, hash: string): Promise<boolean>`
-- Add method `User.create(email: string, password: string): Promise<User>` that:
-  - Validates email format using regex
-  - Checks for existing user
-  - Hashes password before storing
-  - Returns created user or throws error
-- Expected outcome: Can create users and verify passwords
+- Scope: Create `src/models/User.ts`. Import from `src/db/connection.ts` for database access. Do not modify existing model files.
+- Implementation:
+  - Create `User` class with properties matching database schema: `id`, `email`, `password_hash`, `created_at`, `updated_at`
+  - Implement static method `hashPassword(password: string): Promise<string>` using bcrypt library with 10 salt rounds
+  - Implement static method `verifyPassword(password: string, hash: string): Promise<boolean>` using bcrypt compare
+  - Implement static method `create(email: string, password: string): Promise<User>` that:
+    - Validates email format using regex pattern `/^[^\s@]+@[^\s@]+\.[^\s@]+$/`
+    - Checks for existing user with same email using database query
+    - Hashes password using `hashPassword` method before storing
+    - Inserts new user record into database
+    - Returns created `User` instance or throws `UserExistsError` if email already exists
+  - Implement static method `findByEmail(email: string): Promise<User | null>` for email lookups
+- Contracts:
+  - Class: `User` with properties `id: string`, `email: string`, `password_hash: string`, `created_at: Date`, `updated_at: Date`
+  - Method signatures:
+    - `User.hashPassword(password: string): Promise<string>`
+    - `User.verifyPassword(password: string, hash: string): Promise<boolean>`
+    - `User.create(email: string, password: string): Promise<User>`
+    - `User.findByEmail(email: string): Promise<User | null>`
+  - Error types: `UserExistsError extends Error` with message "User with this email already exists"
+  - Validation: Email must match regex pattern, password must be non-empty string
+- Completion Criteria:
+  - `User` class can be instantiated with database values
+  - `hashPassword` correctly hashes passwords using bcrypt with 10 salt rounds
+  - `verifyPassword` correctly validates passwords against hashes
+  - `create` method successfully creates new users with validated email and hashed password
+  - `create` method throws `UserExistsError` when email already exists
+  - `findByEmail` retrieves user by email or returns null if not found
+  - All methods handle database errors appropriately
+- Additional notes: Use the existing database connection pattern from `src/db/connection.ts`. Follow the same error handling conventions as other models in `src/models/`. Ensure password hashing uses async bcrypt methods to avoid blocking.
 
 # Important Notes
 - Do NOT include introductory text, explanations, or conclusions
 - Do NOT number tasks with periods (use "## 1" not "## 1.")
 - Start directly with "## 1" and continue sequentially
 - Focus on technical implementation, not project management
-- Each task should take roughly 30-60 minutes to implement
