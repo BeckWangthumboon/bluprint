@@ -9,6 +9,8 @@ import {
   loadPromptFile,
   unwrapResultAsync,
   cleanupSession,
+  withTimeout,
+  getTimeoutMs,
 } from './utils.js';
 import type { ModelConfig } from './types.js';
 
@@ -51,20 +53,29 @@ export const generatePlan = (): ResultAsync<void, Error> => {
           }));
         })
         .andThen(({ spec, systemPrompt }) => {
+          const timeoutMs = getTimeoutMs('PLAN_AGENT_TIMEOUT_MS', 600_000);
+
           return lib.session.create('Plan Generation').andThen((session) =>
             ResultAsync.fromPromise(
-              unwrapResultAsync(
-                session.prompt({
-                  agent: 'plan',
-                  model: planModel,
-                  system: systemPrompt,
-                  parts: [
-                    {
-                      type: 'text',
-                      text: `Here is the specification to analyze:\n\n${spec}\n\nPlease create a detailed implementation plan following the format specified in your instructions.`,
-                    },
-                  ],
-                })
+              withTimeout(
+                unwrapResultAsync(
+                  session.prompt({
+                    agent: 'plan',
+                    model: planModel,
+                    system: systemPrompt,
+                    parts: [
+                      {
+                        type: 'text',
+                        text: `Here is the specification to analyze:\n\n${spec}\n\nPlease create a detailed implementation plan following the format specified in your instructions.`,
+                      },
+                    ],
+                  })
+                ),
+                {
+                  ms: timeoutMs,
+                  label: 'Plan agent prompt',
+                  onTimeout: () => session.abort(),
+                }
               ),
               toError
             )

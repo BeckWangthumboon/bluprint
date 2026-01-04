@@ -7,6 +7,8 @@ import {
   parseTextResponse,
   unwrapResultAsync,
   cleanupSession,
+  withTimeout,
+  getTimeoutMs,
 } from './utils.js';
 import { getOpenCodeLib, type Session } from './opencodesdk.js';
 import type { ModelConfig } from './types.js';
@@ -42,21 +44,30 @@ const generateSummary = (): ResultAsync<void, Error> => {
       }));
     })
     .andThen(({ spec, plan, systemPrompt }) => {
+      const timeoutMs = getTimeoutMs('SUMMARIZER_AGENT_TIMEOUT_MS', 300_000);
+
       return getOpenCodeLib().andThen((lib) =>
         lib.session.create('Summary Generation').andThen((session) =>
           ResultAsync.fromPromise(
-            unwrapResultAsync(
-              session.prompt({
-                agent: 'build',
-                model,
-                system: systemPrompt,
-                parts: [
-                  {
-                    type: 'text',
-                    text: `Here is the specification:\n\n${spec}\n\nHere is the implementation plan:\n\n${plan}\n\nPlease create a concise summary following the format in your instructions.`,
-                  },
-                ],
-              })
+            withTimeout(
+              unwrapResultAsync(
+                session.prompt({
+                  agent: 'build',
+                  model,
+                  system: systemPrompt,
+                  parts: [
+                    {
+                      type: 'text',
+                      text: `Here is the specification:\n\n${spec}\n\nHere is the implementation plan:\n\n${plan}\n\nPlease create a concise summary following the format in your instructions.`,
+                    },
+                  ],
+                })
+              ),
+              {
+                ms: timeoutMs,
+                label: 'Summarizer agent prompt',
+                onTimeout: () => session.abort(),
+              }
             ),
             toError
           )

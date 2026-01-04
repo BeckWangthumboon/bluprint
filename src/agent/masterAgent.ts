@@ -98,7 +98,7 @@ const callModelWithRepair = (
   userPrompt: string,
   attemptNumber = 1
 ): ResultAsync<{ output: MasterAgentOutput; rawResponse: string }, Error> => {
-  const timeoutMs = getTimeoutMs('MASTER_AGENT_TIMEOUT_MS');
+  const timeoutMs = getTimeoutMs('MASTER_AGENT_TIMEOUT_MS', 300_000);
 
   return ResultAsync.fromPromise(
     withTimeout<PromptResponse>(

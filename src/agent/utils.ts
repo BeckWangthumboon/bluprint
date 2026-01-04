@@ -7,22 +7,19 @@ import { logSessionData } from './logger.js';
 
 export const toError = (e: unknown): Error => (e instanceof Error ? e : new Error(String(e)));
 
-// Default timeout: 5 minutes
-const DEFAULT_PROMPT_TIMEOUT_MS = 300_000;
-
 /**
- * Get timeout value from environment variable or use default
+ * Get timeout value from environment variable or use provided default
  */
-export const getTimeoutMs = (envVarName: string): number => {
+export const getTimeoutMs = (envVarName: string, defaultMs: number): number => {
   const envValue = process.env[envVarName];
-  if (!envValue) return DEFAULT_PROMPT_TIMEOUT_MS;
+  if (!envValue) return defaultMs;
 
   const parsed = parseInt(envValue, 10);
   if (isNaN(parsed) || parsed <= 0) {
     console.warn(
       `Invalid ${envVarName} value: "${envValue}". Expected positive integer (ms). Using default.`
     );
-    return DEFAULT_PROMPT_TIMEOUT_MS;
+    return defaultMs;
   }
   return parsed;
 };

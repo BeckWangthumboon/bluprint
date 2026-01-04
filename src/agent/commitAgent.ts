@@ -7,6 +7,8 @@ import {
   loadPromptFile,
   unwrapResultAsync,
   cleanupSession,
+  withTimeout,
+  getTimeoutMs,
 } from './utils.js';
 import { readState } from '../state.js';
 import { workspace } from '../workspace.js';
@@ -87,20 +89,29 @@ The plan step is provided for context, but your commit message should describe w
 If you need more context about any files, use your tools to read them.`;
 
   return getOpenCodeLib().andThen((lib) =>
-    lib.session.create('Commit Message Generation').andThen((session) =>
-      ResultAsync.fromPromise(
-        unwrapResultAsync(
-          session.prompt({
-            agent: 'plan',
-            model,
-            system: systemPrompt,
-            parts: [
-              {
-                type: 'text',
-                text: userPrompt,
-              },
-            ],
-          })
+    lib.session.create('Commit Message Generation').andThen((session) => {
+      const timeoutMs = getTimeoutMs('COMMIT_AGENT_TIMEOUT_MS', 300_000);
+
+      return ResultAsync.fromPromise(
+        withTimeout(
+          unwrapResultAsync(
+            session.prompt({
+              agent: 'plan',
+              model,
+              system: systemPrompt,
+              parts: [
+                {
+                  type: 'text',
+                  text: userPrompt,
+                },
+              ],
+            })
+          ),
+          {
+            ms: timeoutMs,
+            label: `Commit agent prompt (iteration ${iteration})`,
+            onTimeout: () => session.abort(),
+          }
         ),
         toError
       )
@@ -119,8 +130,8 @@ If you need more context about any files, use your tools to read them.`;
         )
         .orElse((error) =>
           cleanupSession(session, 'commitAgent', iteration).andThen(() => err(error))
-        )
-    )
+        );
+    })
   );
 };
 

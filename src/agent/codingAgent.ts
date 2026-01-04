@@ -103,7 +103,7 @@ Implement ONLY the current step. If feedback is provided, address it first.`;
           return lib.session.create('Coding Agent Execution').andThen((session) => {
             const startedAt = new Date();
             const planStep = state.currentTaskNumber;
-            const timeoutMs = getTimeoutMs('CODING_AGENT_TIMEOUT_MS');
+            const timeoutMs = getTimeoutMs('CODING_AGENT_TIMEOUT_MS', 300_000);
 
             return ResultAsync.fromPromise(
               withTimeout(
