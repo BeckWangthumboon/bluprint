@@ -249,12 +249,20 @@ ${data.error ? `\n## Error\n\n${data.error}` : ''}`;
       iterationsSummary = '- No iterations completed';
     }
 
-    const statusLine =
-      data.status === 'completed'
-        ? `Completed ${data.totalIterations} iterations in ${duration}`
-        : data.status === 'failed'
-          ? `Failed after ${data.totalIterations} iterations (${duration})`
-          : `In progress - ${data.totalIterations} iterations so far`;
+    let statusLine: string;
+    switch (data.status) {
+      case 'completed':
+        statusLine = `Completed ${data.totalIterations} iterations in ${duration}`;
+        break;
+      case 'failed':
+        statusLine = `Failed after ${data.totalIterations} iterations (${duration})`;
+        break;
+      case 'aborted':
+        statusLine = `Aborted after ${data.totalIterations} iterations (${duration})`;
+        break;
+      default:
+        statusLine = `In progress - ${data.totalIterations} iterations so far`;
+    }
 
     const content = `${frontmatter}
 

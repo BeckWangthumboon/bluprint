@@ -2,6 +2,7 @@ import { ResultAsync } from 'neverthrow';
 import { workspace } from '../workspace.js';
 import { exec } from '../shell.js';
 import {
+  abortLoop,
   checkLimits,
   completeCurrentTask,
   failLoop,
@@ -171,7 +172,7 @@ export const runLoop = (sig?: AbortSignal): ResultAsync<void, Error> =>
         if (signal.aborted) {
           loopAborted = true;
           await writeManifestSafe('aborted', 'Operation aborted before starting');
-          await failLoop();
+          await abortLoop();
           return;
         }
 
@@ -180,7 +181,7 @@ export const runLoop = (sig?: AbortSignal): ResultAsync<void, Error> =>
           if (signal.aborted) {
             loopAborted = true;
             await writeManifestSafe('aborted', 'Operation aborted');
-            await failLoop();
+            await abortLoop();
             return;
           }
 
@@ -263,7 +264,7 @@ export const runLoop = (sig?: AbortSignal): ResultAsync<void, Error> =>
           loopAborted = true;
           await writeManifestSafe('aborted', 'Operation aborted');
           if (stateInitialized) {
-            await failLoop();
+            await abortLoop();
           }
           return;
         }

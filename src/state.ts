@@ -3,13 +3,13 @@ import { workspace } from './workspace.js';
 
 export interface TaskStatus {
   taskNumber: number;
-  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'aborted';
   commitHash?: string;
 }
 
 export interface LoopState {
   version: string;
-  status: 'planning' | 'executing' | 'completed' | 'failed';
+  status: 'planning' | 'executing' | 'completed' | 'failed' | 'aborted';
   currentTaskNumber: number;
   isRetry: boolean;
   maxIterations: number;
@@ -46,7 +46,8 @@ const validateState = (data: unknown): data is LoopState => {
     (state.status === 'planning' ||
       state.status === 'executing' ||
       state.status === 'completed' ||
-      state.status === 'failed') &&
+      state.status === 'failed' ||
+      state.status === 'aborted') &&
     typeof state.currentTaskNumber === 'number' &&
     typeof state.isRetry === 'boolean' &&
     typeof state.maxIterations === 'number' &&
@@ -59,7 +60,8 @@ const validateState = (data: unknown): data is LoopState => {
         (task.status === 'pending' ||
           task.status === 'in_progress' ||
           task.status === 'completed' ||
-          task.status === 'failed') &&
+          task.status === 'failed' ||
+          task.status === 'aborted') &&
         (task.commitHash === undefined || typeof task.commitHash === 'string')
     )
   );
@@ -281,6 +283,21 @@ export const failLoop = (): ResultAsync<void, Error> =>
     const updatedState: LoopState = {
       ...state,
       status: 'failed',
+      tasks: updatedTasks,
+    };
+
+    return writeState(updatedState);
+  });
+
+export const abortLoop = (): ResultAsync<void, Error> =>
+  readState().andThen((state) => {
+    const updatedTasks = state.tasks.map((task) =>
+      task.taskNumber === state.currentTaskNumber ? { ...task, status: 'aborted' as const } : task
+    );
+
+    const updatedState: LoopState = {
+      ...state,
+      status: 'aborted',
       tasks: updatedTasks,
     };
 
