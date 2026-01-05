@@ -13,7 +13,7 @@ import {
 import { readState } from '../state.js';
 import { workspace } from '../workspace.js';
 import { getPlanStep } from './planUtils.js';
-import { getOpenCodeLib } from './opencodesdk.js';
+import { getOpenCodeLib, abortAndCleanup } from './opencodesdk.js';
 import type { ModelConfig } from './types.js';
 
 const COMMIT_DEFAULT_MODEL: ModelConfig = {
@@ -65,7 +65,8 @@ const generateCommitMessage = (
   gitStatus: string,
   gitDiff: string,
   model: ModelConfig,
-  iteration: number
+  iteration: number,
+  signal: AbortSignal
 ): ResultAsync<string, Error> => {
   // remove the "## N" header from plan step
   const stepContent = currentStep.replace(/^##\s+\d+\s+[^\n]*\n/, '').trim();
@@ -110,7 +111,9 @@ If you need more context about any files, use your tools to read them.`;
           {
             ms: timeoutMs,
             label: `Commit agent prompt (iteration ${iteration})`,
-            onTimeout: () => session.abort(),
+            signal,
+            onTimeout: () => abortAndCleanup(session),
+            onAbort: () => abortAndCleanup(session),
           }
         ),
         toError
@@ -157,8 +160,13 @@ const commitAndGetResult = (commitMessage: string): ResultAsync<CommitResult, Er
  * Creates a commit for the current task by reviewing uncommitted changes
  * and the current plan step. Returns the commit result with hash and message,
  * or null if there are no changes to commit.
+ * @param iteration - The current loop iteration number
+ * @param signal - AbortSignal to cancel the operation
  */
-const createCommitForTask = (iteration: number): ResultAsync<CommitResult | null, Error> => {
+const createCommitForTask = (
+  iteration: number,
+  signal: AbortSignal
+): ResultAsync<CommitResult | null, Error> => {
   const model = getModelConfig('COMMIT_AGENT_MODEL', COMMIT_DEFAULT_MODEL);
 
   return stageAndGetGitInfo().andThen((gitInfo) => {
@@ -193,7 +201,8 @@ const createCommitForTask = (iteration: number): ResultAsync<CommitResult | null
           gitStatus,
           gitDiff,
           model,
-          iteration
+          iteration,
+          signal
         ).andThen((commitMessage) => commitAndGetResult(commitMessage))
       );
   });

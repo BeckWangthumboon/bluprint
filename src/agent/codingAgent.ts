@@ -1,7 +1,7 @@
-import { ResultAsync, err } from 'neverthrow';
+import { ResultAsync, err, errAsync } from 'neverthrow';
 import { workspace } from '../workspace.js';
 import { readState } from '../state.js';
-import { getOpenCodeLib } from './opencodesdk.js';
+import { getOpenCodeLib, abortAndCleanup } from './opencodesdk.js';
 import { getPlanStep, extractPlanOutline, formatStepHeader } from './planUtils.js';
 import {
   parseTextResponse,
@@ -26,8 +26,16 @@ const CODING_DEFAULT_MODEL: ModelConfig = {
  * Reads feedback (from task.md), summary, and current plan step, then runs the agent.
  * Returns the report content.
  * @param iteration - The current loop iteration number
+ * @param signal - AbortSignal to cancel the operation
  */
-export const executeCodingAgent = (iteration: number): ResultAsync<string, Error> => {
+export const executeCodingAgent = (
+  iteration: number,
+  signal: AbortSignal
+): ResultAsync<string, Error> => {
+  if (signal.aborted) {
+    return errAsync(new Error('Operation aborted'));
+  }
+
   const codingModel = getModelConfig('CODING_AGENT_MODEL', CODING_DEFAULT_MODEL);
 
   return getOpenCodeLib().andThen((lib) =>
@@ -123,7 +131,9 @@ Implement ONLY the current step. If feedback is provided, address it first.`;
                 {
                   ms: timeoutMs,
                   label: `Coding agent prompt (iteration ${iteration})`,
-                  onTimeout: () => session.abort(),
+                  signal,
+                  onTimeout: () => abortAndCleanup(session),
+                  onAbort: () => abortAndCleanup(session),
                 }
               ),
               toError

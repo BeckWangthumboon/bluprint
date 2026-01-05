@@ -1,4 +1,4 @@
-import { ResultAsync, err, ok } from 'neverthrow';
+import { ResultAsync, err, errAsync, ok } from 'neverthrow';
 import { workspace } from '../workspace.js';
 import {
   parseTextResponse,
@@ -11,7 +11,12 @@ import {
   unwrapResultAsync,
   cleanupSession,
 } from './utils.js';
-import { getOpenCodeLib, type Session, type PromptResponse } from './opencodesdk.js';
+import {
+  getOpenCodeLib,
+  abortAndCleanup,
+  type Session,
+  type PromptResponse,
+} from './opencodesdk.js';
 import { readState } from '../state.js';
 import { exec } from '../shell.js';
 import { findPlanStep, getPlanStep } from './planUtils.js';
@@ -96,7 +101,9 @@ const callModelWithRepair = (
   model: ModelConfig,
   systemPrompt: string,
   userPrompt: string,
-  attemptNumber = 1
+  attemptNumber = 1,
+  signal: AbortSignal,
+  onAbort: () => void
 ): ResultAsync<{ output: MasterAgentOutput; rawResponse: string }, Error> => {
   const timeoutMs = getTimeoutMs('MASTER_AGENT_TIMEOUT_MS', 300_000);
 
@@ -118,7 +125,9 @@ const callModelWithRepair = (
       {
         ms: timeoutMs,
         label: `Master agent prompt (attempt ${attemptNumber})`,
+        signal,
         onTimeout: () => session.abort(),
+        onAbort,
       }
     ),
     toError
@@ -152,7 +161,15 @@ const callModelWithRepair = (
           userPrompt,
           rawOutput
         );
-        return callModelWithRepair(session, model, systemPrompt, repairPrompt, attemptNumber + 1);
+        return callModelWithRepair(
+          session,
+          model,
+          systemPrompt,
+          repairPrompt,
+          attemptNumber + 1,
+          signal,
+          onAbort
+        );
       }
 
       // Validate schema
@@ -168,7 +185,15 @@ const callModelWithRepair = (
 
         // Attempt repair
         const repairPrompt = createRepairPrompt(validation.reason, userPrompt, rawOutput);
-        return callModelWithRepair(session, model, systemPrompt, repairPrompt, attemptNumber + 1);
+        return callModelWithRepair(
+          session,
+          model,
+          systemPrompt,
+          repairPrompt,
+          attemptNumber + 1,
+          signal,
+          onAbort
+        );
       }
 
       return ok({
@@ -182,8 +207,16 @@ const callModelWithRepair = (
 /**
  * Main master agent function that reviews code changes and generates next task
  * @param iteration - The current loop iteration number
+ * @param signal - AbortSignal to cancel the operation
  */
-export const reviewAndGenerateTask = (iteration: number): ResultAsync<string, Error> => {
+export const reviewAndGenerateTask = (
+  iteration: number,
+  signal: AbortSignal
+): ResultAsync<string, Error> => {
+  if (signal.aborted) {
+    return errAsync(new Error('Operation aborted'));
+  }
+
   const model = getModelConfig('MASTER_AGENT_MODEL', MASTER_DEFAULT_MODEL);
 
   return getOpenCodeLib().andThen((lib) =>
@@ -317,8 +350,18 @@ Review the current task implementation and decide whether to accept or reject. O
                 const planStep = state.currentTaskNumber;
 
                 // Call model with repair capability
-                return lib.session.create('Master Agent Review').andThen((session) =>
-                  callModelWithRepair(session, model, systemPrompt, userPrompt)
+                return lib.session.create('Master Agent Review').andThen((session) => {
+                  const abortSession = () => abortAndCleanup(session);
+
+                  return callModelWithRepair(
+                    session,
+                    model,
+                    systemPrompt,
+                    userPrompt,
+                    1,
+                    signal,
+                    abortSession
+                  )
                     .andThen(({ output, rawResponse }) => {
                       // Log the agent call
                       const endedAt = new Date();
@@ -362,8 +405,8 @@ Review the current task implementation and decide whether to accept or reject. O
                         err(error)
                       );
                     })
-                    .map((output) => JSON.stringify(output, null, 2))
-                );
+                    .map((output) => JSON.stringify(output, null, 2));
+                });
               }
             );
         });

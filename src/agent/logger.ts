@@ -24,7 +24,7 @@ interface ManifestData {
   runId: string;
   startedAt: Date;
   endedAt?: Date;
-  status: 'in_progress' | 'completed' | 'failed';
+  status: 'in_progress' | 'completed' | 'failed' | 'aborted';
   totalIterations: number;
   inputSizes: { spec: number; plan: number; summary: number };
   error?: string;

@@ -17,6 +17,7 @@ import { reviewAndGenerateTask } from './masterAgent.js';
 import type { MasterAgentOutput } from './types.js';
 import { isObject, toError } from './utils.js';
 import { purgeAndInitLogger, type ManifestData } from './logger.js';
+import { getAbortSignal } from '../exit.js';
 
 const parseMasterOutput = (raw: string): MasterAgentOutput => {
   let parsed: unknown;
@@ -88,14 +89,18 @@ export const applyDecision = (
  * The loop handles errors gracefully by marking the state as failed
  * if an error occurs after initialization.
  *
+ * @param sig - Optional AbortSignal to cancel the loop. Defaults to global abort signal.
  * @returns A ResultAsync that resolves when the loop completes successfully
  *          or rejects with an error if limits are exceeded or an error occurs
  */
-export const runLoop = (): ResultAsync<void, Error> =>
+export const runLoop = (sig?: AbortSignal): ResultAsync<void, Error> =>
   ResultAsync.fromPromise(
     (async () => {
+      const signal = sig ?? getAbortSignal();
+
       let stateInitialized = false;
       let loopFailed = false;
+      let loopAborted = false;
       let iteration = 0;
       const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const startedAt = new Date();
@@ -162,8 +167,23 @@ export const runLoop = (): ResultAsync<void, Error> =>
         await unwrapOrThrow(workspace.report.write(''));
         await logger.writeManifest(manifestData);
 
+        // Check for abort before entering main loop
+        if (signal.aborted) {
+          loopAborted = true;
+          await writeManifestSafe('aborted', 'Operation aborted before starting');
+          await failLoop();
+          return;
+        }
+
         // Main loop
         while (true) {
+          if (signal.aborted) {
+            loopAborted = true;
+            await writeManifestSafe('aborted', 'Operation aborted');
+            await failLoop();
+            return;
+          }
+
           iteration += 1;
 
           // Get current plan step from state
@@ -182,7 +202,7 @@ export const runLoop = (): ResultAsync<void, Error> =>
 
           // Execute coding agent
           const codingStartedAt = Date.now();
-          const report = await unwrapOrThrow(executeCodingAgent(iteration));
+          const report = await unwrapOrThrow(executeCodingAgent(iteration, signal));
           await unwrapOrThrow(saveReport(report));
           iterationData.codingDurationMs = Date.now() - codingStartedAt;
 
@@ -190,14 +210,14 @@ export const runLoop = (): ResultAsync<void, Error> =>
 
           // Master review
           const reviewStartedAt = Date.now();
-          const reviewRaw = await unwrapOrThrow(reviewAndGenerateTask(iteration));
+          const reviewRaw = await unwrapOrThrow(reviewAndGenerateTask(iteration, signal));
           const reviewOutput = parseMasterOutput(reviewRaw);
           iterationData.masterDurationMs = Date.now() - reviewStartedAt;
           iterationData.decision = reviewOutput.decision;
 
           // Handle decision
           if (reviewOutput.decision === 'accept') {
-            const commitResult = await unwrapOrThrow(createCommitForTask(iteration));
+            const commitResult = await unwrapOrThrow(createCommitForTask(iteration, signal));
             if (commitResult) {
               iterationData.commit = {
                 hash: commitResult.hash,
@@ -237,9 +257,20 @@ export const runLoop = (): ResultAsync<void, Error> =>
         }
       } catch (error) {
         const errorMessage = toError(error).message;
+        const isAbortError = errorMessage === 'Operation aborted' || signal.aborted;
+
+        if (isAbortError && !loopAborted) {
+          loopAborted = true;
+          await writeManifestSafe('aborted', 'Operation aborted');
+          if (stateInitialized) {
+            await failLoop();
+          }
+          return;
+        }
+
         await writeManifestSafe('failed', errorMessage);
 
-        if (stateInitialized && !loopFailed) {
+        if (stateInitialized && !loopFailed && !loopAborted) {
           const failResult = await failLoop();
           if (failResult.isErr()) {
           }

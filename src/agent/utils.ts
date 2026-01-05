@@ -27,8 +27,11 @@ export const getTimeoutMs = (envVarName: string, defaultMs: number): number => {
 type TimeoutOptions = {
   ms: number;
   label: string;
+  signal?: AbortSignal;
   onTimeout?: () => void;
   onTimeoutError?: (error: Error) => void;
+  onAbort?: () => void;
+  onAbortError?: (error: Error) => void;
 };
 
 /**
@@ -37,8 +40,14 @@ type TimeoutOptions = {
  * Optionally calls onTimeout (e.g., to abort a running session) when timeout occurs.
  */
 export const withTimeout = async <T>(promise: Promise<T>, options: TimeoutOptions): Promise<T> => {
-  const { ms, label, onTimeout, onTimeoutError } = options;
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const { ms, label, signal, onTimeout, onTimeoutError, onAbort, onAbortError } = options;
+
+  if (signal?.aborted) {
+    throw new Error('Operation aborted');
+  }
+
+  let timeoutId: ReturnType<typeof setTimeout> | undefined = undefined;
+  let abortHandler: (() => void) | undefined = undefined;
 
   const handleTimeoutError = (err: unknown): void => {
     const error = toError(err);
@@ -46,6 +55,24 @@ export const withTimeout = async <T>(promise: Promise<T>, options: TimeoutOption
       onTimeoutError?.(error);
     } catch (handlerErr) {
       console.error('onTimeoutError handler failed:', handlerErr);
+    }
+  };
+
+  const handleAbortError = (err: unknown): void => {
+    const error = toError(err);
+    try {
+      onAbortError?.(error);
+    } catch (handlerErr) {
+      console.error('onAbortError handler failed:', handlerErr);
+    }
+  };
+
+  const cleanup = (): void => {
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId);
+    }
+    if (abortHandler && signal) {
+      signal.removeEventListener('abort', abortHandler);
     }
   };
 
@@ -63,11 +90,29 @@ export const withTimeout = async <T>(promise: Promise<T>, options: TimeoutOption
     }, ms);
   });
 
-  return Promise.race([promise, timeoutPromise]).finally(() => {
-    if (timeoutId !== undefined) {
-      clearTimeout(timeoutId);
-    }
-  });
+  const abortPromise = signal
+    ? new Promise<never>((_, reject) => {
+        abortHandler = () => {
+          try {
+            const result = onAbort?.();
+            if (result && typeof (result as Promise<unknown>).catch === 'function') {
+              (result as Promise<unknown>).catch(handleAbortError);
+            }
+          } catch (err) {
+            handleAbortError(err);
+          }
+          reject(new Error('Operation aborted'));
+        };
+        signal.addEventListener('abort', abortHandler, { once: true });
+      })
+    : null;
+
+  const racers: Promise<T | never>[] = [promise, timeoutPromise];
+  if (abortPromise) {
+    racers.push(abortPromise);
+  }
+
+  return Promise.race(racers).finally(cleanup);
 };
 
 export const isObject = (data: unknown): data is Record<string, unknown> =>

@@ -352,6 +352,28 @@ const getOpencodeServer = async () => {
   return instance.server;
 };
 
+/**
+ * Abort a session and delete it to clean up
+ */
+const abortAndCleanup = (session: Session): void => {
+  session
+    .abort()
+    .andThen(() => session.delete())
+    .mapErr((err) => {
+      const logger = getDebugLogger();
+      logger.debug('ABORT_CLEANUP_ERROR', {
+        sessionId: session.id,
+        error: err.message,
+      });
+    });
+};
+
 export type { SdkError, PromptParams, MessageInfo, PromptResponse, Provider, Session };
 export type { OpenCodeSDKSession };
-export { OpenCodeErrorUtils, isOpencodeInitialized, getOpenCodeLib, getOpencodeServer };
+export {
+  OpenCodeErrorUtils,
+  isOpencodeInitialized,
+  getOpenCodeLib,
+  getOpencodeServer,
+  abortAndCleanup,
+};
