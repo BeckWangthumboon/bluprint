@@ -1,5 +1,5 @@
 import { ResultAsync, errAsync } from 'neverthrow';
-import { readFile } from '../fs.js';
+import { fsUtils } from '../fs.js';
 import { join, dirname } from 'path';
 import type { ModelConfig } from './types.js';
 import type { Session } from './opencodesdk.js';
@@ -157,9 +157,9 @@ export const getModelConfig = (envVarName: string, defaultModel: ModelConfig): M
 
 export const loadPromptFile = (promptFileName: string): ResultAsync<string, Error> => {
   const promptPath = join(dirname(new URL(import.meta.url).pathname), 'prompts', promptFileName);
-  return readFile(promptPath).mapErr(
-    (err) => new Error(`Failed to load ${promptFileName}: ${err.message}`)
-  );
+  return fsUtils
+    .readFile(promptPath)
+    .mapErr((err) => new Error(`Failed to load ${promptFileName}: ${err.message}`));
 };
 
 type PromptTextResponse = { data: { parts: Array<{ type: string; text?: string }> } };

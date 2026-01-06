@@ -6,13 +6,13 @@ const DEFAULT_ENCODING: BufferEncoding = 'utf8';
 
 const toError = (err: unknown): Error => (err instanceof Error ? err : new Error(String(err)));
 
-export const readFile = (
+const readFile = (
   filePath: string,
   encoding: BufferEncoding = DEFAULT_ENCODING
 ): ResultAsync<string, Error> =>
   ResultAsync.fromPromise(fs.readFile(filePath, { encoding }), toError);
 
-export const writeFile = (
+const writeFile = (
   filePath: string,
   data: string | Uint8Array,
   encoding: BufferEncoding = DEFAULT_ENCODING
@@ -25,7 +25,7 @@ export const writeFile = (
     toError
   );
 
-export const appendFile = (
+const appendFile = (
   filePath: string,
   data: string,
   encoding: BufferEncoding = DEFAULT_ENCODING
@@ -38,18 +38,18 @@ export const appendFile = (
     toError
   );
 
-export const clearFile = (
+const clearFile = (
   filePath: string,
   encoding: BufferEncoding = DEFAULT_ENCODING
 ): ResultAsync<void, Error> => writeFile(filePath, '', encoding);
 
-export const removeDir = (dirPath: string): ResultAsync<void, Error> =>
+const removeDir = (dirPath: string): ResultAsync<void, Error> =>
   ResultAsync.fromPromise(
     fs.rm(dirPath, { recursive: true, force: true }).catch(() => {}),
     toError
   );
 
-export const moveFile = (src: string, dest: string): ResultAsync<void, Error> =>
+const moveFile = (src: string, dest: string): ResultAsync<void, Error> =>
   ResultAsync.fromPromise(
     (async () => {
       await fs.mkdir(dirname(dest), { recursive: true });
@@ -58,13 +58,13 @@ export const moveFile = (src: string, dest: string): ResultAsync<void, Error> =>
     toError
   );
 
-export const removeFile = (filePath: string): ResultAsync<void, Error> =>
+const removeFile = (filePath: string): ResultAsync<void, Error> =>
   ResultAsync.fromPromise(
     fs.rm(filePath, { force: true }).catch(() => {}),
     toError
   );
 
-export const fileExists = (filePath: string): ResultAsync<boolean, Error> =>
+const fileExists = (filePath: string): ResultAsync<boolean, Error> =>
   ResultAsync.fromPromise(
     fs
       .access(filePath)
@@ -73,7 +73,7 @@ export const fileExists = (filePath: string): ResultAsync<boolean, Error> =>
     toError
   );
 
-export const ensureDir = (dirPath: string): ResultAsync<void, Error> =>
+const ensureDir = (dirPath: string): ResultAsync<void, Error> =>
   ResultAsync.fromPromise(
     fs.mkdir(dirPath, { recursive: true }).then(() => undefined),
     toError

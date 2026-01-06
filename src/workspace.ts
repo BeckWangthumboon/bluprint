@@ -1,6 +1,6 @@
 import { join } from 'path';
 import { ResultAsync } from 'neverthrow';
-import { readFile, writeFile, moveFile, removeFile } from './fs.js';
+import { fsUtils } from './fs.js';
 
 const BLUPRINT_DIR = join(process.cwd(), '.bluprint');
 const RUNS_DIR = join(BLUPRINT_DIR, 'runs');
@@ -25,23 +25,27 @@ const CACHE_FILES_TO_ARCHIVE = [
 
 const TEMP_FILE_NAMES = new Set(['task.md', 'report.md']);
 
-const readTask = (): ResultAsync<string, Error> => readFile(TASK_MD_FILE);
-const writeTask = (content: string): ResultAsync<void, Error> => writeFile(TASK_MD_FILE, content);
+const readTask = (): ResultAsync<string, Error> => fsUtils.readFile(TASK_MD_FILE);
+const writeTask = (content: string): ResultAsync<void, Error> =>
+  fsUtils.writeFile(TASK_MD_FILE, content);
 
-const readReport = (): ResultAsync<string, Error> => readFile(REPORT_FILE);
-const writeReport = (content: string): ResultAsync<void, Error> => writeFile(REPORT_FILE, content);
+const readReport = (): ResultAsync<string, Error> => fsUtils.readFile(REPORT_FILE);
+const writeReport = (content: string): ResultAsync<void, Error> =>
+  fsUtils.writeFile(REPORT_FILE, content);
 
-const readSpec = (): ResultAsync<string, Error> => readFile(SPEC_FILE);
+const readSpec = (): ResultAsync<string, Error> => fsUtils.readFile(SPEC_FILE);
 
-const readPlan = (): ResultAsync<string, Error> => readFile(PLAN_FILE);
-const writePlan = (content: string): ResultAsync<void, Error> => writeFile(PLAN_FILE, content);
+const readPlan = (): ResultAsync<string, Error> => fsUtils.readFile(PLAN_FILE);
+const writePlan = (content: string): ResultAsync<void, Error> =>
+  fsUtils.writeFile(PLAN_FILE, content);
 
-const readSummary = (): ResultAsync<string, Error> => readFile(SUMMARY_FILE);
+const readSummary = (): ResultAsync<string, Error> => fsUtils.readFile(SUMMARY_FILE);
 const writeSummary = (content: string): ResultAsync<void, Error> =>
-  writeFile(SUMMARY_FILE, content);
+  fsUtils.writeFile(SUMMARY_FILE, content);
 
-const readState = (): ResultAsync<string, Error> => readFile(STATE_FILE);
-const writeState = (content: string): ResultAsync<void, Error> => writeFile(STATE_FILE, content);
+const readState = (): ResultAsync<string, Error> => fsUtils.readFile(STATE_FILE);
+const writeState = (content: string): ResultAsync<void, Error> =>
+  fsUtils.writeFile(STATE_FILE, content);
 
 /**
  * Archive cache files to the run directory.
@@ -49,8 +53,7 @@ const writeState = (content: string): ResultAsync<void, Error> => writeFile(STAT
  *
  * @param runId - The run identifier
  * @param options - Optional configuration
- * @param options.deleteTemp - If true, deletes task.md and report.md 
-
+ * @param options.deleteTemp - If true, deletes task.md and report.md
  *
  * Logs warnings for move/delete failures but does not throw.
  */
@@ -65,7 +68,7 @@ const archiveCacheToRun = (
       const results = await Promise.allSettled(
         CACHE_FILES_TO_ARCHIVE.map(async ({ name, path }) => {
           if (shouldDeleteTemp && TEMP_FILE_NAMES.has(name)) {
-            const result = await removeFile(path);
+            const result = await fsUtils.removeFile(path);
             if (result.isErr()) {
               console.warn(
                 `[archive] Failed to delete temporary file ${name}: ${result.error.message}`
@@ -73,7 +76,7 @@ const archiveCacheToRun = (
             }
           } else {
             const dest = join(runDir, name);
-            const result = await moveFile(path, dest);
+            const result = await fsUtils.moveFile(path, dest);
             if (result.isErr()) {
               console.warn(
                 `[archive] Failed to move ${name} to run ${runId}: ${result.error.message}`

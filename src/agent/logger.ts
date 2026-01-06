@@ -1,6 +1,6 @@
 import { join } from 'path';
 import { Result, ResultAsync, ok } from 'neverthrow';
-import { writeFile, appendFile, removeDir } from '../fs.js';
+import { fsUtils } from '../fs.js';
 import { workspaceConstants } from '../workspace.js';
 import type { ModelConfig } from './types.js';
 import type { Session, OpenCodeSDKSession } from './opencodesdk.js';
@@ -135,7 +135,7 @@ class Logger {
    * Purge all existing logs
    */
   async purge(): Promise<void> {
-    await removeDir(RUNS_DIR);
+    await fsUtils.removeDir(RUNS_DIR);
   }
 
   /**
@@ -147,7 +147,7 @@ class Logger {
       event,
       ...data,
     };
-    appendFile(this.debugLogPath, JSON.stringify(entry) + '\n').mapErr(() => {});
+    fsUtils.appendFile(this.debugLogPath, JSON.stringify(entry) + '\n').mapErr(() => {});
   }
 
   /**
@@ -162,7 +162,7 @@ class Logger {
     const agentShort = meta.agent.replace('Agent', '');
     const filename = `${prefix}-${agentShort}-${sessionId}.json`;
     const filepath = join(this.sessionsDir, filename);
-    await writeFile(filepath, JSON.stringify(sessionData, null, 2));
+    await fsUtils.writeFile(filepath, JSON.stringify(sessionData, null, 2));
   }
 
   /**
@@ -205,7 +205,7 @@ class Logger {
 ${data.agent === 'masterAgent' ? formatMasterAgentResponse(data.response) : formatCodingAgentResponse(data.response)}
 ${data.error ? `\n## Error\n\n${data.error}` : ''}`;
 
-    await writeFile(join(this.agentsDir, filename), frontmatter + body);
+    await fsUtils.writeFile(join(this.agentsDir, filename), frontmatter + body);
   }
 
   /**
@@ -282,7 +282,7 @@ ${iterationsSummary}
 ${data.error ? `\n## Error\n\n\`\`\`\n${data.error}\n\`\`\`` : ''}
 `;
 
-    await writeFile(join(this.runDir, 'manifest.md'), content);
+    await fsUtils.writeFile(join(this.runDir, 'manifest.md'), content);
   }
 
   private formatDuration(ms: number): string {

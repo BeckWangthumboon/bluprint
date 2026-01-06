@@ -2,7 +2,7 @@ import { ResultAsync, ok, err } from 'neverthrow';
 import { z } from 'zod';
 import type { BluprintConfig, ModelsConfig, ModelConfig } from './schemas.js';
 import type { ConfigValidationError } from './types.js';
-import { readFile, writeFile, fileExists, ensureDir } from '../fs.js';
+import { fsUtils } from '../fs.js';
 import * as path from 'path';
 import { BluprintConfigSchema, ModelsConfigSchema } from './schemas.js';
 
@@ -19,13 +19,14 @@ export const getConfigFilePath = (filename: string): string => {
 };
 
 export const ensureConfigDir = (): ResultAsync<void, Error> => {
-  return ensureDir(getConfigDir());
+  return fsUtils.ensureDir(getConfigDir());
 };
 
 export const readBluprintConfig = (): ResultAsync<BluprintConfig, ConfigValidationError> => {
   const filePath = getConfigFilePath(BLUPRINT_CONFIG_FILE);
 
-  return fileExists(filePath)
+  return fsUtils
+    .fileExists(filePath)
     .mapErr(
       (e): ConfigValidationError => ({
         type: 'CONFIG_FILE_INVALID_JSON',
@@ -38,7 +39,8 @@ export const readBluprintConfig = (): ResultAsync<BluprintConfig, ConfigValidati
         return err({ type: 'CONFIG_FILE_MISSING', file: filePath } as const);
       }
 
-      return readFile(filePath)
+      return fsUtils
+        .readFile(filePath)
         .mapErr(
           (e): ConfigValidationError => ({
             type: 'CONFIG_FILE_INVALID_JSON',
@@ -81,13 +83,14 @@ export const readBluprintConfig = (): ResultAsync<BluprintConfig, ConfigValidati
 export const writeBluprintConfig = (config: BluprintConfig): ResultAsync<void, Error> => {
   const filePath = getConfigFilePath(BLUPRINT_CONFIG_FILE);
   const content = JSON.stringify(config, null, 2);
-  return writeFile(filePath, content);
+  return fsUtils.writeFile(filePath, content);
 };
 
 export const readModelsConfig = (): ResultAsync<ModelsConfig, ConfigValidationError> => {
   const filePath = getConfigFilePath(MODELS_CONFIG_FILE);
 
-  return fileExists(filePath)
+  return fsUtils
+    .fileExists(filePath)
     .mapErr(
       (e): ConfigValidationError => ({
         type: 'CONFIG_FILE_INVALID_JSON',
@@ -100,7 +103,8 @@ export const readModelsConfig = (): ResultAsync<ModelsConfig, ConfigValidationEr
         return err({ type: 'CONFIG_FILE_MISSING', file: filePath } as const);
       }
 
-      return readFile(filePath)
+      return fsUtils
+        .readFile(filePath)
         .mapErr(
           (e): ConfigValidationError => ({
             type: 'CONFIG_FILE_INVALID_JSON',
@@ -143,7 +147,7 @@ export const readModelsConfig = (): ResultAsync<ModelsConfig, ConfigValidationEr
 export const writeModelsConfig = (config: ModelsConfig): ResultAsync<void, Error> => {
   const filePath = getConfigFilePath(MODELS_CONFIG_FILE);
   const content = JSON.stringify(config, null, 2);
-  return writeFile(filePath, content);
+  return fsUtils.writeFile(filePath, content);
 };
 
 export const modelConfigEquals = (a: ModelConfig, b: ModelConfig): boolean => {
