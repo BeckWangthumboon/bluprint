@@ -40,9 +40,11 @@ export const generatePlan = (): ResultAsync<void, Error> => {
       }
 
       // Both models are valid, proceed with plan generation
-      return workspace.spec
+      return workspace.cache.spec
         .read()
-        .mapErr((e) => new Error(`Could not read spec file at .duo/spec.md: ${e.message}`))
+        .mapErr(
+          (e) => new Error(`Could not read spec file at .bluprint/cache/spec.md: ${e.message}`)
+        )
         .andThen((spec) => {
           if (!spec.trim()) {
             return err(new Error('spec.md is empty. Please add a specification first.'));
@@ -97,7 +99,7 @@ export const generatePlan = (): ResultAsync<void, Error> => {
           );
         })
         .andThen((plan) =>
-          workspace.plan
+          workspace.cache.plan
             .write(plan)
             .mapErr((e) => new Error(`Error saving plan: ${e.message}`))
             .andThen(() => generateSummary())

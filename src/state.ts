@@ -71,7 +71,7 @@ const toError = (e: unknown): Error => (e instanceof Error ? e : new Error(Strin
 
 const writeState = (state: LoopState): ResultAsync<void, Error> => {
   const json = JSON.stringify(state, null, 2);
-  return workspace.state
+  return workspace.cache.state
     .write(json)
     .mapErr((e) => new Error(`Failed to write state: ${e.message}`));
 };
@@ -110,7 +110,7 @@ const parsePlanTasks = (planContent: string): ResultAsync<number[], Error> => {
 };
 
 export const readState = (): ResultAsync<LoopState, Error> =>
-  workspace.state
+  workspace.cache.state
     .read()
     .mapErr((e: Error) => new Error(`Failed to read state file: ${e.message}`))
     .andThen((content: string) => {
@@ -143,7 +143,7 @@ export const getCurrentTask = (): ResultAsync<TaskStatus, Error> =>
 export const isRetry = (): ResultAsync<boolean, Error> => readState().map((state) => state.isRetry);
 
 export const initializeState = (): ResultAsync<void, Error> =>
-  workspace.plan
+  workspace.cache.plan
     .read()
     .mapErr((e) => new Error(`Could not read plan file: ${e.message}`))
     .andThen(parsePlanTasks)

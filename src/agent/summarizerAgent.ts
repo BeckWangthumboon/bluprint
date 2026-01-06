@@ -21,16 +21,18 @@ export const SUMMARIZER_DEFAULT_MODEL: ModelConfig = {
 const generateSummary = (): ResultAsync<void, Error> => {
   const model = getModelConfig('SUMMARIZER_AGENT_MODEL', SUMMARIZER_DEFAULT_MODEL);
 
-  return workspace.spec
+  return workspace.cache.spec
     .read()
-    .mapErr((e) => new Error(`Could not read spec file at .duo/spec.md: ${e.message}`))
+    .mapErr((e) => new Error(`Could not read spec file at .bluprint/cache/spec.md: ${e.message}`))
     .andThen((spec) => {
       if (!spec.trim()) {
         return err(new Error('spec.md is empty. Please add a specification first.'));
       }
-      return workspace.plan
+      return workspace.cache.plan
         .read()
-        .mapErr((e) => new Error(`Could not read plan file at .duo/plan.md: ${e.message}`))
+        .mapErr(
+          (e) => new Error(`Could not read plan file at .bluprint/cache/plan.md: ${e.message}`)
+        )
         .map((plan) => ({ spec, plan }));
     })
     .andThen(({ spec, plan }) => {
@@ -87,7 +89,7 @@ const generateSummary = (): ResultAsync<void, Error> => {
       );
     })
     .andThen((summary) =>
-      workspace.summary
+      workspace.cache.summary
         .write(summary)
         .mapErr((e: Error) => new Error(`Error saving summary: ${e.message}`))
     );

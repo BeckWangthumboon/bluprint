@@ -178,7 +178,7 @@ const createCommitForTask = (
 
     return readState()
       .andThen((state) =>
-        workspace.plan
+        workspace.cache.plan
           .read()
           .mapErr((e) => new Error(`Could not read plan.md: ${e.message}`))
           .map((plan) => ({ state, plan }))

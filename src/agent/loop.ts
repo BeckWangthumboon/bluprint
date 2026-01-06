@@ -1,5 +1,5 @@
 import { ResultAsync } from 'neverthrow';
-import { workspace } from '../workspace.js';
+import { workspace, archiveCacheToRun } from '../workspace.js';
 import { exec } from '../shell.js';
 import {
   abortLoop,
@@ -17,7 +17,7 @@ import { createCommitForTask } from './commitAgent.js';
 import { reviewAndGenerateTask } from './masterAgent.js';
 import type { MasterAgentOutput } from './types.js';
 import { isObject, toError } from './utils.js';
-import { purgeAndInitLogger, type ManifestData } from './logger.js';
+import { initLogger, type ManifestData } from './logger.js';
 import { getAbortSignal } from '../exit.js';
 
 const parseMasterOutput = (raw: string): MasterAgentOutput => {
@@ -57,10 +57,12 @@ const unwrapOrThrow = async <T>(result: ResultAsync<T, Error>): Promise<T> => {
 };
 
 export const saveReport = (report: string): ResultAsync<void, Error> =>
-  workspace.report.write(report).mapErr((e) => new Error(`Error saving report: ${e.message}`));
+  workspace.cache.report
+    .write(report)
+    .mapErr((e) => new Error(`Error saving report: ${e.message}`));
 
 export const saveTaskMarkdown = (task: string): ResultAsync<void, Error> =>
-  workspace.task.write(task).mapErr((e) => new Error(`Error saving task: ${e.message}`));
+  workspace.cache.task.write(task).mapErr((e) => new Error(`Error saving task: ${e.message}`));
 
 export const applyDecision = (
   decision: 'accept' | 'reject',
@@ -116,8 +118,8 @@ export const runLoop = (sig?: AbortSignal): ResultAsync<void, Error> =>
         iterations: [],
       };
 
-      // Purge old logs and initialize new logger
-      const logger = await purgeAndInitLogger(runId);
+      // Initialize new logger
+      const logger = await initLogger(runId);
 
       const writeManifestSafe = async (
         status: ManifestData['status'],
@@ -130,13 +132,29 @@ export const runLoop = (sig?: AbortSignal): ResultAsync<void, Error> =>
         await logger.writeManifest(manifestData);
       };
 
+      /**
+       * Archives cache files to the run directory.
+       * Called at all exit points (success, failure, abort).
+       * Logs warnings but does not throw on failure.
+       */
+      const finalizeRun = async (): Promise<void> => {
+        const result = await archiveCacheToRun(runId);
+        if (result.isErr()) {
+          console.warn(`[loop] Failed to archive cache to run ${runId}: ${result.error.message}`);
+        }
+      };
+
       try {
         // Load inputs
         const [spec, plan, summary] = await unwrapOrThrow(
           ResultAsync.combine([
-            workspace.spec.read().mapErr((e) => new Error(`Could not read spec.md: ${e.message}`)),
-            workspace.plan.read().mapErr((e) => new Error(`Could not read plan.md: ${e.message}`)),
-            workspace.summary
+            workspace.cache.spec
+              .read()
+              .mapErr((e) => new Error(`Could not read spec.md: ${e.message}`)),
+            workspace.cache.plan
+              .read()
+              .mapErr((e) => new Error(`Could not read plan.md: ${e.message}`)),
+            workspace.cache.summary
               .read()
               .mapErr((e) => new Error(`Could not read summary.md: ${e.message}`)),
           ])
@@ -164,8 +182,8 @@ export const runLoop = (sig?: AbortSignal): ResultAsync<void, Error> =>
         await unwrapOrThrow(initializeState());
         stateInitialized = true;
         await unwrapOrThrow(startExecution());
-        await unwrapOrThrow(workspace.task.write(''));
-        await unwrapOrThrow(workspace.report.write(''));
+        await unwrapOrThrow(workspace.cache.task.write(''));
+        await unwrapOrThrow(workspace.cache.report.write(''));
         await logger.writeManifest(manifestData);
 
         // Check for abort before entering main loop
@@ -173,6 +191,7 @@ export const runLoop = (sig?: AbortSignal): ResultAsync<void, Error> =>
           loopAborted = true;
           await writeManifestSafe('aborted', 'Operation aborted before starting');
           await abortLoop();
+          await finalizeRun();
           return;
         }
 
@@ -182,6 +201,7 @@ export const runLoop = (sig?: AbortSignal): ResultAsync<void, Error> =>
             loopAborted = true;
             await writeManifestSafe('aborted', 'Operation aborted');
             await abortLoop();
+            await finalizeRun();
             return;
           }
 
@@ -239,6 +259,7 @@ export const runLoop = (sig?: AbortSignal): ResultAsync<void, Error> =>
             const state = await unwrapOrThrow(readState());
             if (state.status === 'completed') {
               await writeManifestSafe('completed');
+              await finalizeRun();
               return;
             }
 
@@ -266,6 +287,7 @@ export const runLoop = (sig?: AbortSignal): ResultAsync<void, Error> =>
           if (stateInitialized) {
             await abortLoop();
           }
+          await finalizeRun();
           return;
         }
 
@@ -276,6 +298,7 @@ export const runLoop = (sig?: AbortSignal): ResultAsync<void, Error> =>
           if (failResult.isErr()) {
           }
         }
+        await finalizeRun();
         throw error;
       }
     })(),

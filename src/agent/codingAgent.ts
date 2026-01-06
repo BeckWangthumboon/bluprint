@@ -48,14 +48,16 @@ export const executeCodingAgent = (
 
       // Read all required inputs in parallel
       return ResultAsync.combine([
-        workspace.task
+        workspace.cache.task
           .read()
           .mapErr((e) => new Error(`Could not read task.md: ${e.message}`))
           .map((content) => content.trim()),
-        workspace.summary
+        workspace.cache.summary
           .read()
           .mapErr((e) => new Error(`Could not read summary.md: ${e.message}`)),
-        workspace.plan.read().mapErr((e) => new Error(`Could not read plan.md: ${e.message}`)),
+        workspace.cache.plan
+          .read()
+          .mapErr((e) => new Error(`Could not read plan.md: ${e.message}`)),
         readState().mapErr((e) => new Error(`Could not read state: ${e.message}`)),
         loadPromptFile('codingAgent.txt'),
       ]).andThen(([feedback, summary, plan, state, systemPrompt]) => {

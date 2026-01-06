@@ -228,11 +228,11 @@ export const reviewAndGenerateTask = (
       // Read all required context files
       return readState()
         .andThen((state) => {
-          return workspace.spec
+          return workspace.cache.spec
             .read()
             .mapErr((e) => new Error(`Could not read spec.md: ${e.message}`))
             .andThen((spec) => {
-              return workspace.plan
+              return workspace.cache.plan
                 .read()
                 .mapErr((e) => new Error(`Could not read plan.md: ${e.message}`))
                 .map((plan) => ({ state, spec, plan }));
@@ -245,7 +245,7 @@ export const reviewAndGenerateTask = (
         )
         .andThen(({ state, spec, plan, currentStep }) => {
           // Read report (allow empty)
-          return workspace.report
+          return workspace.cache.report
             .read()
             .orElse(() => ResultAsync.fromSafePromise(Promise.resolve(''))) // Treat missing report as empty
             .map((report) => ({ state, spec, plan, currentStep, report }));

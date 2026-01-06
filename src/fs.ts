@@ -49,4 +49,19 @@ export const removeDir = (dirPath: string): ResultAsync<void, Error> =>
     toError
   );
 
-export const fsUtils = { readFile, writeFile, appendFile, clearFile, removeDir };
+export const moveFile = (src: string, dest: string): ResultAsync<void, Error> =>
+  ResultAsync.fromPromise(
+    (async () => {
+      await fs.mkdir(dirname(dest), { recursive: true });
+      await fs.rename(src, dest);
+    })(),
+    toError
+  );
+
+export const removeFile = (filePath: string): ResultAsync<void, Error> =>
+  ResultAsync.fromPromise(
+    fs.rm(filePath, { force: true }).catch(() => {}),
+    toError
+  );
+
+export const fsUtils = { readFile, writeFile, appendFile, clearFile, removeDir, moveFile, removeFile };

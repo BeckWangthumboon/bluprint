@@ -5,7 +5,7 @@ import { workspaceConstants } from '../workspace.js';
 import type { ModelConfig } from './types.js';
 import type { Session, OpenCodeSDKSession } from './opencodesdk.js';
 
-const { LOGS_DIR } = workspaceConstants;
+const { RUNS_DIR } = workspaceConstants;
 
 interface AgentCallData {
   agent: 'codingAgent' | 'masterAgent';
@@ -125,7 +125,7 @@ class Logger {
 
   constructor(runId: string) {
     this.runId = runId;
-    this.runDir = join(LOGS_DIR, runId);
+    this.runDir = join(RUNS_DIR, runId);
     this.agentsDir = join(this.runDir, 'agents');
     this.sessionsDir = join(this.runDir, 'sessions');
     this.debugLogPath = join(this.runDir, 'debug.log');
@@ -135,7 +135,7 @@ class Logger {
    * Purge all existing logs
    */
   async purge(): Promise<void> {
-    await removeDir(LOGS_DIR);
+    await removeDir(RUNS_DIR);
   }
 
   /**
@@ -303,23 +303,22 @@ const noopLogger = { debug: () => {} } as Pick<Logger, 'debug'>;
  */
 const getLogger = (): Logger => {
   if (!currentLogger) {
-    throw new Error('Logger not initialized - call purgeAndInitLogger() first');
+    throw new Error('Logger not initialized - call initLogger() first');
   }
   return currentLogger;
 };
 
 /**
  * Get a debug-only logger that returns a no-op if not initialized.
- * Safe to call before purgeAndInitLogger().
+ * Safe to call before initLogger().
  */
 const getDebugLogger = (): Pick<Logger, 'debug'> => currentLogger ?? noopLogger;
 
 /**
- * Purge all logs and initialize a new logger
+ * Initialize a new logger
  */
-const purgeAndInitLogger = async (runId: string): Promise<Logger> => {
+const initLogger = async (runId: string): Promise<Logger> => {
   currentLogger = new Logger(runId);
-  await currentLogger.purge();
   return currentLogger;
 };
 
@@ -353,4 +352,4 @@ const logSessionData = (session: Session, meta: SessionMetaData): ResultAsync<vo
     });
 
 export type { AgentCallData, ManifestData, SessionMetaData };
-export { Logger, getLogger, getDebugLogger, purgeAndInitLogger, logSessionData, LOGS_DIR };
+export { Logger, getLogger, getDebugLogger, initLogger, logSessionData, RUNS_DIR };
