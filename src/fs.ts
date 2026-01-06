@@ -80,6 +80,13 @@ export const ensureDir = (dirPath: string): ResultAsync<void, Error> =>
   );
 
 export const fsUtils = {
+  readFile,
+  writeFile,
+  appendFile,
+  clearFile,
+  removeDir,
+  moveFile,
+  removeFile,
   fileExists,
   ensureDir,
 };
