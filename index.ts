@@ -16,7 +16,7 @@ process.once('unhandledRejection', (reason) => {
 });
 
 await yargs(hideBin(process.argv))
-  .scriptName('duo')
+  .scriptName('bluprint')
   .version('0.0.0')
   .command(
     'plan',
