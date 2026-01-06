@@ -64,4 +64,22 @@ export const removeFile = (filePath: string): ResultAsync<void, Error> =>
     toError
   );
 
-export const fsUtils = { readFile, writeFile, appendFile, clearFile, removeDir, moveFile, removeFile };
+export const fileExists = (filePath: string): ResultAsync<boolean, Error> =>
+  ResultAsync.fromPromise(
+    fs
+      .access(filePath)
+      .then(() => true)
+      .catch(() => false),
+    toError
+  );
+
+export const ensureDir = (dirPath: string): ResultAsync<void, Error> =>
+  ResultAsync.fromPromise(
+    fs.mkdir(dirPath, { recursive: true }).then(() => undefined),
+    toError
+  );
+
+export const fsUtils = {
+  fileExists,
+  ensureDir,
+};
