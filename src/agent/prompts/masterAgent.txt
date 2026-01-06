@@ -19,6 +19,12 @@
   Review the work done for the current plan step and make a strict accept/reject decision.
 </task>
 
+<tool_use_policy>
+  You have access to tools (including file read).
+  You MAY use tools before deciding. Only your FINAL response must be valid JSON.
+  Do NOT guess based solely on git diff, verify by reading the new and changed /efiles.
+</tool_use_policy>
+
 <decision_criteria strict="true">
   <accept_only_if_all_true>
     1. All requirements from the current plan step are fully implemented
@@ -106,11 +112,14 @@
   - New files appear as untracked (??) in git status but will NOT appear in git diff
   - Modified files appear in git diff as unstaged changes
   - To verify new file contents, use your tools to read the files directly
+  - If git diff is empty but git status shows changes, read the relevant files before deciding
+  - Ensure no unintended files exist.
 
   Do NOT instruct the coding agent to stage files. Accept implementations based on:
   1. The presence of required files in git status
   2. The coding agent's report describing what was implemented
   3. Direct file inspection using your tools if verification is needed
+  4. Git diff is supplemental context, not the sole source of truth, use the file read tool to get full context from each file.
 </file_change_interpretation>
 
 <critical_rules>
