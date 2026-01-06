@@ -1,6 +1,6 @@
 import { join } from 'path';
 import { ResultAsync } from 'neverthrow';
-import { readFile, writeFile, moveFile } from './fs.js';
+import { readFile, writeFile, moveFile, removeFile } from './fs.js';
 
 const BLUPRINT_DIR = join(process.cwd(), '.bluprint');
 const RUNS_DIR = join(BLUPRINT_DIR, 'runs');
@@ -23,6 +23,8 @@ const CACHE_FILES_TO_ARCHIVE = [
   { name: 'report.md', path: REPORT_FILE },
 ];
 
+const TEMP_FILE_NAMES = new Set(['task.md', 'report.md']);
+
 const readTask = (): ResultAsync<string, Error> => readFile(TASK_MD_FILE);
 const writeTask = (content: string): ResultAsync<void, Error> => writeFile(TASK_MD_FILE, content);
 
@@ -42,27 +44,45 @@ const readState = (): ResultAsync<string, Error> => readFile(STATE_FILE);
 const writeState = (content: string): ResultAsync<void, Error> => writeFile(STATE_FILE, content);
 
 /**
- * Archive all cache files to the run directory.
+ * Archive cache files to the run directory.
  * Moves files from .bluprint/cache/ to .bluprint/runs/<runId>/
- * Logs warnings for move failures but does not throw.
+ *
+ * @param runId - The run identifier
+ * @param options - Optional configuration
+ * @param options.deleteTemp - If true, deletes task.md and report.md 
+
+ *
+ * Logs warnings for move/delete failures but does not throw.
  */
-const archiveCacheToRun = (runId: string): ResultAsync<void, Error> =>
+const archiveCacheToRun = (
+  runId: string,
+  options?: { deleteTemp?: boolean }
+): ResultAsync<void, Error> =>
   ResultAsync.fromPromise(
     (async () => {
       const runDir = join(RUNS_DIR, runId);
+      const shouldDeleteTemp = options?.deleteTemp === true;
       const results = await Promise.allSettled(
         CACHE_FILES_TO_ARCHIVE.map(async ({ name, path }) => {
-          const dest = join(runDir, name);
-          const result = await moveFile(path, dest);
-          if (result.isErr()) {
-            console.warn(
-              `[archive] Failed to move ${name} to run ${runId}: ${result.error.message}`
-            );
+          if (shouldDeleteTemp && TEMP_FILE_NAMES.has(name)) {
+            const result = await removeFile(path);
+            if (result.isErr()) {
+              console.warn(
+                `[archive] Failed to delete temporary file ${name}: ${result.error.message}`
+              );
+            }
+          } else {
+            const dest = join(runDir, name);
+            const result = await moveFile(path, dest);
+            if (result.isErr()) {
+              console.warn(
+                `[archive] Failed to move ${name} to run ${runId}: ${result.error.message}`
+              );
+            }
           }
         })
       );
 
-      // Check if any promises were rejected (shouldn't happen, but be safe)
       const rejected = results.filter((r) => r.status === 'rejected');
       if (rejected.length > 0) {
         console.warn(`[archive] ${rejected.length} file(s) failed to archive`);

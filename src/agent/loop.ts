@@ -133,11 +133,21 @@ export const runLoop = (sig?: AbortSignal): ResultAsync<void, Error> =>
       };
 
       /**
-       * Archives cache files to the run directory.
-       * Called at all exit points (success, failure, abort).
-       * Logs warnings but does not throw on failure.
+       * Called on successful completion.
+       * Archives main files, deletes temporary task/report files.
        */
-      const finalizeRun = async (): Promise<void> => {
+      const finalizeRunOnSuccess = async (): Promise<void> => {
+        const result = await archiveCacheToRun(runId, { deleteTemp: true });
+        if (result.isErr()) {
+          console.warn(`[loop] Failed to finalize run ${runId}: ${result.error.message}`);
+        }
+      };
+
+      /**
+       * Called on failure or abort.
+       * Archives all files including task.md and report.md for debugging.
+       */
+      const finalizeRunOnFailureOrAbort = async (): Promise<void> => {
         const result = await archiveCacheToRun(runId);
         if (result.isErr()) {
           console.warn(`[loop] Failed to archive cache to run ${runId}: ${result.error.message}`);
@@ -191,7 +201,7 @@ export const runLoop = (sig?: AbortSignal): ResultAsync<void, Error> =>
           loopAborted = true;
           await writeManifestSafe('aborted', 'Operation aborted before starting');
           await abortLoop();
-          await finalizeRun();
+          await finalizeRunOnFailureOrAbort();
           return;
         }
 
@@ -201,7 +211,7 @@ export const runLoop = (sig?: AbortSignal): ResultAsync<void, Error> =>
             loopAborted = true;
             await writeManifestSafe('aborted', 'Operation aborted');
             await abortLoop();
-            await finalizeRun();
+            await finalizeRunOnFailureOrAbort();
             return;
           }
 
@@ -259,7 +269,7 @@ export const runLoop = (sig?: AbortSignal): ResultAsync<void, Error> =>
             const state = await unwrapOrThrow(readState());
             if (state.status === 'completed') {
               await writeManifestSafe('completed');
-              await finalizeRun();
+              await finalizeRunOnSuccess();
               return;
             }
 
@@ -287,7 +297,7 @@ export const runLoop = (sig?: AbortSignal): ResultAsync<void, Error> =>
           if (stateInitialized) {
             await abortLoop();
           }
-          await finalizeRun();
+          await finalizeRunOnFailureOrAbort();
           return;
         }
 
@@ -298,7 +308,7 @@ export const runLoop = (sig?: AbortSignal): ResultAsync<void, Error> =>
           if (failResult.isErr()) {
           }
         }
-        await finalizeRun();
+        await finalizeRunOnFailureOrAbort();
         throw error;
       }
     })(),
