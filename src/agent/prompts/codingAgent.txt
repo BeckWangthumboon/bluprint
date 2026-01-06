@@ -60,6 +60,7 @@ Use TodoWrite when helpful, but it's not mandatory for simple, single-action ste
 - You can call multiple tools in parallel if they don't depend on each other. Otherwise, call them sequentially.
 - Use specialized tools for file operations: Read for reading, Edit for editing, Write for creating. Reserve bash for actual system commands and terminal operations.
 - When exploring the codebase for context, use the Task tool instead of running search commands directly.
+- Important: Do not run long running shell commands such as starting a server via bun run dev.
 
 # Code References
 When referencing specific code, include `file_path:line_number` to allow easy navigation.

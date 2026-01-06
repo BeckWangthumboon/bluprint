@@ -43,6 +43,24 @@ export const withTimeout = async <T>(promise: Promise<T>, options: TimeoutOption
   const { ms, label, signal, onTimeout, onTimeoutError, onAbort, onAbortError } = options;
 
   if (signal?.aborted) {
+    try {
+      const result = onAbort?.();
+      if (result && typeof (result as Promise<unknown>).catch === 'function') {
+        (result as Promise<unknown>).catch((err) => {
+          try {
+            onAbortError?.(toError(err));
+          } catch (handlerErr) {
+            console.error('onAbortError handler failed:', handlerErr);
+          }
+        });
+      }
+    } catch (err) {
+      try {
+        onAbortError?.(toError(err));
+      } catch (handlerErr) {
+        console.error('onAbortError handler failed:', handlerErr);
+      }
+    }
     throw new Error('Operation aborted');
   }
 
