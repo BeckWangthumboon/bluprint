@@ -63,10 +63,15 @@ export async function handleModelsAdd(): Promise<void> {
   let continueAdding = true;
 
   while (continueAdding) {
-    const providerOptions = providersWithModels.map((provider: Provider) => ({
-      value: provider.id,
-      label: provider.id,
-    }));
+    const providerOptions = [
+      ...providersWithModels
+        .map((provider: Provider) => ({
+          value: provider.id,
+          label: provider.id,
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+      { value: '__exit__', label: 'exit/skip' },
+    ];
 
     const providerSelectResult = await p.select({
       message: 'Select a provider',
@@ -78,6 +83,11 @@ export async function handleModelsAdd(): Promise<void> {
       await exit(0);
       return;
     }
+
+    if (providerSelectResult === '__exit__') {
+      break;
+    }
+
     const providerID = providerSelectResult as string;
 
     const selectedProvider = providersWithModels.find(
