@@ -401,3 +401,69 @@ export async function handlePresetsList(): Promise<void> {
 
   await exit(0);
 }
+
+/**
+ * Handles the "set default preset" command.
+ *
+ * Prompts the user to select a preset to set as the default and updates the bluprint config.
+ *
+ * @returns Resolves when the operation completes.
+ */
+export async function handlePresetsDefault(): Promise<void> {
+  p.intro('Set default model preset');
+
+  const config = await requireModelsConfig();
+  if (!config) return;
+
+  const presetNames = Object.keys(config.presets);
+  if (presetNames.length === 0) {
+    p.note('No presets added.', 'Warning');
+    await exit(0);
+    return;
+  }
+
+  const presetOptions = buildPresetOptions(config.presets);
+  const selectedPresetResult = await p.select({
+    message: 'Select a preset',
+    options: presetOptions,
+  });
+
+  if (p.isCancel(selectedPresetResult)) {
+    p.cancel('Operation cancelled');
+    await exit(0);
+    return;
+  }
+
+  const selectedPresetName = selectedPresetResult as string;
+  const selectedPreset = config.presets[selectedPresetName]!;
+
+  const validation = validatePreset(selectedPreset, config.models, selectedPresetName);
+  if (validation.isErr()) {
+    p.note(`Preset "${selectedPresetName}" is invalid. Fix it before setting default.`, 'Error');
+    await exit(1);
+    return;
+  }
+
+  const bluprintConfigResult = await configUtils.bluprint.read();
+  if (bluprintConfigResult.isErr()) {
+    p.note('Failed to read bluprint config', 'Error');
+    await exit(1);
+    return;
+  }
+
+  const bluprintConfig = bluprintConfigResult.value;
+  const updatedBluprintConfig: BluprintConfig = {
+    ...bluprintConfig,
+    defaultPreset: selectedPresetName,
+  };
+
+  const writeResult = await configUtils.bluprint.write(updatedBluprintConfig);
+  if (writeResult.isErr()) {
+    await exit(1);
+    return;
+  }
+
+  p.log.message(`Default model preset set to "${selectedPresetName}"`);
+  p.outro('Done!');
+  await exit(0);
+}
