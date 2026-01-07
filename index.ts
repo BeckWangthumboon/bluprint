@@ -90,7 +90,7 @@ await yargs(hideBin(process.argv))
               )
               .command(
                 'validate',
-                'Validate models still exist in SDK',
+                'Validate existing models in pool',
                 () => {},
                 async () => {
                   await handleModelsValidate();
