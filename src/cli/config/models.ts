@@ -334,6 +334,41 @@ export async function handleModelsRemove(): Promise<void> {
   await exit(0);
 }
 
-export async function handleModelsList(): Promise<void> {}
+export async function handleModelsList(): Promise<void> {
+  const configResult = await configUtils.models.read();
+  if (configResult.isErr()) {
+    const error = configResult.error;
+    if (error.type === 'CONFIG_FILE_MISSING') {
+      console.error("No models.json found. Run 'bluprint config models add' first.");
+      await exit(1);
+      return;
+    }
+    console.error('Failed to read models config');
+    await exit(1);
+    return;
+  }
+
+  const config = configResult._unsafeUnwrap();
+  const models = config.models;
+
+  if (models.length === 0) {
+    console.log('No models added.');
+    await exit(0);
+    return;
+  }
+
+  const sortedModels = [...models].sort((a, b) => {
+    const aFormatted = formatModelConfig(a);
+    const bFormatted = formatModelConfig(b);
+    return aFormatted.localeCompare(bFormatted);
+  });
+
+  console.log(`Models in pool (${sortedModels.length}):`);
+  for (const model of sortedModels) {
+    console.log(`  • ${formatModelConfig(model)}`);
+  }
+
+  await exit(0);
+}
 
 export async function handleModelsValidate(): Promise<void> {}
