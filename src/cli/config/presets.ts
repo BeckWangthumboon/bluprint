@@ -180,3 +180,131 @@ export async function handlePresetsAdd(): Promise<void> {
 
   await savePreset(presetName, preset as ModelPreset, config);
 }
+
+/**
+ * Updates an existing preset to the config file.
+ *
+ * Validates the updated preset and writes the modified config to file.
+ * Exits the process on completion or error.
+ *
+ * @param presetName - The name of the preset to update.
+ * @param preset - The updated ModelPreset configuration.
+ * @param config - The existing models config.
+ */
+async function updatePreset(
+  presetName: string,
+  preset: ModelPreset,
+  config: ModelsConfig
+): Promise<void> {
+  const validation = validatePreset(preset, config.models, presetName);
+  if (validation.isErr()) {
+    const error = validation.error;
+    p.note(`Preset validation failed: ${error.type}`, 'Error');
+    await exit(1);
+    return;
+  }
+
+  const updatedConfig: ModelsConfig = {
+    ...config,
+    presets: {
+      ...config.presets,
+      [presetName]: preset,
+    },
+  };
+
+  const ensureDirResult = await ensureConfigDir();
+  if (ensureDirResult.isErr()) {
+    p.note('Failed to ensure config directory exists', 'Error');
+    await exit(1);
+    return;
+  }
+
+  const writeResult = await configUtils.models.write(updatedConfig);
+  if (writeResult.isErr()) {
+    p.note('Failed to write config', 'Error');
+    await exit(1);
+    return;
+  }
+
+  p.log.message(`Updated preset "${presetName}":`);
+  for (const agentType of AGENT_TYPE_ORDER) {
+    p.log.message(`  ${agentType}: ${formatModelConfig(preset[agentType])}`);
+  }
+
+  p.outro('Done!');
+  await exit(0);
+}
+
+/**
+ * Handles the interactive "edit preset" command.
+ *
+ * Prompts the user to select a preset and edit model selections for each agent type,
+ * validates the selections, and updates the preset in the config file.
+ *
+ * @returns Resolves when the operation completes.
+ */
+export async function handlePresetsEdit(): Promise<void> {
+  p.intro('Edit model preset');
+
+  const config = await requireModelsConfig();
+  if (!config) return;
+
+  if (config.models.length === 0) {
+    p.note('No models added.', 'Warning');
+    await exit(0);
+    return;
+  }
+
+  const presetNames = Object.keys(config.presets);
+  if (presetNames.length === 0) {
+    p.note('No presets added.', 'Warning');
+    await exit(0);
+    return;
+  }
+
+  const presetOptions = buildPresetOptions(config.presets);
+  const selectPresetResult = await p.select({
+    message: 'Select a preset',
+    options: presetOptions,
+  });
+
+  if (p.isCancel(selectPresetResult)) {
+    p.cancel('Operation cancelled');
+    await exit(0);
+    return;
+  }
+
+  const presetName = selectPresetResult as string;
+  const currentPreset = config.presets[presetName]!;
+
+  const updatedPreset: ModelPreset = { ...currentPreset } as ModelPreset;
+
+  for (const agentType of AGENT_TYPE_ORDER) {
+    const currentModel = formatModelConfig(currentPreset[agentType]);
+    const allModelOptions = buildModelOptions(config.models);
+
+    const currentModelOption = allModelOptions.find((opt) => opt.value === currentModel);
+    const otherModelOptions = allModelOptions.filter((opt) => opt.value !== currentModel);
+
+    const modelOptions = currentModelOption
+      ? [currentModelOption, ...otherModelOptions]
+      : allModelOptions;
+
+    const selectResult = await p.select({
+      message: `Select model for ${agentType}`,
+      options: modelOptions,
+      initialValue: currentModel,
+    });
+
+    if (p.isCancel(selectResult)) {
+      p.cancel('Operation cancelled');
+      await exit(0);
+      return;
+    }
+
+    const selectedModelStr = selectResult as string;
+    updatedPreset[agentType] = parseModelSelection(selectedModelStr);
+  }
+
+  await updatePreset(presetName, updatedPreset, config);
+}
