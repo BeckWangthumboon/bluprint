@@ -1,5 +1,5 @@
 import * as p from '@clack/prompts';
-import type { ModelConfig, ModelPreset, ModelsConfig } from '../../config/index.js';
+import type { ModelConfig, ModelPreset, ModelsConfig, BluprintConfig } from '../../config/index.js';
 import {
   AGENT_TYPES,
   formatModelConfig,
@@ -307,4 +307,64 @@ export async function handlePresetsEdit(): Promise<void> {
   }
 
   await updatePreset(presetName, updatedPreset, config);
+}
+
+/**
+ * Handles the interactive "remove preset" command.
+ *
+ * Prompts the user to select a preset to remove and removes it from the config file.
+ *
+ * @returns Resolves when the operation completes.
+ */
+export async function handlePresetsRemove(): Promise<void> {
+  p.intro('Remove model preset');
+
+  const config = await requireModelsConfig();
+  if (!config) return;
+
+  const presetNames = Object.keys(config.presets);
+  if (presetNames.length === 0) {
+    p.note('No presets added.', 'Warning');
+    await exit(0);
+    return;
+  }
+
+  const presetOptions = buildPresetOptions(config.presets);
+  const selectedPresetResult = await p.select({
+    message: 'Select a preset',
+    options: presetOptions,
+  });
+
+  if (p.isCancel(selectedPresetResult)) {
+    p.cancel('Operation cancelled');
+    await exit(0);
+    return;
+  }
+
+  const selectedName = selectedPresetResult as string;
+  const { [selectedName]: _, ...remainingPresets } = config.presets;
+
+  const ensureDirResult = await ensureConfigDir();
+  if (ensureDirResult.isErr()) {
+    p.note('Failed to ensure config directory exists', 'Error');
+    await exit(1);
+    return;
+  }
+
+  const updatedConfig: ModelsConfig = {
+    ...config,
+    presets: remainingPresets,
+  };
+
+  const writeResult = await configUtils.models.write(updatedConfig);
+  if (writeResult.isErr()) {
+    p.note('Failed to write config', 'Error');
+    await exit(1);
+    return;
+  }
+
+  p.log.message(`Removed preset "${selectedName}"`);
+
+  p.outro('Done!');
+  await exit(0);
 }
