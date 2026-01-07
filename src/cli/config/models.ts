@@ -222,7 +222,117 @@ export async function handleModelsAdd(): Promise<void> {
   await exit(0);
 }
 
-export async function handleModelsRemove(): Promise<void> {}
+export async function handleModelsRemove(): Promise<void> {
+  p.intro('Remove models from the pool');
+
+  const configResult = await configUtils.models.read();
+  if (configResult.isErr()) {
+    const error = configResult.error;
+    if (error.type === 'CONFIG_FILE_MISSING') {
+      p.note("No models.json found. Run 'bluprint config models add' first.", 'Error');
+      await exit(1);
+      return;
+    }
+    p.note('Failed to read models config', 'Error');
+    await exit(1);
+    return;
+  }
+
+  const config = configResult._unsafeUnwrap();
+  const existingModels = config.models;
+
+  if (existingModels.length === 0) {
+    p.note('No models added.', 'Warning');
+    await exit(0);
+    return;
+  }
+
+  const modelOptions = existingModels.map((model) => ({
+    value: formatModelConfig(model),
+    label: formatModelConfig(model),
+  }));
+
+  const selectedModelsResult = await p.multiselect({
+    message: 'Select models to remove',
+    options: modelOptions,
+    required: false,
+  });
+
+  if (p.isCancel(selectedModelsResult)) {
+    p.cancel('Operation cancelled');
+    await exit(0);
+    return;
+  }
+
+  const selectedModels = selectedModelsResult as string[];
+
+  if (selectedModels.length === 0) {
+    p.note('No models selected', 'Warning');
+    await exit(0);
+    return;
+  }
+
+  const modelsToRemove: ModelConfig[] = [];
+  for (const modelStr of selectedModels) {
+    const parts = modelStr.split('/');
+    if (parts.length === 2 && parts[0] && parts[1]) {
+      modelsToRemove.push({ providerID: parts[0], modelID: parts[1] });
+    }
+  }
+
+  const presetUsages: Array<{ model: ModelConfig; presetNames: string[] }> = [];
+  for (const model of modelsToRemove) {
+    const presetNames = findPresetsUsingModel(model, config.presets);
+    if (presetNames.length > 0) {
+      presetUsages.push({ model, presetNames });
+    }
+  }
+
+  if (presetUsages.length > 0) {
+    p.log.warn('The following models are used in presets:');
+    for (const { model, presetNames } of presetUsages) {
+      p.log.message(`  • ${formatModelConfig(model)}`);
+      p.log.message(`    Used in: ${presetNames.join(', ')}`);
+    }
+    p.log.message('Removing them will make those presets invalid.');
+
+    const confirmResult = await p.confirm({
+      message: 'Continue anyway?',
+    });
+
+    if (p.isCancel(confirmResult) || !confirmResult) {
+      p.cancel('Operation cancelled');
+      await exit(0);
+      return;
+    }
+  }
+
+  const updatedModels = existingModels.filter(
+    (existing: ModelConfig) =>
+      !modelsToRemove.some((toRemove: ModelConfig) => modelConfigEquals(existing, toRemove))
+  );
+
+  const updatedConfig: ModelsConfig = {
+    ...config,
+    models: updatedModels,
+  };
+
+  const writeResult = await configUtils.models.write(updatedConfig);
+  if (writeResult.isErr()) {
+    p.note('Failed to write config', 'Error');
+    await exit(1);
+    return;
+  }
+
+  p.log.message(`Removed ${modelsToRemove.length} models from the pool:`);
+  modelsToRemove.forEach((model: ModelConfig) => {
+    p.log.message(`  ${formatModelConfig(model)}`);
+  });
+
+  p.outro('Done!');
+
+  await exit(0);
+}
 
 export async function handleModelsList(): Promise<void> {}
 
