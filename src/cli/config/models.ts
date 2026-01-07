@@ -6,9 +6,18 @@ import {
   formatModelConfig,
   ensureConfigDir,
 } from '../../config/index.js';
-import { getOpenCodeLib, type Provider } from '../../agent/opencodesdk.js';
+import { getOpenCodeLib, type Provider, type Lib } from '../../agent/opencodesdk.js';
 import { exit } from '../../exit.js';
 
+/**
+ * Finds all presets that reference a given model.
+ *
+ * Checks each preset's coding, master, plan, summarizer, and commit model slots.
+ *
+ * @param model - The model configuration to search for.
+ * @param presets - The record of preset names to preset configurations.
+ * @returns An array of preset names that use the specified model.
+ */
 function findPresetsUsingModel(model: ModelConfig, presets: Record<string, ModelPreset>): string[] {
   const matchingPresets: string[] = [];
   for (const [presetName, preset] of Object.entries(presets)) {
@@ -25,16 +34,70 @@ function findPresetsUsingModel(model: ModelConfig, presets: Record<string, Model
   return matchingPresets;
 }
 
-export async function handleModelsAdd(): Promise<void> {
-  p.intro('Add models to the pool');
+/**
+ * Parses a "providerID/modelID" string into a ModelConfig object.
+ *
+ * @param str - The string to parse in "providerID/modelID" format.
+ * @returns The parsed ModelConfig, or null if the string is not in the expected format.
+ */
+function parseModelConfig(str: string): ModelConfig | null {
+  const parts = str.split('/');
+  if (parts.length === 2 && parts[0] && parts[1]) {
+    return { providerID: parts[0], modelID: parts[1] };
+  }
+  return null;
+}
 
+/**
+ * Reads the models config, exiting with an error if unavailable.
+ *
+ * Displays an error message and exits the process if the config file is missing or unreadable.
+ * Use `usePrompts: true` for interactive commands (uses p.note), `false` for non-interactive (uses console.error).
+ *
+ * @param options - Configuration options.
+ * @param options.usePrompts - Whether to use interactive prompts for error display.
+ * @returns The models config, or null if an error occurred and the process is exiting.
+ */
+async function requireModelsConfig(options: { usePrompts: boolean }): Promise<ModelsConfig | null> {
+  const result = await configUtils.models.read();
+  if (result.isErr()) {
+    const error = result.error;
+    const missingMsg = "No models.json found. Run 'bluprint config models add' first.";
+    const errorMsg = 'Failed to read models config';
+    const msg = error.type === 'CONFIG_FILE_MISSING' ? missingMsg : errorMsg;
+
+    if (options.usePrompts) {
+      p.note(msg, 'Error');
+    } else {
+      console.error(msg);
+    }
+    await exit(1);
+    return null;
+  }
+  return result.value;
+}
+
+interface SDKWithProviders {
+  lib: Lib;
+  providers: Provider[];
+}
+
+/**
+ * Connects to the OpenCode SDK and fetches all providers that have models.
+ *
+ * Displays a spinner while fetching and exits the process if the connection fails
+ * or no providers with models are available.
+ *
+ * @returns The SDK library instance and list of providers with models, or null if an error occurred.
+ */
+async function fetchProvidersWithModels(): Promise<SDKWithProviders | null> {
   const libResult = await getOpenCodeLib();
   if (libResult.isErr()) {
     p.note('Failed to connect to OpenCode SDK', 'Error');
     await exit(1);
-    return;
+    return null;
   }
-  const lib = libResult._unsafeUnwrap();
+  const lib = libResult.value;
 
   const s = p.spinner();
   s.start('Fetching providers...');
@@ -44,9 +107,9 @@ export async function handleModelsAdd(): Promise<void> {
     s.stop('Failed to fetch providers', 1);
     p.note('Failed to list providers', 'Error');
     await exit(1);
-    return;
+    return null;
   }
-  const providers = providersResult._unsafeUnwrap();
+  const providers = providersResult.value;
   s.stop('Providers fetched');
 
   const providersWithModels = providers.filter(
@@ -56,15 +119,33 @@ export async function handleModelsAdd(): Promise<void> {
   if (providersWithModels.length === 0) {
     p.note('No providers available', 'Error');
     await exit(1);
-    return;
+    return null;
   }
 
+  return { lib, providers: providersWithModels };
+}
+
+/**
+ * Runs an interactive loop to select and validate models from providers.
+ *
+ * Prompts the user to select a provider, then models from that provider, validates them,
+ * and optionally continues to add models from other providers. Exits the process if
+ * validation fails or the user cancels.
+ *
+ * @param lib - The OpenCode SDK library instance.
+ * @param providers - The list of available providers with models.
+ * @returns The array of selected and validated model configs, or null if cancelled/errored.
+ */
+async function selectModelsFromProviders(
+  lib: SDKWithProviders['lib'],
+  providers: Provider[]
+): Promise<ModelConfig[] | null> {
   const allSelectedModels: ModelConfig[] = [];
   let continueAdding = true;
 
   while (continueAdding) {
     const providerOptions = [
-      ...providersWithModels
+      ...providers
         .map((provider: Provider) => ({
           value: provider.id,
           label: provider.id,
@@ -81,7 +162,7 @@ export async function handleModelsAdd(): Promise<void> {
     if (p.isCancel(providerSelectResult)) {
       p.cancel('Operation cancelled');
       await exit(0);
-      return;
+      return null;
     }
 
     if (providerSelectResult === '__exit__') {
@@ -90,9 +171,7 @@ export async function handleModelsAdd(): Promise<void> {
 
     const providerID = providerSelectResult as string;
 
-    const selectedProvider = providersWithModels.find(
-      (provider: Provider) => provider.id === providerID
-    );
+    const selectedProvider = providers.find((provider: Provider) => provider.id === providerID);
     const availableModels = selectedProvider?.models
       ? Object.keys(selectedProvider.models).sort()
       : [];
@@ -112,7 +191,7 @@ export async function handleModelsAdd(): Promise<void> {
     if (p.isCancel(modelSelectResult)) {
       p.cancel('Operation cancelled');
       await exit(0);
-      return;
+      return null;
     }
     const selectedModelIDs = modelSelectResult as string[];
 
@@ -127,13 +206,13 @@ export async function handleModelsAdd(): Promise<void> {
       if (validateResult.isErr()) {
         p.note(`Failed to validate ${providerID}/${modelID}`, 'Error');
         await exit(1);
-        return;
+        return null;
       }
-      const isValid = validateResult._unsafeUnwrap();
+      const isValid = validateResult.value;
       if (!isValid) {
         p.note(`Model ${providerID}/${modelID} is not valid`, 'Error');
         await exit(1);
-        return;
+        return null;
       }
       validModels.push({ providerID, modelID });
     }
@@ -147,12 +226,25 @@ export async function handleModelsAdd(): Promise<void> {
     if (p.isCancel(addAnotherResult)) {
       p.cancel('Operation cancelled');
       await exit(0);
-      return;
+      return null;
     }
 
     continueAdding = addAnotherResult === true;
   }
 
+  return allSelectedModels;
+}
+
+/**
+ * Saves the selected models to the config file.
+ *
+ * Creates a new config if one doesn't exist, deduplicates models against existing ones,
+ * and reports which models were added vs already present. Exits the process on completion or error.
+ *
+ * @param selectedModels - The array of model configs to save.
+ * @returns Resolves when the operation completes (process exits).
+ */
+async function saveNewModelsToConfig(selectedModels: ModelConfig[]): Promise<void> {
   const configDirResult = await ensureConfigDir();
   if (configDirResult.isErr()) {
     p.note('Failed to ensure config directory exists', 'Error');
@@ -164,14 +256,14 @@ export async function handleModelsAdd(): Promise<void> {
   if (configResult.isErr()) {
     const error = configResult.error;
     if (error.type === 'CONFIG_FILE_MISSING') {
-      const newConfig: ModelsConfig = { models: [...allSelectedModels], presets: {} };
+      const newConfig: ModelsConfig = { models: [...selectedModels], presets: {} };
       const writeResult = await configUtils.models.write(newConfig);
       if (writeResult.isErr()) {
         p.note('Failed to write config', 'Error');
         await exit(1);
         return;
       }
-      p.outro(`Added ${allSelectedModels.length} models to the pool`);
+      p.outro(`Added ${selectedModels.length} models to the pool`);
       await exit(0);
       return;
     }
@@ -180,13 +272,13 @@ export async function handleModelsAdd(): Promise<void> {
     return;
   }
 
-  const config = configResult._unsafeUnwrap();
+  const config = configResult.value;
   const existingModels = config.models;
 
   const newModels: ModelConfig[] = [];
   const duplicateModels: ModelConfig[] = [];
 
-  for (const model of allSelectedModels) {
+  for (const model of selectedModels) {
     const isDuplicate = existingModels.some((existing: ModelConfig) =>
       modelConfigEquals(existing, model)
     );
@@ -233,23 +325,49 @@ export async function handleModelsAdd(): Promise<void> {
   await exit(0);
 }
 
-export async function handleModelsRemove(): Promise<void> {
-  p.intro('Remove models from the pool');
+/**
+ * Handles the interactive "add models" command.
+ *
+ * Fetches available providers, prompts the user to select models, validates them,
+ * and saves the selection to the config file.
+ *
+ * @returns Resolves when the operation completes.
+ */
+export async function handleModelsAdd(): Promise<void> {
+  p.intro('Add models to the pool');
 
-  const configResult = await configUtils.models.read();
-  if (configResult.isErr()) {
-    const error = configResult.error;
-    if (error.type === 'CONFIG_FILE_MISSING') {
-      p.note("No models.json found. Run 'bluprint config models add' first.", 'Error');
-      await exit(1);
-      return;
-    }
-    p.note('Failed to read models config', 'Error');
-    await exit(1);
+  const openCodeProvidersAndModels = await fetchProvidersWithModels();
+  if (!openCodeProvidersAndModels) return;
+
+  const selectedModels = await selectModelsFromProviders(
+    openCodeProvidersAndModels.lib,
+    openCodeProvidersAndModels.providers
+  );
+  if (!selectedModels) return;
+
+  if (selectedModels.length === 0) {
+    p.outro('No models selected');
+    await exit(0);
     return;
   }
 
-  const config = configResult._unsafeUnwrap();
+  await saveNewModelsToConfig(selectedModels);
+}
+
+/**
+ * Handles the interactive "remove models" command.
+ *
+ * Prompts the user to select models from the pool to remove, warns if any are used
+ * in presets, and updates the config file.
+ *
+ * @returns Resolves when the operation completes.
+ */
+export async function handleModelsRemove(): Promise<void> {
+  p.intro('Remove models from the pool');
+
+  const config = await requireModelsConfig({ usePrompts: true });
+  if (!config) return;
+
   const existingModels = config.models;
 
   if (existingModels.length === 0) {
@@ -285,9 +403,9 @@ export async function handleModelsRemove(): Promise<void> {
 
   const modelsToRemove: ModelConfig[] = [];
   for (const modelStr of selectedModels) {
-    const parts = modelStr.split('/');
-    if (parts.length === 2 && parts[0] && parts[1]) {
-      modelsToRemove.push({ providerID: parts[0], modelID: parts[1] });
+    const parsed = parseModelConfig(modelStr);
+    if (parsed) {
+      modelsToRemove.push(parsed);
     }
   }
 
@@ -341,25 +459,20 @@ export async function handleModelsRemove(): Promise<void> {
   });
 
   p.outro('Done!');
-
   await exit(0);
 }
 
+/**
+ * Handles the "list models" command.
+ *
+ * Reads the config and prints all models in the pool, sorted alphabetically.
+ *
+ * @returns Resolves when the operation completes.
+ */
 export async function handleModelsList(): Promise<void> {
-  const configResult = await configUtils.models.read();
-  if (configResult.isErr()) {
-    const error = configResult.error;
-    if (error.type === 'CONFIG_FILE_MISSING') {
-      console.error("No models.json found. Run 'bluprint config models add' first.");
-      await exit(1);
-      return;
-    }
-    console.error('Failed to read models config');
-    await exit(1);
-    return;
-  }
+  const config = await requireModelsConfig({ usePrompts: false });
+  if (!config) return;
 
-  const config = configResult._unsafeUnwrap();
   const models = config.models;
 
   if (models.length === 0) {
@@ -382,21 +495,18 @@ export async function handleModelsList(): Promise<void> {
   await exit(0);
 }
 
+/**
+ * Handles the "validate models" command.
+ *
+ * Validates each model in the pool against the OpenCode SDK to check if it exists
+ * and is accessible. Exits with code 1 if any models are invalid.
+ *
+ * @returns Resolves when the operation completes.
+ */
 export async function handleModelsValidate(): Promise<void> {
-  const configResult = await configUtils.models.read();
-  if (configResult.isErr()) {
-    const error = configResult.error;
-    if (error.type === 'CONFIG_FILE_MISSING') {
-      console.error("No models.json found. Run 'bluprint config models add' first.");
-      await exit(1);
-      return;
-    }
-    console.error('Failed to read models config');
-    await exit(1);
-    return;
-  }
+  const config = await requireModelsConfig({ usePrompts: false });
+  if (!config) return;
 
-  const config = configResult._unsafeUnwrap();
   const models = config.models;
 
   if (models.length === 0) {
@@ -411,7 +521,7 @@ export async function handleModelsValidate(): Promise<void> {
     await exit(1);
     return;
   }
-  const lib = libResult._unsafeUnwrap();
+  const lib = libResult.value;
 
   console.log(`Validating ${models.length} models...\n`);
 
@@ -424,7 +534,7 @@ export async function handleModelsValidate(): Promise<void> {
       invalidModels.push({ model, reason: 'Validation failed' });
       console.log(`  ✗ ${formatModelConfig(model)} (validation failed)`);
     } else {
-      const isValid = validateResult._unsafeUnwrap();
+      const isValid = validateResult.value;
       if (isValid) {
         validModels.push(model);
         console.log(`  ✓ ${formatModelConfig(model)}`);

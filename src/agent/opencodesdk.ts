@@ -368,7 +368,7 @@ const abortAndCleanup = (session: Session): void => {
     });
 };
 
-export type { SdkError, PromptParams, MessageInfo, PromptResponse, Provider, Session };
+export type { SdkError, PromptParams, MessageInfo, PromptResponse, Provider, Session, Lib };
 export type { OpenCodeSDKSession };
 export {
   OpenCodeErrorUtils,
