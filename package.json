@@ -11,6 +11,7 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "@clack/prompts": "^0.11.0",
     "@opencode-ai/sdk": "^1.0.169",
     "@types/yargs": "^17.0.35",
     "neverthrow": "^8.2.0",
