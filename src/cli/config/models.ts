@@ -1,5 +1,4 @@
 import * as p from '@clack/prompts';
-import { ResultAsync, ok, err } from 'neverthrow';
 import type { ModelConfig, ModelsConfig, ModelPreset } from '../../config/index.js';
 import {
   configUtils,
@@ -163,6 +162,7 @@ export async function handleModelsAdd(): Promise<void> {
         return;
       }
       p.outro(`Added ${allSelectedModels.length} models to the pool`);
+      await exit(0);
       return;
     }
     p.note('Failed to read models config', 'Error');
@@ -219,6 +219,7 @@ export async function handleModelsAdd(): Promise<void> {
     });
   }
 
+  p.outro('Done!');
   await exit(0);
 }
 
@@ -411,6 +412,7 @@ export async function handleModelsValidate(): Promise<void> {
     const validateResult = await lib.provider.validate(model.providerID, model.modelID);
     if (validateResult.isErr()) {
       invalidModels.push({ model, reason: 'Validation failed' });
+      console.log(`  ✗ ${formatModelConfig(model)} (validation failed)`);
     } else {
       const isValid = validateResult._unsafeUnwrap();
       if (isValid) {
