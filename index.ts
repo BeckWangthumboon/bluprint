@@ -8,6 +8,13 @@ import {
   handleModelsList,
   handleModelsValidate,
 } from './src/cli/config/models.js';
+import {
+  handlePresetsAdd,
+  handlePresetsEdit,
+  handlePresetsRemove,
+  handlePresetsList,
+  handlePresetsDefault,
+} from './src/cli/config/presets.js';
 
 process.once('SIGINT', () => void exit(130));
 process.once('SIGTERM', () => void exit(143));
@@ -88,6 +95,55 @@ await yargs(hideBin(process.argv))
                 }
               )
               .demandCommand(1, 'You must provide a models subcommand')
+              .strict(),
+          () => {}
+        )
+        .command(
+          'presets',
+          'Manage model presets',
+          (yargs) =>
+            yargs
+              .command(
+                'add',
+                'Add a new model preset',
+                () => {},
+                async () => {
+                  await handlePresetsAdd();
+                }
+              )
+              .command(
+                'edit',
+                'Edit an existing model preset',
+                () => {},
+                async () => {
+                  await handlePresetsEdit();
+                }
+              )
+              .command(
+                'remove',
+                'Remove a model preset',
+                () => {},
+                async () => {
+                  await handlePresetsRemove();
+                }
+              )
+              .command(
+                'list',
+                'List all model presets',
+                () => {},
+                async () => {
+                  await handlePresetsList();
+                }
+              )
+              .command(
+                'default',
+                'Set the default model preset',
+                () => {},
+                async () => {
+                  await handlePresetsDefault();
+                }
+              )
+              .demandCommand(1, 'You must provide a presets subcommand')
               .strict(),
           () => {}
         )
