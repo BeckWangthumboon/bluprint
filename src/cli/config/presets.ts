@@ -368,3 +368,36 @@ export async function handlePresetsRemove(): Promise<void> {
   p.outro('Done!');
   await exit(0);
 }
+
+/**
+ * Handles the "list presets" command.
+ *
+ * Displays all configured presets with their agent types and models.
+ *
+ * @returns Resolves when the operation completes.
+ */
+export async function handlePresetsList(): Promise<void> {
+  const config = await requireModelsConfig();
+  if (!config) return;
+
+  const presets = config.presets;
+
+  if (Object.keys(presets).length === 0) {
+    console.log('No presets added.');
+    await exit(0);
+    return;
+  }
+
+  const sortedPresetNames = Object.keys(presets).sort((a, b) => a.localeCompare(b));
+
+  console.log(`Presets (${sortedPresetNames.length}):`);
+  for (const presetName of sortedPresetNames) {
+    console.log(`  ${presetName}:`);
+    const preset = presets[presetName]!;
+    for (const agentType of AGENT_TYPE_ORDER) {
+      console.log(`    ${agentType}: ${formatModelConfig(preset[agentType])}`);
+    }
+  }
+
+  await exit(0);
+}
