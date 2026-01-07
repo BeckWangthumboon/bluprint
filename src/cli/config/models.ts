@@ -371,4 +371,59 @@ export async function handleModelsList(): Promise<void> {
   await exit(0);
 }
 
-export async function handleModelsValidate(): Promise<void> {}
+export async function handleModelsValidate(): Promise<void> {
+  const configResult = await configUtils.models.read();
+  if (configResult.isErr()) {
+    const error = configResult.error;
+    if (error.type === 'CONFIG_FILE_MISSING') {
+      console.error("No models.json found. Run 'bluprint config models add' first.");
+      await exit(1);
+      return;
+    }
+    console.error('Failed to read models config');
+    await exit(1);
+    return;
+  }
+
+  const config = configResult._unsafeUnwrap();
+  const models = config.models;
+
+  if (models.length === 0) {
+    console.log('No models added.');
+    await exit(0);
+    return;
+  }
+
+  const libResult = await getOpenCodeLib();
+  if (libResult.isErr()) {
+    console.error('Failed to connect to OpenCode SDK');
+    await exit(1);
+    return;
+  }
+  const lib = libResult._unsafeUnwrap();
+
+  console.log(`Validating ${models.length} models...\n`);
+
+  const validModels: ModelConfig[] = [];
+  const invalidModels: Array<{ model: ModelConfig; reason: string }> = [];
+
+  for (const model of models) {
+    const validateResult = await lib.provider.validate(model.providerID, model.modelID);
+    if (validateResult.isErr()) {
+      invalidModels.push({ model, reason: 'Validation failed' });
+    } else {
+      const isValid = validateResult._unsafeUnwrap();
+      if (isValid) {
+        validModels.push(model);
+        console.log(`  ✓ ${formatModelConfig(model)}`);
+      } else {
+        invalidModels.push({ model, reason: 'not found in SDK' });
+        console.log(`  ✗ ${formatModelConfig(model)} (not found in SDK)`);
+      }
+    }
+  }
+
+  console.log(`\n${validModels.length} valid, ${invalidModels.length} invalid`);
+
+  await exit(invalidModels.length > 0 ? 1 : 0);
+}
