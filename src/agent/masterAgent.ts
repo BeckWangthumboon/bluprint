@@ -3,10 +3,8 @@ import { workspace } from '../workspace.js';
 import {
   parseTextResponse,
   toError,
-  getModelConfig,
   loadPromptFile,
   withTimeout,
-  getTimeoutMs,
   isObject,
   unwrapResultAsync,
   cleanupSession,
@@ -22,11 +20,12 @@ import { exec } from '../shell.js';
 import { findPlanStep, getPlanStep } from './planUtils.js';
 import { getLogger } from './logger.js';
 import type { ModelConfig, MasterAgentOutput } from './types.js';
+import type { ModelConfig as ConfigModelConfig } from '../config/index.js';
 
-const MASTER_DEFAULT_MODEL: ModelConfig = {
-  providerID: 'google',
-  modelID: 'claude-sonnet-4-5',
-};
+export interface MasterAgentConfig {
+  model: ConfigModelConfig;
+  timeoutMs: number;
+}
 
 const MAX_REPAIR_ATTEMPTS = 2;
 
@@ -101,12 +100,11 @@ const callModelWithRepair = (
   model: ModelConfig,
   systemPrompt: string,
   userPrompt: string,
+  timeoutMs: number,
   attemptNumber = 1,
   signal: AbortSignal,
   onAbort: () => void
 ): ResultAsync<{ output: MasterAgentOutput; rawResponse: string }, Error> => {
-  const timeoutMs = getTimeoutMs('MASTER_AGENT_TIMEOUT_MS', 300_000);
-
   return ResultAsync.fromPromise(
     withTimeout<PromptResponse>(
       unwrapResultAsync(
@@ -166,6 +164,7 @@ const callModelWithRepair = (
           model,
           systemPrompt,
           repairPrompt,
+          timeoutMs,
           attemptNumber + 1,
           signal,
           onAbort
@@ -190,6 +189,7 @@ const callModelWithRepair = (
           model,
           systemPrompt,
           repairPrompt,
+          timeoutMs,
           attemptNumber + 1,
           signal,
           onAbort
@@ -208,16 +208,18 @@ const callModelWithRepair = (
  * Main master agent function that reviews code changes and generates next task
  * @param iteration - The current loop iteration number
  * @param signal - AbortSignal to cancel the operation
+ * @param config - Resolved runtime configuration containing model and timeout settings
  */
 export const reviewAndGenerateTask = (
   iteration: number,
-  signal: AbortSignal
+  signal: AbortSignal,
+  config: MasterAgentConfig
 ): ResultAsync<string, Error> => {
   if (signal.aborted) {
     return errAsync(new Error('Operation aborted'));
   }
 
-  const model = getModelConfig('MASTER_AGENT_MODEL', MASTER_DEFAULT_MODEL);
+  const model = config.model;
 
   return getOpenCodeLib().andThen((lib) =>
     lib.provider.validate(model.providerID, model.modelID, { log: true }).andThen((isValid) => {
@@ -358,6 +360,7 @@ Review the current task implementation and decide whether to accept or reject. O
                     model,
                     systemPrompt,
                     userPrompt,
+                    config.timeoutMs,
                     1,
                     signal,
                     abortSession
