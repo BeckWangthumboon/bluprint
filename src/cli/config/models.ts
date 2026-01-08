@@ -98,17 +98,7 @@ async function fetchProvidersWithModels(): Promise<SDKWithProviders | null> {
   const providers = providersResult.value;
   s.stop('Providers fetched');
 
-  const providersWithModels = providers.filter(
-    (provider: Provider) => provider.models && Object.keys(provider.models).length > 0
-  );
-
-  if (providersWithModels.length === 0) {
-    p.note('No providers available', 'Error');
-    await exit(1);
-    return null;
-  }
-
-  return { lib, providers: providersWithModels };
+  return { lib, providers };
 }
 
 /**
@@ -130,14 +120,31 @@ async function selectModelsFromProviders(
   existingModels: ModelConfig[]
 ): Promise<ModelConfig[] | null> {
   const currentModels = [...existingModels];
+  const existingProviderIDs = new Set(existingModels.map((model) => model.providerID));
+  const providerModels = new Map<string, string[]>();
+
+  for (const provider of providers) {
+    const availableModels = provider.models ? Object.keys(provider.models).sort() : [];
+    if (availableModels.length > 0 || existingProviderIDs.has(provider.id)) {
+      providerModels.set(provider.id, availableModels);
+    }
+  }
+
+  for (const providerID of existingProviderIDs) {
+    if (!providerModels.has(providerID)) {
+      providerModels.set(providerID, []);
+    }
+  }
+
   let continueEditing = true;
 
   while (continueEditing) {
     const providerOptions = [
-      ...providers
-        .map((provider: Provider) => ({
-          value: provider.id,
-          label: provider.id,
+      ...Array.from(providerModels.entries())
+        .map(([providerID, availableModels]) => ({
+          value: providerID,
+          label: providerID,
+          hint: availableModels.length === 0 ? 'no models returned' : undefined,
         }))
         .sort((a, b) => a.label.localeCompare(b.label)),
       { value: '__exit__', label: 'done' },
@@ -160,13 +167,31 @@ async function selectModelsFromProviders(
 
     const providerID = providerSelectResult as string;
 
-    const selectedProvider = providers.find((provider: Provider) => provider.id === providerID);
-    const availableModels = selectedProvider?.models
-      ? Object.keys(selectedProvider.models).sort()
-      : [];
+    const availableModels = providerModels.get(providerID) ?? [];
 
     if (availableModels.length === 0) {
-      p.note('No models available for this provider', 'Warning');
+      const existingForProvider = currentModels.filter((model) => model.providerID === providerID);
+      if (existingForProvider.length > 0) {
+        const removeResult = await p.confirm({
+          message: `No valid models returned for ${providerID}. Remove existing models for this provider?`,
+        });
+
+        if (p.isCancel(removeResult)) {
+          p.cancel('Operation cancelled');
+          await exit(0);
+          return null;
+        }
+
+        if (removeResult) {
+          const modelsFromOtherProviders = currentModels.filter(
+            (model) => model.providerID !== providerID
+          );
+          currentModels.length = 0;
+          currentModels.push(...modelsFromOtherProviders);
+        }
+      } else {
+        p.note('No models available for this provider', 'Warning');
+      }
       continue;
     }
 
@@ -189,11 +214,7 @@ async function selectModelsFromProviders(
     }
     const selectedModelIDs = modelSelectResult as string[];
 
-    const newlySelectedIDs = selectedModelIDs.filter(
-      (modelID) => !currentModels.some((m) => m.providerID === providerID && m.modelID === modelID)
-    );
-
-    for (const modelID of newlySelectedIDs) {
+    for (const modelID of selectedModelIDs) {
       const validateResult = await lib.provider.validate(providerID, modelID);
       if (validateResult.isErr()) {
         p.note(`Failed to validate ${providerID}/${modelID}`, 'Error');
@@ -227,6 +248,65 @@ async function selectModelsFromProviders(
   }
 
   return currentModels;
+}
+
+/**
+ * Validates models against the SDK and prompts to remove invalid ones.
+ *
+ * Checks each model in the provided list by validating it against the OpenCode SDK.
+ * Models that fail validation or are not found are collected and displayed to the user
+ * with a prompt to remove them from the pool. If the user cancels, returns null.
+ *
+ * @param lib - The OpenCode SDK library instance.
+ * @param models - The array of model configs to validate.
+ * @returns The array of valid models (with invalid ones removed if confirmed), or null if cancelled.
+ */
+async function promptRemoveInvalidModels(
+  lib: Lib,
+  models: ModelConfig[]
+): Promise<ModelConfig[] | null> {
+  if (models.length === 0) {
+    return models;
+  }
+
+  const invalidModels: Array<{ model: ModelConfig; reason: string }> = [];
+  for (const model of models) {
+    const validateResult = await lib.provider.validate(model.providerID, model.modelID);
+    if (validateResult.isErr()) {
+      invalidModels.push({ model, reason: 'validation failed' });
+      continue;
+    }
+    if (!validateResult.value) {
+      invalidModels.push({ model, reason: 'not found in OpenCode' });
+    }
+  }
+
+  if (invalidModels.length === 0) {
+    return models;
+  }
+
+  p.log.warn('Some models are not available in OpenCode:');
+  for (const { model, reason } of invalidModels) {
+    p.log.message(`  - ${formatModelConfig(model)} (${reason})`);
+  }
+
+  const removeResult = await p.confirm({
+    message: 'Remove these models from the pool?',
+  });
+
+  if (p.isCancel(removeResult)) {
+    p.cancel('Operation cancelled');
+    await exit(0);
+    return null;
+  }
+
+  if (removeResult) {
+    return models.filter(
+      (model) => !invalidModels.some((invalid) => modelConfigEquals(invalid.model, model))
+    );
+  }
+
+  return models;
 }
 
 /**
@@ -350,6 +430,11 @@ export async function handleModelsEdit(): Promise<void> {
 
   const openCodeProvidersAndModels = await fetchProvidersWithModels();
   if (!openCodeProvidersAndModels) return;
+  if (openCodeProvidersAndModels.providers.length === 0 && originalModels.length === 0) {
+    p.note('No providers available', 'Error');
+    await exit(1);
+    return;
+  }
 
   const finalModels = await selectModelsFromProviders(
     openCodeProvidersAndModels.lib,
@@ -358,11 +443,17 @@ export async function handleModelsEdit(): Promise<void> {
   );
   if (!finalModels) return;
 
-  if (finalModels.length === 0) {
+  const cleanedModels = await promptRemoveInvalidModels(
+    openCodeProvidersAndModels.lib,
+    finalModels
+  );
+  if (!cleanedModels) return;
+
+  if (cleanedModels.length === 0) {
     p.note('Model pool will be empty after this operation.', 'Info');
   }
 
-  await saveEditedModelsToConfig(originalModels, finalModels, presets);
+  await saveEditedModelsToConfig(originalModels, cleanedModels, presets);
 }
 
 /**
@@ -440,10 +531,9 @@ export async function handleModelsValidate(): Promise<void> {
       const isValid = validateResult.value;
       if (isValid) {
         validModels.push(model);
-        console.log(`  ✓ ${formatModelConfig(model)}`);
       } else {
-        invalidModels.push({ model, reason: 'not found in SDK' });
-        console.log(`  ✗ ${formatModelConfig(model)} (not found in SDK)`);
+        invalidModels.push({ model, reason: 'not found in OpenCode' });
+        console.log(`  ✗ ${formatModelConfig(model)} (not found in OpenCode)`);
       }
     }
   }

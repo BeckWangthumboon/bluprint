@@ -85,7 +85,11 @@ interface Lib {
   };
   provider: {
     list(): ResultAsync<Provider[], Error>;
-    validate(providerID: string, modelID: string): ResultAsync<boolean, Error>;
+    validate(
+      providerID: string,
+      modelID: string,
+      options?: { log?: boolean }
+    ): ResultAsync<boolean, Error>;
   };
 }
 
@@ -303,30 +307,36 @@ const createOpenCodeLib = (rawClient: OpencodeClient): Lib => ({
         (data) => (data as { all?: Provider[] }).all ?? []
       ),
 
-    validate: (providerID: string, modelID: string) =>
-      wrapCall(() => rawClient.provider.list({}), 'Provider list').andThen((data) => {
+    validate: (providerID: string, modelID: string, options?: { log?: boolean }) => {
+      const shouldLog = options?.log === true;
+      return wrapCall(() => rawClient.provider.list({}), 'Provider list').andThen((data) => {
         const providers = (data as { all?: Provider[] }).all ?? [];
         const provider = providers.find((p) => p.id === providerID);
 
         if (!provider) {
-          console.error(
-            `Provider "${providerID}" not found. Known providers:`,
-            providers.map((p) => p.id)
-          );
+          if (shouldLog) {
+            console.error(
+              `Provider "${providerID}" not found. Known providers:`,
+              providers.map((p) => p.id)
+            );
+          }
           return ok(false);
         }
 
         const models = provider.models ?? {};
         if (!models[modelID]) {
-          console.error(
-            `Model "${modelID}" not found for provider "${providerID}". Available:`,
-            Object.keys(models)
-          );
+          if (shouldLog) {
+            console.error(
+              `Model "${modelID}" not found for provider "${providerID}". Available:`,
+              Object.keys(models)
+            );
+          }
           return ok(false);
         }
 
         return ok(true);
-      }),
+      });
+    },
   },
 });
 

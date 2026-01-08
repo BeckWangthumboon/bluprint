@@ -27,8 +27,8 @@ export const generatePlan = (): ResultAsync<void, Error> => {
   // Validate both models upfront before doing any work
   return getOpenCodeLib().andThen((lib) =>
     ResultAsync.combine([
-      lib.provider.validate(planModel.providerID, planModel.modelID),
-      lib.provider.validate(summaryModel.providerID, summaryModel.modelID),
+      lib.provider.validate(planModel.providerID, planModel.modelID, { log: true }),
+      lib.provider.validate(summaryModel.providerID, summaryModel.modelID, { log: true }),
     ]).andThen(([planValid, summaryValid]) => {
       if (!planValid) {
         return err(new Error(`Invalid plan model: ${planModel.providerID}/${planModel.modelID}`));

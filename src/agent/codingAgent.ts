@@ -39,7 +39,9 @@ export const executeCodingAgent = (
   const codingModel = getModelConfig('CODING_AGENT_MODEL', CODING_DEFAULT_MODEL);
 
   return getOpenCodeLib().andThen((lib) =>
-    lib.provider.validate(codingModel.providerID, codingModel.modelID).andThen((isValid) => {
+    lib.provider
+      .validate(codingModel.providerID, codingModel.modelID, { log: true })
+      .andThen((isValid) => {
       if (!isValid) {
         return err(
           new Error(`Invalid coding model: ${codingModel.providerID}/${codingModel.modelID}`)
