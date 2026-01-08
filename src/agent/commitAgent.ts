@@ -12,11 +12,10 @@ import { readState } from '../state.js';
 import { workspace } from '../workspace.js';
 import { getPlanStep } from './planUtils.js';
 import { getOpenCodeLib, abortAndCleanup } from './opencodesdk.js';
-import type { ModelConfig } from './types.js';
-import type { ModelConfig as ConfigModelConfig } from '../config/index.js';
+import type { ModelConfig } from '../config/index.js';
 
 export interface CommitAgentConfig {
-  model: ConfigModelConfig;
+  model: ModelConfig;
   timeoutMs: number;
 }
 

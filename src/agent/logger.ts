@@ -2,7 +2,7 @@ import { join } from 'path';
 import { Result, ResultAsync, ok } from 'neverthrow';
 import { fsUtils } from '../fs.js';
 import { workspaceConstants } from '../workspace.js';
-import type { ModelConfig } from './types.js';
+import type { ModelConfig } from '../config/index.js';
 import type { Session, OpenCodeSDKSession } from './opencodesdk.js';
 
 const { RUNS_DIR } = workspaceConstants;

@@ -1,7 +1,7 @@
 import { ResultAsync, errAsync } from 'neverthrow';
 import { fsUtils } from '../fs.js';
 import { join, dirname } from 'path';
-import type { ModelConfig } from './types.js';
+import type { ModelConfig } from '../config/index.js';
 import type { Session } from './opencodesdk.js';
 import { logSessionData } from './logger.js';
 

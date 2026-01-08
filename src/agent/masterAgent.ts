@@ -19,11 +19,11 @@ import { readState } from '../state.js';
 import { exec } from '../shell.js';
 import { findPlanStep, getPlanStep } from './planUtils.js';
 import { getLogger } from './logger.js';
-import type { ModelConfig, MasterAgentOutput } from './types.js';
-import type { ModelConfig as ConfigModelConfig } from '../config/index.js';
+import type { ModelConfig } from '../config/index.js';
+import type { MasterAgentOutput } from './types.js';
 
 export interface MasterAgentConfig {
-  model: ConfigModelConfig;
+  model: ModelConfig;
   timeoutMs: number;
 }
 

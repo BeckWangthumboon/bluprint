@@ -5,7 +5,7 @@ import {
   type Session as OpenCodeSDKSession,
 } from '@opencode-ai/sdk';
 import { getDebugLogger } from './logger.js';
-import type { ModelConfig } from './types.js';
+import type { ModelConfig } from '../config/index.js';
 import { getAbortSignal } from '../exit.js';
 
 const isObject = (data: unknown): data is Record<string, unknown> =>
