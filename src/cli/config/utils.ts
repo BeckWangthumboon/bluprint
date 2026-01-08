@@ -118,19 +118,24 @@ export async function fetchProvidersWithModels(): Promise<SDKWithProviders | nul
 export async function validateModel(
   model: ModelConfig,
   poolModels: ModelConfig[],
-  lib: Lib
+  lib: Lib,
+  options: { usePrompts: boolean }
 ): Promise<ModelValidationStatus> {
   const inPool = poolModels.some((m) => modelConfigEquals(m, model));
 
-  let validInOpenCode: boolean | null = null;
   const validateResult = await lib.provider.validate(model.providerID, model.modelID);
   if (validateResult.isErr()) {
-    validInOpenCode = null;
-  } else {
-    validInOpenCode = validateResult.value;
+    const msg = `Failed to validate ${formatModelConfig(model)} in OpenCode`;
+    if (options.usePrompts) {
+      p.note(msg, 'Error');
+    } else {
+      console.error(msg);
+    }
+    await exit(1);
+    return { inPool, validInOpenCode: null };
   }
 
-  return { inPool, validInOpenCode };
+  return { inPool, validInOpenCode: validateResult.value };
 }
 
 /**
@@ -145,7 +150,8 @@ export async function validateModel(
 export async function validateMultiplePresets(
   presets: Record<string, ModelPreset>,
   poolModels: ModelConfig[],
-  lib: Lib
+  lib: Lib,
+  options: { usePrompts: boolean }
 ): Promise<Map<string, ModelValidationStatus>> {
   const uniqueModels = new Map<string, ModelConfig>();
 
@@ -163,7 +169,7 @@ export async function validateMultiplePresets(
   const statusMap = new Map<string, ModelValidationStatus>();
 
   for (const [key, model] of uniqueModels) {
-    const status = await validateModel(model, poolModels, lib);
+    const status = await validateModel(model, poolModels, lib, options);
     statusMap.set(key, status);
   }
 
@@ -182,13 +188,14 @@ export async function validateMultiplePresets(
 export async function validatePresets(
   preset: ModelPreset,
   poolModels: ModelConfig[],
-  lib: Lib
+  lib: Lib,
+  options: { usePrompts: boolean }
 ): Promise<Record<AgentType, ModelValidationStatus>> {
   const results: Partial<Record<AgentType, ModelValidationStatus>> = {};
 
   for (const agentType of AGENT_TYPES) {
     const model = preset[agentType];
-    results[agentType] = await validateModel(model, poolModels, lib);
+    results[agentType] = await validateModel(model, poolModels, lib, options);
   }
 
   return results as Record<AgentType, ModelValidationStatus>;
@@ -235,23 +242,34 @@ export function formatModelWithStatus(model: ModelConfig, status: ModelValidatio
  */
 export async function buildModelOptionsWithStatus(
   models: ModelConfig[],
-  lib: Lib
+  lib: Lib,
+  options: { usePrompts: boolean }
 ): Promise<Array<{ value: string; label: string; hint?: string }>> {
-  const options: Array<{ value: string; label: string; hint?: string }> = [];
+  const modelOptions: Array<{ value: string; label: string; hint?: string }> = [];
 
   for (const model of models) {
     const formatted = formatModelConfig(model);
     let hint: string | undefined;
 
     const validateResult = await lib.provider.validate(model.providerID, model.modelID);
-    if (validateResult.isErr() || !validateResult.value) {
+    if (validateResult.isErr()) {
+      const msg = `Failed to validate ${formatted} in OpenCode`;
+      if (options.usePrompts) {
+        p.note(msg, 'Error');
+      } else {
+        console.error(msg);
+      }
+      await exit(1);
+      return [];
+    }
+    if (!validateResult.value) {
       hint = '✗ invalid';
     }
 
-    options.push({ value: formatted, label: formatted, hint });
+    modelOptions.push({ value: formatted, label: formatted, hint });
   }
 
-  return options.sort((a, b) => a.label.localeCompare(b.label));
+  return modelOptions.sort((a, b) => a.label.localeCompare(b.label));
 }
 
 /**

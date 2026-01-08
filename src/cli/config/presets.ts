@@ -139,7 +139,7 @@ export async function handlePresetsAdd(): Promise<void> {
     return;
   }
 
-  const modelOptions = await buildModelOptionsWithStatus(config.models, lib);
+  const modelOptions = await buildModelOptionsWithStatus(config.models, lib, { usePrompts: true });
   const preset: Partial<ModelPreset> = {};
 
   for (const agentType of AGENT_TYPES) {
@@ -208,7 +208,9 @@ export async function handlePresetsEdit(): Promise<void> {
   const currentPreset = config.presets[presetName]!;
 
   p.log.message(`\nCurrent configuration for "${presetName}":`);
-  const currentPresetStatus = await validatePresets(currentPreset, config.models, lib);
+  const currentPresetStatus = await validatePresets(currentPreset, config.models, lib, {
+    usePrompts: true,
+  });
   for (const agentType of AGENT_TYPES) {
     const model = currentPreset[agentType];
     const status = currentPresetStatus[agentType];
@@ -219,7 +221,9 @@ export async function handlePresetsEdit(): Promise<void> {
 
   const updatedPreset: ModelPreset = { ...currentPreset } as ModelPreset;
 
-  const allModelOptionsDisplay = await buildModelOptionsWithStatus(config.models, lib);
+  const allModelOptionsDisplay = await buildModelOptionsWithStatus(config.models, lib, {
+    usePrompts: true,
+  });
 
   for (const agentType of AGENT_TYPES) {
     const currentModel = formatModelConfig(currentPreset[agentType]);
@@ -333,7 +337,9 @@ export async function handlePresetsList(): Promise<void> {
   const lib = await connectToOpenCodeOrExit(false);
   if (!lib) return;
 
-  const modelStatusMap = await validateMultiplePresets(presets, config.models, lib);
+  const modelStatusMap = await validateMultiplePresets(presets, config.models, lib, {
+    usePrompts: false,
+  });
 
   const sortedPresetNames = Object.keys(presets).sort((a, b) => a.localeCompare(b));
 
@@ -402,7 +408,9 @@ export async function handlePresetsDefault(): Promise<void> {
     return;
   }
 
-  const modelStatuses = await validatePresets(selectedPreset, config.models, lib);
+  const modelStatuses = await validatePresets(selectedPreset, config.models, lib, {
+    usePrompts: true,
+  });
 
   p.log.message(`\nSelected preset "${selectedPresetName}":`);
   for (const agentType of AGENT_TYPES) {
