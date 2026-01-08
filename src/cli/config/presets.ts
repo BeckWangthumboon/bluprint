@@ -6,6 +6,7 @@ import {
   validatePresetPool,
   configUtils,
   ensureConfigDir,
+  DEFAULT_GENERAL_CONFIG,
 } from '../../config/index.js';
 import { exit } from '../../exit.js';
 import {
@@ -296,6 +297,31 @@ export async function handlePresetsRemove(): Promise<void> {
     return;
   }
 
+  let clearedDefaultPreset = false;
+  let bluprintConfig: BluprintConfig | undefined = undefined;
+  const bluprintConfigResult = await configUtils.bluprint.read();
+  if (bluprintConfigResult.isOk()) {
+    bluprintConfig = bluprintConfigResult.value;
+  } else if (bluprintConfigResult.error.type !== 'CONFIG_FILE_MISSING') {
+    p.note('Failed to read bluprint config', 'Error');
+    await exit(1);
+    return;
+  }
+
+  if (bluprintConfig?.defaultPreset === selectedName) {
+    const updatedBluprintConfig: BluprintConfig = {
+      ...bluprintConfig,
+      defaultPreset: undefined,
+    };
+    const writeBluprintResult = await configUtils.bluprint.write(updatedBluprintConfig);
+    if (writeBluprintResult.isErr()) {
+      p.note('Failed to clear default preset', 'Error');
+      await exit(1);
+      return;
+    }
+    clearedDefaultPreset = true;
+  }
+
   const updatedConfig: ModelsConfig = {
     ...config,
     presets: remainingPresets,
@@ -303,12 +329,24 @@ export async function handlePresetsRemove(): Promise<void> {
 
   const writeResult = await configUtils.models.write(updatedConfig);
   if (writeResult.isErr()) {
-    p.note('Failed to write config', 'Error');
+    if (clearedDefaultPreset && bluprintConfig) {
+      const rollbackResult = await configUtils.bluprint.write(bluprintConfig);
+      if (rollbackResult.isErr()) {
+        p.note('Failed to write config and restore default preset', 'Error');
+      } else {
+        p.note('Failed to write config', 'Error');
+      }
+    } else {
+      p.note('Failed to write config', 'Error');
+    }
     await exit(1);
     return;
   }
 
   p.log.message(`Removed preset "${selectedName}"`);
+  if (clearedDefaultPreset) {
+    p.log.message(`Default preset removed (was "${selectedName}").`);
+  }
 
   p.outro('Done!');
   await exit(0);
@@ -435,21 +473,28 @@ export async function handlePresetsDefault(): Promise<void> {
     }
   }
 
+  const ensureDirResult = await ensureConfigDir();
+  if (ensureDirResult.isErr()) {
+    p.note('Failed to ensure config directory exists', 'Error');
+    await exit(1);
+    return;
+  }
+
   const bluprintConfigResult = await configUtils.bluprint.read();
-  if (bluprintConfigResult.isErr()) {
+  if (bluprintConfigResult.isErr() && bluprintConfigResult.error.type !== 'CONFIG_FILE_MISSING') {
     p.note('Failed to read bluprint config', 'Error');
     await exit(1);
     return;
   }
 
-  const bluprintConfig = bluprintConfigResult.value;
   const updatedBluprintConfig: BluprintConfig = {
-    ...bluprintConfig,
+    ...(bluprintConfigResult.isOk() ? bluprintConfigResult.value : DEFAULT_GENERAL_CONFIG),
     defaultPreset: selectedPresetName,
   };
 
   const writeResult = await configUtils.bluprint.write(updatedBluprintConfig);
   if (writeResult.isErr()) {
+    p.note('Failed to write bluprint config', 'Error');
     await exit(1);
     return;
   }
