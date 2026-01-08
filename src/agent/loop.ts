@@ -12,13 +12,19 @@ import {
   readState,
   startExecution,
 } from '../state.js';
-import { executeCodingAgent } from './codingAgent.js';
-import { createCommitForTask } from './commitAgent.js';
-import { reviewAndGenerateTask } from './masterAgent.js';
+import { executeCodingAgent, type CodingAgentConfig } from './codingAgent.js';
+import { createCommitForTask, type CommitAgentConfig } from './commitAgent.js';
+import { reviewAndGenerateTask, type MasterAgentConfig } from './masterAgent.js';
 import type { MasterAgentOutput } from './types.js';
 import { isObject, toError } from './utils.js';
 import { initLogger, type ManifestData } from './logger.js';
 import { getAbortSignal } from '../exit.js';
+import { resolveRuntimeConfig, getTimeoutMs, formatResolveError } from '../config/index.js';
+import type { ResolvedConfig } from '../config/index.js';
+
+export interface LoopConfig {
+  preset?: string;
+}
 
 const parseMasterOutput = (raw: string): MasterAgentOutput => {
   let parsed: unknown;
@@ -92,14 +98,19 @@ export const applyDecision = (
  * The loop handles errors gracefully by marking the state as failed
  * if an error occurs after initialization.
  *
- * @param sig - Optional AbortSignal to cancel the loop. Defaults to global abort signal.
+ * @param options - Optional configuration for the loop
+ * @param options.signal - Optional AbortSignal to cancel the loop. Defaults to global abort signal.
+ * @param options.config - Optional loop configuration including preset selection
  * @returns A ResultAsync that resolves when the loop completes successfully
  *          or rejects with an error if limits are exceeded or an error occurs
  */
-export const runLoop = (sig?: AbortSignal): ResultAsync<void, Error> =>
+export const runLoop = (options?: {
+  signal?: AbortSignal;
+  config?: LoopConfig;
+}): ResultAsync<void, Error> =>
   ResultAsync.fromPromise(
     (async () => {
-      const signal = sig ?? getAbortSignal();
+      const signal = options?.signal ?? getAbortSignal();
 
       let stateInitialized = false;
       let loopFailed = false;
@@ -107,6 +118,13 @@ export const runLoop = (sig?: AbortSignal): ResultAsync<void, Error> =>
       let iteration = 0;
       const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const startedAt = new Date();
+
+      // Resolve runtime configuration
+      const resolvedConfig = await unwrapOrThrow(
+        resolveRuntimeConfig(options?.config?.preset).mapErr(
+          (e) => new Error(formatResolveError(e))
+        )
+      );
 
       // Initialize manifest data for tracking
       const manifestData: ManifestData = {
@@ -189,7 +207,7 @@ export const runLoop = (sig?: AbortSignal): ResultAsync<void, Error> =>
         }
 
         // Initialize state
-        await unwrapOrThrow(initializeState());
+        await unwrapOrThrow(initializeState(resolvedConfig.limits));
         stateInitialized = true;
         await unwrapOrThrow(startExecution());
         await unwrapOrThrow(workspace.cache.task.write(''));
@@ -233,7 +251,13 @@ export const runLoop = (sig?: AbortSignal): ResultAsync<void, Error> =>
 
           // Execute coding agent
           const codingStartedAt = Date.now();
-          const report = await unwrapOrThrow(executeCodingAgent(iteration, signal));
+          const codingAgentConfig: CodingAgentConfig = {
+            model: resolvedConfig.preset.coding,
+            timeoutMs: getTimeoutMs(resolvedConfig.timeouts, 'coding'),
+          };
+          const report = await unwrapOrThrow(
+            executeCodingAgent(iteration, signal, codingAgentConfig)
+          );
           await unwrapOrThrow(saveReport(report));
           iterationData.codingDurationMs = Date.now() - codingStartedAt;
 
@@ -241,14 +265,26 @@ export const runLoop = (sig?: AbortSignal): ResultAsync<void, Error> =>
 
           // Master review
           const reviewStartedAt = Date.now();
-          const reviewRaw = await unwrapOrThrow(reviewAndGenerateTask(iteration, signal));
+          const masterAgentConfig: MasterAgentConfig = {
+            model: resolvedConfig.preset.master,
+            timeoutMs: getTimeoutMs(resolvedConfig.timeouts, 'master'),
+          };
+          const reviewRaw = await unwrapOrThrow(
+            reviewAndGenerateTask(iteration, signal, masterAgentConfig)
+          );
           const reviewOutput = parseMasterOutput(reviewRaw);
           iterationData.masterDurationMs = Date.now() - reviewStartedAt;
           iterationData.decision = reviewOutput.decision;
 
           // Handle decision
           if (reviewOutput.decision === 'accept') {
-            const commitResult = await unwrapOrThrow(createCommitForTask(iteration, signal));
+            const commitAgentConfig: CommitAgentConfig = {
+              model: resolvedConfig.preset.commit,
+              timeoutMs: getTimeoutMs(resolvedConfig.timeouts, 'commit'),
+            };
+            const commitResult = await unwrapOrThrow(
+              createCommitForTask(iteration, signal, commitAgentConfig)
+            );
             if (commitResult) {
               iterationData.commit = {
                 hash: commitResult.hash,
