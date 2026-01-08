@@ -35,20 +35,6 @@ function findPresetsUsingModel(model: ModelConfig, presets: Record<string, Model
 }
 
 /**
- * Parses a "providerID/modelID" string into a ModelConfig object.
- *
- * @param str - The string to parse in "providerID/modelID" format.
- * @returns The parsed ModelConfig, or null if the string is not in the expected format.
- */
-function parseModelConfig(str: string): ModelConfig | null {
-  const parts = str.split('/');
-  if (parts.length === 2 && parts[0] && parts[1]) {
-    return { providerID: parts[0], modelID: parts[1] };
-  }
-  return null;
-}
-
-/**
  * Reads the models config, exiting with an error if unavailable.
  *
  * Displays an error message and exits the process if the config file is missing or unreadable.
@@ -62,7 +48,7 @@ async function requireModelsConfig(options: { usePrompts: boolean }): Promise<Mo
   const result = await configUtils.models.read();
   if (result.isErr()) {
     const error = result.error;
-    const missingMsg = "No models.json found. Run 'bluprint config models add' first.";
+    const missingMsg = "No models.json found. Run 'bluprint config models edit' first.";
     const errorMsg = 'Failed to read models config';
     const msg = error.type === 'CONFIG_FILE_MISSING' ? missingMsg : errorMsg;
 
@@ -129,21 +115,24 @@ async function fetchProvidersWithModels(): Promise<SDKWithProviders | null> {
  * Runs an interactive loop to select and validate models from providers.
  *
  * Prompts the user to select a provider, then models from that provider, validates them,
- * and optionally continues to add models from other providers. Exits the process if
- * validation fails or the user cancels.
+ * and optionally continues to edit models from other providers. Models already in the pool
+ * are pre-selected. When a provider is visited, all its models are replaced by the new selection.
+ * Models from unvisited providers remain unchanged.
  *
  * @param lib - The OpenCode SDK library instance.
  * @param providers - The list of available providers with models.
- * @returns The array of selected and validated model configs, or null if cancelled/errored.
+ * @param existingModels - The current models in the pool (used for pre-selection).
+ * @returns The final array of model configs after edits, or null if cancelled/errored.
  */
 async function selectModelsFromProviders(
   lib: SDKWithProviders['lib'],
-  providers: Provider[]
+  providers: Provider[],
+  existingModels: ModelConfig[]
 ): Promise<ModelConfig[] | null> {
-  const allSelectedModels: ModelConfig[] = [];
-  let continueAdding = true;
+  const currentModels = [...existingModels];
+  let continueEditing = true;
 
-  while (continueAdding) {
+  while (continueEditing) {
     const providerOptions = [
       ...providers
         .map((provider: Provider) => ({
@@ -151,7 +140,7 @@ async function selectModelsFromProviders(
           label: provider.id,
         }))
         .sort((a, b) => a.label.localeCompare(b.label)),
-      { value: '__exit__', label: 'exit/skip' },
+      { value: '__exit__', label: 'done' },
     ];
 
     const providerSelectResult = await p.select({
@@ -181,10 +170,15 @@ async function selectModelsFromProviders(
       continue;
     }
 
+    const initialValues = availableModels.filter((modelID) =>
+      currentModels.some((m) => m.providerID === providerID && m.modelID === modelID)
+    );
+
     const modelOptions = availableModels.map((model: string) => ({ value: model, label: model }));
     const modelSelectResult = await p.multiselect({
-      message: 'Select models',
+      message: 'Select models (toggle to add/remove)',
       options: modelOptions,
+      initialValues,
       required: false,
     });
 
@@ -195,13 +189,11 @@ async function selectModelsFromProviders(
     }
     const selectedModelIDs = modelSelectResult as string[];
 
-    if (selectedModelIDs.length === 0) {
-      p.note('No models selected', 'Warning');
-      continue;
-    }
+    const newlySelectedIDs = selectedModelIDs.filter(
+      (modelID) => !currentModels.some((m) => m.providerID === providerID && m.modelID === modelID)
+    );
 
-    const validModels: ModelConfig[] = [];
-    for (const modelID of selectedModelIDs) {
+    for (const modelID of newlySelectedIDs) {
       const validateResult = await lib.provider.validate(providerID, modelID);
       if (validateResult.isErr()) {
         p.note(`Failed to validate ${providerID}/${modelID}`, 'Error');
@@ -214,37 +206,45 @@ async function selectModelsFromProviders(
         await exit(1);
         return null;
       }
-      validModels.push({ providerID, modelID });
     }
 
-    allSelectedModels.push(...validModels);
+    const modelsFromOtherProviders = currentModels.filter((m) => m.providerID !== providerID);
+    const newModelsForProvider = selectedModelIDs.map((modelID) => ({ providerID, modelID }));
+    currentModels.length = 0;
+    currentModels.push(...modelsFromOtherProviders, ...newModelsForProvider);
 
-    const addAnotherResult = await p.confirm({
-      message: 'Add models from another provider?',
+    const editAnotherResult = await p.confirm({
+      message: 'Edit models from another provider?',
     });
 
-    if (p.isCancel(addAnotherResult)) {
+    if (p.isCancel(editAnotherResult)) {
       p.cancel('Operation cancelled');
       await exit(0);
       return null;
     }
 
-    continueAdding = addAnotherResult === true;
+    continueEditing = editAnotherResult === true;
   }
 
-  return allSelectedModels;
+  return currentModels;
 }
 
 /**
- * Saves the selected models to the config file.
+ * Saves the edited models to the config file.
  *
- * Creates a new config if one doesn't exist, deduplicates models against existing ones,
- * and reports which models were added vs already present. Exits the process on completion or error.
+ * Computes the diff between original and new models, warns if removed models are used
+ * in presets, and writes the final config. Exits the process on completion or error.
  *
- * @param selectedModels - The array of model configs to save.
+ * @param originalModels - The models that were in the pool before editing.
+ * @param newModels - The final array of models after editing.
+ * @param presets - The existing presets config (for warning about removed models).
  * @returns Resolves when the operation completes (process exits).
  */
-async function saveNewModelsToConfig(selectedModels: ModelConfig[]): Promise<void> {
+async function saveEditedModelsToConfig(
+  originalModels: ModelConfig[],
+  newModels: ModelConfig[],
+  presets: Record<string, ModelPreset>
+): Promise<void> {
   const configDirResult = await ensureConfigDir();
   if (configDirResult.isErr()) {
     p.note('Failed to ensure config directory exists', 'Error');
@@ -252,175 +252,26 @@ async function saveNewModelsToConfig(selectedModels: ModelConfig[]): Promise<voi
     return;
   }
 
-  const configResult = await configUtils.models.read();
-  if (configResult.isErr()) {
-    const error = configResult.error;
-    if (error.type === 'CONFIG_FILE_MISSING') {
-      const newConfig: ModelsConfig = { models: [...selectedModels], presets: {} };
-      const writeResult = await configUtils.models.write(newConfig);
-      if (writeResult.isErr()) {
-        p.note('Failed to write config', 'Error');
-        await exit(1);
-        return;
-      }
-      p.outro(`Added ${selectedModels.length} models to the pool`);
-      await exit(0);
-      return;
-    }
-    p.note('Failed to read models config', 'Error');
-    await exit(1);
-    return;
-  }
-
-  const config = configResult.value;
-  const existingModels = config.models;
-
-  const newModels: ModelConfig[] = [];
-  const duplicateModels: ModelConfig[] = [];
-
-  for (const model of selectedModels) {
-    const isDuplicate = existingModels.some((existing: ModelConfig) =>
-      modelConfigEquals(existing, model)
-    );
-    if (isDuplicate) {
-      duplicateModels.push(model);
-    } else {
-      newModels.push(model);
-    }
-  }
-
-  if (newModels.length === 0 && duplicateModels.length > 0) {
-    p.note('All selected models already exist in the pool', 'Warning');
-    duplicateModels.forEach((model: ModelConfig) => {
-      p.log.message(`  ${formatModelConfig(model)} (already in pool)`);
-    });
-    await exit(0);
-    return;
-  }
-
-  const updatedConfig: ModelsConfig = {
-    ...config,
-    models: [...existingModels, ...newModels],
-  };
-
-  const writeResult = await configUtils.models.write(updatedConfig);
-  if (writeResult.isErr()) {
-    p.note('Failed to write config', 'Error');
-    await exit(1);
-    return;
-  }
-
-  p.log.message(`Added ${newModels.length} models to the pool:`);
-  newModels.forEach((model: ModelConfig) => {
-    p.log.message(`  ${formatModelConfig(model)}`);
-  });
-
-  if (duplicateModels.length > 0) {
-    duplicateModels.forEach((model: ModelConfig) => {
-      p.log.message(`  ${formatModelConfig(model)} (already in pool)`);
-    });
-  }
-
-  p.outro('Done!');
-  await exit(0);
-}
-
-/**
- * Handles the interactive "add models" command.
- *
- * Fetches available providers, prompts the user to select models, validates them,
- * and saves the selection to the config file.
- *
- * @returns Resolves when the operation completes.
- */
-export async function handleModelsAdd(): Promise<void> {
-  p.intro('Add models to the pool');
-
-  const openCodeProvidersAndModels = await fetchProvidersWithModels();
-  if (!openCodeProvidersAndModels) return;
-
-  const selectedModels = await selectModelsFromProviders(
-    openCodeProvidersAndModels.lib,
-    openCodeProvidersAndModels.providers
+  const addedModels = newModels.filter(
+    (m) => !originalModels.some((orig) => modelConfigEquals(orig, m))
   );
-  if (!selectedModels) return;
+  const removedModels = originalModels.filter(
+    (orig) => !newModels.some((m) => modelConfigEquals(orig, m))
+  );
 
-  if (selectedModels.length === 0) {
-    p.outro('No models selected');
-    await exit(0);
-    return;
-  }
-
-  await saveNewModelsToConfig(selectedModels);
-}
-
-/**
- * Handles the interactive "remove models" command.
- *
- * Prompts the user to select models from the pool to remove, warns if any are used
- * in presets, and updates the config file.
- *
- * @returns Resolves when the operation completes.
- */
-export async function handleModelsRemove(): Promise<void> {
-  p.intro('Remove models from the pool');
-
-  const config = await requireModelsConfig({ usePrompts: true });
-  if (!config) return;
-
-  const existingModels = config.models;
-
-  if (existingModels.length === 0) {
-    p.note('No models added.', 'Warning');
-    await exit(0);
-    return;
-  }
-
-  const modelOptions = existingModels.map((model) => ({
-    value: formatModelConfig(model),
-    label: formatModelConfig(model),
-  }));
-
-  const selectedModelsResult = await p.multiselect({
-    message: 'Select models to remove',
-    options: modelOptions,
-    required: false,
-  });
-
-  if (p.isCancel(selectedModelsResult)) {
-    p.cancel('Operation cancelled');
-    await exit(0);
-    return;
-  }
-
-  const selectedModels = selectedModelsResult as string[];
-
-  if (selectedModels.length === 0) {
-    p.note('No models selected', 'Warning');
-    await exit(0);
-    return;
-  }
-
-  const modelsToRemove: ModelConfig[] = [];
-  for (const modelStr of selectedModels) {
-    const parsed = parseModelConfig(modelStr);
-    if (parsed) {
-      modelsToRemove.push(parsed);
-    }
-  }
-
+  // Check if any removed models are used in presets
   const presetUsages: Array<{ model: ModelConfig; presetNames: string[] }> = [];
-  for (const model of modelsToRemove) {
-    const presetNames = findPresetsUsingModel(model, config.presets);
+  for (const model of removedModels) {
+    const presetNames = findPresetsUsingModel(model, presets);
     if (presetNames.length > 0) {
       presetUsages.push({ model, presetNames });
     }
   }
 
   if (presetUsages.length > 0) {
-    p.log.warn('The following models are used in presets:');
+    p.log.warn('The following models to be removed are used in presets:');
     for (const { model, presetNames } of presetUsages) {
-      p.log.message(`  • ${formatModelConfig(model)}`);
+      p.log.message(`  - ${formatModelConfig(model)}`);
       p.log.message(`    Used in: ${presetNames.join(', ')}`);
     }
     p.log.message('Removing them will make those presets invalid.');
@@ -436,14 +287,15 @@ export async function handleModelsRemove(): Promise<void> {
     }
   }
 
-  const updatedModels = existingModels.filter(
-    (existing: ModelConfig) =>
-      !modelsToRemove.some((toRemove: ModelConfig) => modelConfigEquals(existing, toRemove))
-  );
+  if (addedModels.length === 0 && removedModels.length === 0) {
+    p.outro('No changes made');
+    await exit(0);
+    return;
+  }
 
   const updatedConfig: ModelsConfig = {
-    ...config,
-    models: updatedModels,
+    models: newModels,
+    presets,
   };
 
   const writeResult = await configUtils.models.write(updatedConfig);
@@ -453,13 +305,64 @@ export async function handleModelsRemove(): Promise<void> {
     return;
   }
 
-  p.log.message(`Removed ${modelsToRemove.length} models from the pool:`);
-  modelsToRemove.forEach((model: ModelConfig) => {
-    p.log.message(`  ${formatModelConfig(model)}`);
-  });
+  if (addedModels.length > 0) {
+    p.log.message(`Added ${addedModels.length} model(s):`);
+    addedModels.forEach((model) => {
+      p.log.message(`  + ${formatModelConfig(model)}`);
+    });
+  }
+
+  if (removedModels.length > 0) {
+    p.log.message(`Removed ${removedModels.length} model(s):`);
+    removedModels.forEach((model) => {
+      p.log.message(`  - ${formatModelConfig(model)}`);
+    });
+  }
 
   p.outro('Done!');
   await exit(0);
+}
+
+/**
+ * Handles the interactive "edit models" command.
+ *
+ * Loads existing models from config, fetches available providers, prompts the user
+ * to select/deselect models with pre-selection of existing ones, and saves the
+ * final selection to the config file. All changes are atomic - only written at the end.
+ *
+ * @returns Resolves when the operation completes.
+ */
+export async function handleModelsEdit(): Promise<void> {
+  p.intro('Edit model pool');
+
+  const configResult = await configUtils.models.read();
+  let originalModels: ModelConfig[] = [];
+  let presets: Record<string, ModelPreset> = {};
+
+  if (configResult.isOk()) {
+    originalModels = configResult.value.models;
+    presets = configResult.value.presets;
+  } else if (configResult.error.type !== 'CONFIG_FILE_MISSING') {
+    p.note('Failed to read models config', 'Error');
+    await exit(1);
+    return;
+  }
+
+  const openCodeProvidersAndModels = await fetchProvidersWithModels();
+  if (!openCodeProvidersAndModels) return;
+
+  const finalModels = await selectModelsFromProviders(
+    openCodeProvidersAndModels.lib,
+    openCodeProvidersAndModels.providers,
+    originalModels
+  );
+  if (!finalModels) return;
+
+  if (finalModels.length === 0) {
+    p.note('Model pool will be empty after this operation.', 'Info');
+  }
+
+  await saveEditedModelsToConfig(originalModels, finalModels, presets);
 }
 
 /**

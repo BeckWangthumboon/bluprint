@@ -4,8 +4,7 @@ import { runLoop } from './src/agent/loop.js';
 import { generatePlan } from './src/agent/planAgent.js';
 import { exit } from './src/exit.js';
 import {
-  handleModelsAdd,
-  handleModelsRemove,
+  handleModelsEdit,
   handleModelsList,
   handleModelsValidate,
 } from './src/cli/config/models.js';
@@ -65,19 +64,11 @@ await yargs(hideBin(process.argv))
           (yargs) =>
             yargs
               .command(
-                'add',
-                'Add models to the pool from SDK providers',
+                'edit',
+                'Add/remove models in the pool',
                 () => {},
                 async () => {
-                  await handleModelsAdd();
-                }
-              )
-              .command(
-                'remove',
-                'Remove models from the pool',
-                () => {},
-                async () => {
-                  await handleModelsRemove();
+                  await handleModelsEdit();
                 }
               )
               .command(
