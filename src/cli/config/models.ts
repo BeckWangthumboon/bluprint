@@ -8,98 +8,12 @@ import {
 } from '../../config/index.js';
 import { getOpenCodeLib, type Provider, type Lib } from '../../agent/opencodesdk.js';
 import { exit } from '../../exit.js';
-
-/**
- * Finds all presets that reference a given model.
- *
- * Checks each preset's coding, master, plan, summarizer, and commit model slots.
- *
- * @param model - The model configuration to search for.
- * @param presets - The record of preset names to preset configurations.
- * @returns An array of preset names that use the specified model.
- */
-function findPresetsUsingModel(model: ModelConfig, presets: Record<string, ModelPreset>): string[] {
-  const matchingPresets: string[] = [];
-  for (const [presetName, preset] of Object.entries(presets)) {
-    if (
-      modelConfigEquals(preset.coding, model) ||
-      modelConfigEquals(preset.master, model) ||
-      modelConfigEquals(preset.plan, model) ||
-      modelConfigEquals(preset.summarizer, model) ||
-      modelConfigEquals(preset.commit, model)
-    ) {
-      matchingPresets.push(presetName);
-    }
-  }
-  return matchingPresets;
-}
-
-/**
- * Reads the models config, exiting with an error if unavailable.
- *
- * Displays an error message and exits the process if the config file is missing or unreadable.
- * Use `usePrompts: true` for interactive commands (uses p.note), `false` for non-interactive (uses console.error).
- *
- * @param options - Configuration options.
- * @param options.usePrompts - Whether to use interactive prompts for error display.
- * @returns The models config, or null if an error occurred and the process is exiting.
- */
-async function requireModelsConfig(options: { usePrompts: boolean }): Promise<ModelsConfig | null> {
-  const result = await configUtils.models.read();
-  if (result.isErr()) {
-    const error = result.error;
-    const missingMsg = "No models.json found. Run 'bluprint config models edit' first.";
-    const errorMsg = 'Failed to read models config';
-    const msg = error.type === 'CONFIG_FILE_MISSING' ? missingMsg : errorMsg;
-
-    if (options.usePrompts) {
-      p.note(msg, 'Error');
-    } else {
-      console.error(msg);
-    }
-    await exit(1);
-    return null;
-  }
-  return result.value;
-}
-
-interface SDKWithProviders {
-  lib: Lib;
-  providers: Provider[];
-}
-
-/**
- * Connects to the OpenCode SDK and fetches all providers that have models.
- *
- * Displays a spinner while fetching and exits the process if the connection fails
- * or no providers with models are available.
- *
- * @returns The SDK library instance and list of providers with models, or null if an error occurred.
- */
-async function fetchProvidersWithModels(): Promise<SDKWithProviders | null> {
-  const libResult = await getOpenCodeLib();
-  if (libResult.isErr()) {
-    p.note('Failed to connect to OpenCode SDK', 'Error');
-    await exit(1);
-    return null;
-  }
-  const lib = libResult.value;
-
-  const s = p.spinner();
-  s.start('Fetching providers...');
-  const providersResult = await lib.provider.list();
-
-  if (providersResult.isErr()) {
-    s.stop('Failed to fetch providers', 1);
-    p.note('Failed to list providers', 'Error');
-    await exit(1);
-    return null;
-  }
-  const providers = providersResult.value;
-  s.stop('Providers fetched');
-
-  return { lib, providers };
-}
+import {
+  findPresetsUsingModel,
+  fetchProvidersWithModels,
+  requireModelsConfigOrExit,
+  type SDKWithProviders,
+} from './utils.js';
 
 /**
  * Runs an interactive loop to select and validate models from providers.
@@ -465,7 +379,7 @@ export async function handleModelsEdit(): Promise<void> {
  * @returns Resolves when the operation completes.
  */
 export async function handleModelsList(): Promise<void> {
-  const config = await requireModelsConfig({ usePrompts: false });
+  const config = await requireModelsConfigOrExit({ usePrompts: false });
   if (!config) return;
 
   const models = config.models;
@@ -499,7 +413,7 @@ export async function handleModelsList(): Promise<void> {
  * @returns Resolves when the operation completes.
  */
 export async function handleModelsValidate(): Promise<void> {
-  const config = await requireModelsConfig({ usePrompts: false });
+  const config = await requireModelsConfigOrExit({ usePrompts: false });
   if (!config) return;
 
   const models = config.models;

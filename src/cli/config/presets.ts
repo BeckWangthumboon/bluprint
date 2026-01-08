@@ -3,20 +3,19 @@ import type { ModelConfig, ModelPreset, ModelsConfig, BluprintConfig } from '../
 import {
   AGENT_TYPES,
   formatModelConfig,
-  validatePreset,
+  validatePresetPool,
   configUtils,
   ensureConfigDir,
 } from '../../config/index.js';
 import { exit } from '../../exit.js';
-
-function buildModelOptions(models: ModelConfig[]): Array<{ value: string; label: string }> {
-  return models
-    .map((model) => ({
-      value: formatModelConfig(model),
-      label: formatModelConfig(model),
-    }))
-    .sort((a, b) => a.label.localeCompare(b.label));
-}
+import {
+  connectToOpenCodeOrExit,
+  requireModelsConfigOrExit,
+  validateMultiplePresets,
+  validatePresets,
+  formatModelWithStatus,
+  buildModelOptionsWithStatus,
+} from './utils.js';
 
 function parseModelSelection(value: string): ModelConfig {
   const parts = value.split('/');
@@ -38,26 +37,6 @@ function buildPresetOptions(
 }
 
 /**
- * Reads the models config, displaying an error and exiting if unavailable.
- *
- * @returns The models config, or null if the process is exiting due to error.
- */
-async function readModelsConfigOrExit(): Promise<ModelsConfig | null> {
-  const result = await configUtils.models.read();
-  if (result.isErr()) {
-    const error = result.error;
-    const missingMsg = "No models.json found. Run 'bluprint config models add' first.";
-    const errorMsg = 'Failed to read models config';
-    const msg = error.type === 'CONFIG_FILE_MISSING' ? missingMsg : errorMsg;
-
-    p.note(msg, 'Error');
-    await exit(1);
-    return null;
-  }
-  return result.value;
-}
-
-/**
  * Persists a preset to the config file (used for both add and update).
  *
  * Validates the preset, writes to config, and exits the process.
@@ -73,7 +52,7 @@ async function persistPreset(
   config: ModelsConfig,
   action: 'Added' | 'Updated'
 ): Promise<void> {
-  const validation = validatePreset(preset, config.models, presetName);
+  const validation = validatePresetPool(preset, config.models, presetName);
   if (validation.isErr()) {
     const error = validation.error;
     p.note(`Preset validation failed: ${error.type}`, 'Error');
@@ -117,13 +96,14 @@ async function persistPreset(
  *
  * Prompts the user for a preset name and model selections for each agent type,
  * validates the selections, and saves the preset to the config file.
+ * Shows validation status for each model in the selection list.
  *
  * @returns Resolves when the operation completes.
  */
 export async function handlePresetsAdd(): Promise<void> {
   p.intro('Add model preset');
 
-  const config = await readModelsConfigOrExit();
+  const config = await requireModelsConfigOrExit({ usePrompts: true });
   if (!config) return;
 
   if (config.models.length === 0) {
@@ -131,6 +111,9 @@ export async function handlePresetsAdd(): Promise<void> {
     await exit(0);
     return;
   }
+
+  const lib = await connectToOpenCodeOrExit(true);
+  if (!lib) return;
 
   const presetNameResult = await p.text({
     message: 'Preset name',
@@ -156,7 +139,7 @@ export async function handlePresetsAdd(): Promise<void> {
     return;
   }
 
-  const modelOptions = buildModelOptions(config.models);
+  const modelOptions = await buildModelOptionsWithStatus(config.models, lib);
   const preset: Partial<ModelPreset> = {};
 
   for (const agentType of AGENT_TYPES) {
@@ -183,13 +166,14 @@ export async function handlePresetsAdd(): Promise<void> {
  *
  * Prompts the user to select a preset and edit model selections for each agent type,
  * validates the selections, and updates the preset in the config file.
+ * Shows current preset with validation status before editing.
  *
  * @returns Resolves when the operation completes.
  */
 export async function handlePresetsEdit(): Promise<void> {
   p.intro('Edit model preset');
 
-  const config = await readModelsConfigOrExit();
+  const config = await requireModelsConfigOrExit({ usePrompts: true });
   if (!config) return;
 
   if (config.models.length === 0) {
@@ -204,6 +188,9 @@ export async function handlePresetsEdit(): Promise<void> {
     await exit(0);
     return;
   }
+
+  const lib = await connectToOpenCodeOrExit(true);
+  if (!lib) return;
 
   const presetOptions = buildPresetOptions(config.presets);
   const selectPresetResult = await p.select({
@@ -220,18 +207,29 @@ export async function handlePresetsEdit(): Promise<void> {
   const presetName = selectPresetResult as string;
   const currentPreset = config.presets[presetName]!;
 
+  p.log.message(`\nCurrent configuration for "${presetName}":`);
+  const currentPresetStatus = await validatePresets(currentPreset, config.models, lib);
+  for (const agentType of AGENT_TYPES) {
+    const model = currentPreset[agentType];
+    const status = currentPresetStatus[agentType];
+    const formatted = formatModelWithStatus(model, status);
+    p.log.message(`  ${agentType}: ${formatted}`);
+  }
+  p.log.message('');
+
   const updatedPreset: ModelPreset = { ...currentPreset } as ModelPreset;
+
+  const allModelOptionsDisplay = await buildModelOptionsWithStatus(config.models, lib);
 
   for (const agentType of AGENT_TYPES) {
     const currentModel = formatModelConfig(currentPreset[agentType]);
-    const allModelOptions = buildModelOptions(config.models);
 
-    const currentModelOption = allModelOptions.find((opt) => opt.value === currentModel);
-    const otherModelOptions = allModelOptions.filter((opt) => opt.value !== currentModel);
+    const currentModelOption = allModelOptionsDisplay.find((opt) => opt.value === currentModel);
+    const otherModelOptions = allModelOptionsDisplay.filter((opt) => opt.value !== currentModel);
 
     const modelOptions = currentModelOption
       ? [currentModelOption, ...otherModelOptions]
-      : allModelOptions;
+      : allModelOptionsDisplay;
 
     const selectResult = await p.select({
       message: `Select model for ${agentType}`,
@@ -262,7 +260,7 @@ export async function handlePresetsEdit(): Promise<void> {
 export async function handlePresetsRemove(): Promise<void> {
   p.intro('Remove model preset');
 
-  const config = await readModelsConfigOrExit();
+  const config = await requireModelsConfigOrExit({ usePrompts: true });
   if (!config) return;
 
   const presetNames = Object.keys(config.presets);
@@ -285,7 +283,7 @@ export async function handlePresetsRemove(): Promise<void> {
   }
 
   const selectedName = selectedPresetResult as string;
-  const { [selectedName]: _, ...remainingPresets } = config.presets;
+  const { [selectedName]: removedPreset, ...remainingPresets } = config.presets;
 
   const ensureDirResult = await ensureConfigDir();
   if (ensureDirResult.isErr()) {
@@ -316,11 +314,12 @@ export async function handlePresetsRemove(): Promise<void> {
  * Handles the "list presets" command.
  *
  * Displays all configured presets with their agent types and models.
+ * Shows validation status for each model (pool membership and SDK validity).
  *
  * @returns Resolves when the operation completes.
  */
 export async function handlePresetsList(): Promise<void> {
-  const config = await readModelsConfigOrExit();
+  const config = await requireModelsConfigOrExit({ usePrompts: false });
   if (!config) return;
 
   const presets = config.presets;
@@ -331,6 +330,11 @@ export async function handlePresetsList(): Promise<void> {
     return;
   }
 
+  const lib = await connectToOpenCodeOrExit(false);
+  if (!lib) return;
+
+  const modelStatusMap = await validateMultiplePresets(presets, config.models, lib);
+
   const sortedPresetNames = Object.keys(presets).sort((a, b) => a.localeCompare(b));
 
   console.log(`Presets (${sortedPresetNames.length}):`);
@@ -338,7 +342,11 @@ export async function handlePresetsList(): Promise<void> {
     console.log(`  ${presetName}:`);
     const preset = presets[presetName]!;
     for (const agentType of AGENT_TYPES) {
-      console.log(`    ${agentType}: ${formatModelConfig(preset[agentType])}`);
+      const model = preset[agentType];
+      const modelKey = formatModelConfig(model);
+      const status = modelStatusMap.get(modelKey);
+      const formatted = status ? formatModelWithStatus(model, status) : modelKey;
+      console.log(`    ${agentType}: ${formatted}`);
     }
   }
 
@@ -349,13 +357,14 @@ export async function handlePresetsList(): Promise<void> {
  * Handles the "set default preset" command.
  *
  * Prompts the user to select a preset to set as the default and updates the bluprint config.
+ * Shows validation status for the selected preset and warns about invalid models.
  *
  * @returns Resolves when the operation completes.
  */
 export async function handlePresetsDefault(): Promise<void> {
-  p.intro('Set default model preset');
+  p.intro('Set default preset');
 
-  const config = await readModelsConfigOrExit();
+  const config = await requireModelsConfigOrExit({ usePrompts: true });
   if (!config) return;
 
   const presetNames = Object.keys(config.presets);
@@ -364,6 +373,9 @@ export async function handlePresetsDefault(): Promise<void> {
     await exit(0);
     return;
   }
+
+  const lib = await connectToOpenCodeOrExit(true);
+  if (!lib) return;
 
   const presetOptions = buildPresetOptions(config.presets);
   const selectedPresetResult = await p.select({
@@ -380,11 +392,39 @@ export async function handlePresetsDefault(): Promise<void> {
   const selectedPresetName = selectedPresetResult as string;
   const selectedPreset = config.presets[selectedPresetName]!;
 
-  const validation = validatePreset(selectedPreset, config.models, selectedPresetName);
-  if (validation.isErr()) {
-    p.note(`Preset "${selectedPresetName}" is invalid. Fix it before setting default.`, 'Error');
+  const poolValidation = validatePresetPool(selectedPreset, config.models, selectedPresetName);
+  if (poolValidation.isErr()) {
+    p.note(
+      `Preset "${selectedPresetName}" is invalid (models not in pool). Fix it before setting default.`,
+      'Error'
+    );
     await exit(1);
     return;
+  }
+
+  const modelStatuses = await validatePresets(selectedPreset, config.models, lib);
+
+  p.log.message(`\nSelected preset "${selectedPresetName}":`);
+  for (const agentType of AGENT_TYPES) {
+    const model = selectedPreset[agentType];
+    const status = modelStatuses[agentType];
+    const formatted = formatModelWithStatus(model, status);
+    p.log.message(`  ${agentType}: ${formatted}`);
+  }
+
+  const hasInvalidModels = Object.values(modelStatuses).some((s) => s.validInOpenCode === false);
+
+  if (hasInvalidModels) {
+    p.log.warn('\nThis preset contains invalid models.');
+    const confirmResult = await p.confirm({
+      message: 'Set as default anyway?',
+    });
+
+    if (p.isCancel(confirmResult) || !confirmResult) {
+      p.cancel('Operation cancelled');
+      await exit(0);
+      return;
+    }
   }
 
   const bluprintConfigResult = await configUtils.bluprint.read();
@@ -406,7 +446,7 @@ export async function handlePresetsDefault(): Promise<void> {
     return;
   }
 
-  p.log.message(`Default model preset set to "${selectedPresetName}"`);
+  p.log.message(`\nDefault model preset set to "${selectedPresetName}"`);
   p.outro('Done!');
   await exit(0);
 }

@@ -12,7 +12,7 @@ import { configUtils, modelConfigEquals } from './io.js';
  * @param presetName  The name of the preset being validated
  * @returns           Result<void, ConfigValidationError> - ok if validation passes, err if validation fails
  */
-export const validatePreset = (
+export const validatePresetPool = (
   preset: ModelPreset,
   models: ModelConfig[],
   presetName: string
@@ -52,7 +52,7 @@ export const resolveConfig = (): ResultAsync<ResolvedConfig, ConfigValidationErr
         } as const);
       }
 
-      return validatePreset(preset, modelsConfig.models, defaultPreset).map(() => {
+      return validatePresetPool(preset, modelsConfig.models, defaultPreset).map(() => {
         const resolvedConfig: ResolvedConfig = {
           limits,
           timeouts,
