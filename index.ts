@@ -9,6 +9,12 @@ import {
   handleModelsValidate,
 } from './src/cli/config/models.js';
 import {
+  handleConfigShow,
+  handleConfigGet,
+  handleConfigSet,
+  handleConfigReset,
+} from './src/cli/config/general.js';
+import {
   handlePresetsAdd,
   handlePresetsEdit,
   handlePresetsRemove,
@@ -97,6 +103,71 @@ await yargs(hideBin(process.argv))
               .demandCommand(1, 'You must provide a models subcommand')
               .strict(),
           () => {}
+        )
+        .command(
+          'show',
+          'Show all general config values',
+          (yargs) =>
+            yargs.option('json', {
+              type: 'boolean',
+              description: 'Output as JSON',
+              default: false,
+            }),
+          async (argv) => {
+            await handleConfigShow({ json: argv.json as boolean });
+          }
+        )
+        .command(
+          'get',
+          'Get a specific general config value',
+          (yargs) =>
+            yargs.positional('key', {
+              type: 'string',
+              description: 'Config key (e.g., limits.maxIterations)',
+              demandOption: true,
+            }),
+          async (argv) => {
+            await handleConfigGet(argv.key as string);
+          }
+        )
+        .command(
+          'set',
+          'Set a general config value',
+          (yargs) =>
+            yargs
+              .positional('key', {
+                type: 'string',
+                description: 'Config key (e.g., limits.maxIterations)',
+                demandOption: true,
+              })
+              .positional('value', {
+                type: 'string',
+                description: 'Positive integer value',
+                demandOption: true,
+              }),
+          async (argv) => {
+            await handleConfigSet(argv.key as string, argv.value as string);
+          }
+        )
+        .command(
+          'reset',
+          'Reset general config value(s) to defaults',
+          (yargs) =>
+            yargs
+              .positional('key', {
+                type: 'string',
+                description: 'Config key (e.g., limits.maxIterations)',
+              })
+              .option('all', {
+                type: 'boolean',
+                description: 'Reset all general config values',
+                default: false,
+              }),
+          async (argv) => {
+            await handleConfigReset(argv.key as string | undefined, {
+              all: argv.all as boolean,
+            });
+          }
         )
         .command(
           'presets',
