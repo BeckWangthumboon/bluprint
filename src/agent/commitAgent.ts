@@ -3,23 +3,22 @@ import { exec } from '../shell.js';
 import {
   parseTextResponse,
   toError,
-  getModelConfig,
   loadPromptFile,
   unwrapResultAsync,
   cleanupSession,
   withTimeout,
-  getTimeoutMs,
 } from './utils.js';
 import { readState } from '../state.js';
 import { workspace } from '../workspace.js';
 import { getPlanStep } from './planUtils.js';
 import { getOpenCodeLib, abortAndCleanup } from './opencodesdk.js';
 import type { ModelConfig } from './types.js';
+import type { ModelConfig as ConfigModelConfig } from '../config/index.js';
 
-const COMMIT_DEFAULT_MODEL: ModelConfig = {
-  providerID: 'google',
-  modelID: 'gemini-3-flash',
-};
+export interface CommitAgentConfig {
+  model: ConfigModelConfig;
+  timeoutMs: number;
+}
 
 export interface CommitResult {
   hash: string;
@@ -66,23 +65,24 @@ const generateCommitMessage = (
   gitDiff: string,
   model: ModelConfig,
   iteration: number,
-  signal: AbortSignal
+  signal: AbortSignal,
+  timeoutMs: number
 ): ResultAsync<string, Error> => {
   // remove the "## N" header from plan step
   const stepContent = currentStep.replace(/^##\s+\d+\s+[^\n]*\n/, '').trim();
 
   const userPrompt = `# Current Plan Step (for context)
-${stepContent}
+ ${stepContent}
 
 # Git Status
-\`\`\`
-${gitStatus}
-\`\`\`
+ \`\`\`
+ ${gitStatus}
+ \`\`\`
 
 # Git Diff (Staged Changes)
-\`\`\`diff
-${gitDiff || '(no diff available)'}
-\`\`\`
+ \`\`\`diff
+ ${gitDiff || '(no diff available)'}
+ \`\`\`
 
 Generate a commit message based on the CODE CHANGES shown in the diff.
 The plan step is provided for context, but your commit message should describe what code changed, not the task itself.
@@ -91,8 +91,6 @@ If you need more context about any files, use your tools to read them.`;
 
   return getOpenCodeLib().andThen((lib) =>
     lib.session.create('Commit Message Generation').andThen((session) => {
-      const timeoutMs = getTimeoutMs('COMMIT_AGENT_TIMEOUT_MS', 300_000);
-
       return ResultAsync.fromPromise(
         withTimeout(
           unwrapResultAsync(
@@ -162,12 +160,14 @@ const commitAndGetResult = (commitMessage: string): ResultAsync<CommitResult, Er
  * or null if there are no changes to commit.
  * @param iteration - The current loop iteration number
  * @param signal - AbortSignal to cancel the operation
+ * @param config - Resolved runtime configuration containing model and timeout settings
  */
 const createCommitForTask = (
   iteration: number,
-  signal: AbortSignal
+  signal: AbortSignal,
+  config: CommitAgentConfig
 ): ResultAsync<CommitResult | null, Error> => {
-  const model = getModelConfig('COMMIT_AGENT_MODEL', COMMIT_DEFAULT_MODEL);
+  const model = config.model;
 
   return stageAndGetGitInfo().andThen((gitInfo) => {
     if (!gitInfo) {
@@ -202,7 +202,8 @@ const createCommitForTask = (
           gitDiff,
           model,
           iteration,
-          signal
+          signal,
+          config.timeoutMs
         ).andThen((commitMessage) => commitAndGetResult(commitMessage))
       );
   });
