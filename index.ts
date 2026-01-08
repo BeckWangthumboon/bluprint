@@ -118,7 +118,7 @@ await yargs(hideBin(process.argv))
           }
         )
         .command(
-          'get',
+          'get <key>',
           'Get a specific general config value',
           (yargs) =>
             yargs.positional('key', {
@@ -131,7 +131,7 @@ await yargs(hideBin(process.argv))
           }
         )
         .command(
-          'set',
+          'set <key> <value>',
           'Set a general config value',
           (yargs) =>
             yargs
@@ -150,7 +150,7 @@ await yargs(hideBin(process.argv))
           }
         )
         .command(
-          'reset',
+          'reset [key]',
           'Reset general config value(s) to defaults',
           (yargs) =>
             yargs
