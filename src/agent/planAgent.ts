@@ -1,28 +1,27 @@
 import { ResultAsync, err } from 'neverthrow';
 import { workspace } from '../workspace.js';
-import { generateSummary, SUMMARIZER_DEFAULT_MODEL } from './summarizerAgent.js';
+import { generateSummary } from './summarizerAgent.js';
 import { getOpenCodeLib, type Session } from './opencodesdk.js';
 import {
   parseTextResponse,
   toError,
-  getModelConfig,
   loadPromptFile,
   unwrapResultAsync,
   cleanupSession,
   withTimeout,
-  getTimeoutMs,
 } from './utils.js';
-import type { ModelConfig } from './types.js';
+import type { ModelConfig } from '../config/index.js';
 
-const PLAN_DEFAULT_MODEL: ModelConfig = {
-  providerID: 'google',
-  modelID: 'claude-sonnet-4-5',
-};
+export interface PlanAgentConfig {
+  model: ModelConfig;
+  timeoutMs: number;
+  summaryModel: ModelConfig;
+  summaryTimeoutMs: number;
+}
 
-export const generatePlan = (): ResultAsync<void, Error> => {
-  // Get model configs for both plan and summary agents
-  const planModel = getModelConfig('PLAN_AGENT_MODEL', PLAN_DEFAULT_MODEL);
-  const summaryModel = getModelConfig('SUMMARIZER_AGENT_MODEL', SUMMARIZER_DEFAULT_MODEL);
+export const generatePlan = (config: PlanAgentConfig): ResultAsync<void, Error> => {
+  const planModel = config.model;
+  const summaryModel = config.summaryModel;
 
   // Validate both models upfront before doing any work
   return getOpenCodeLib().andThen((lib) =>
@@ -55,7 +54,7 @@ export const generatePlan = (): ResultAsync<void, Error> => {
           }));
         })
         .andThen(({ spec, systemPrompt }) => {
-          const timeoutMs = getTimeoutMs('PLAN_AGENT_TIMEOUT_MS', 600_000);
+          const timeoutMs = config.timeoutMs;
 
           return lib.session.create('Plan Generation').andThen((session) =>
             ResultAsync.fromPromise(
@@ -102,7 +101,12 @@ export const generatePlan = (): ResultAsync<void, Error> => {
           workspace.cache.plan
             .write(plan)
             .mapErr((e) => new Error(`Error saving plan: ${e.message}`))
-            .andThen(() => generateSummary())
+            .andThen(() =>
+              generateSummary({
+                model: config.summaryModel,
+                timeoutMs: config.summaryTimeoutMs,
+              })
+            )
             .map(() => {
               console.log('Plan generated successfully');
             })
