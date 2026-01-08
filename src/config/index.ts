@@ -19,4 +19,4 @@ export {
 } from './io.js';
 
 export type { GeneralConfigKey } from './general.js';
-export { GENERAL_CONFIG_KEYS, readGeneralConfig } from './general.js';
+export { GENERAL_CONFIG_KEYS, readGeneralConfig, getTimeoutMs } from './general.js';
