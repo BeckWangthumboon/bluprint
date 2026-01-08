@@ -85,7 +85,7 @@ function getConfigValue(key: GeneralConfigKey, config: GeneralConfig): number {
  *
  * Returns a new config object with the value set, leaving other fields unchanged.
  *
- * @param key - The config key to update (e.g., 'timeouts.codingAgentMs').
+ * @param key - The config key to update (e.g., 'timeouts.codingAgentMin').
  * @param value - The new numeric value to set.
  * @param config - The existing BluprintConfig to update.
  * @returns A new BluprintConfig with the updated value.
@@ -152,11 +152,11 @@ export async function handleConfigShow(options: { json: boolean }): Promise<void
     console.log('General config:');
     console.log(`  ${GENERAL_CONFIG_KEYS[0]}: ${config.limits.maxIterations}`);
     console.log(`  ${GENERAL_CONFIG_KEYS[1]}: ${config.limits.maxTimeMinutes}`);
-    console.log(`  ${GENERAL_CONFIG_KEYS[2]}: ${config.timeouts.codingAgentMs}`);
-    console.log(`  ${GENERAL_CONFIG_KEYS[3]}: ${config.timeouts.masterAgentMs}`);
-    console.log(`  ${GENERAL_CONFIG_KEYS[4]}: ${config.timeouts.planAgentMs}`);
-    console.log(`  ${GENERAL_CONFIG_KEYS[5]}: ${config.timeouts.summarizerAgentMs}`);
-    console.log(`  ${GENERAL_CONFIG_KEYS[6]}: ${config.timeouts.commitAgentMs}`);
+    console.log(`  ${GENERAL_CONFIG_KEYS[2]}: ${config.timeouts.codingAgentMin}`);
+    console.log(`  ${GENERAL_CONFIG_KEYS[3]}: ${config.timeouts.masterAgentMin}`);
+    console.log(`  ${GENERAL_CONFIG_KEYS[4]}: ${config.timeouts.planAgentMin}`);
+    console.log(`  ${GENERAL_CONFIG_KEYS[5]}: ${config.timeouts.summarizerAgentMin}`);
+    console.log(`  ${GENERAL_CONFIG_KEYS[6]}: ${config.timeouts.commitAgentMin}`);
   }
 
   await exit(0);
@@ -198,7 +198,7 @@ export async function handleConfigGet(key: string): Promise<void> {
  * Updates a single config key to a new value. Creates the config file if it doesn't exist.
  * Validates that the key is known and the value is a positive integer.
  *
- * @param key - The config key to update (e.g., 'timeouts.codingAgentMs').
+ * @param key - The config key to update (e.g., 'timeouts.codingAgentMin').
  * @param value - The new value as a string (must be a positive integer).
  */
 export async function handleConfigSet(key: string, value: string): Promise<void> {

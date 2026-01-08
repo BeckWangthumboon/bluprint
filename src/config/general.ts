@@ -7,11 +7,11 @@ import { DEFAULT_GENERAL_CONFIG } from './defaults.js';
 export const GENERAL_CONFIG_KEYS = [
   'limits.maxIterations',
   'limits.maxTimeMinutes',
-  'timeouts.codingAgentMs',
-  'timeouts.masterAgentMs',
-  'timeouts.planAgentMs',
-  'timeouts.summarizerAgentMs',
-  'timeouts.commitAgentMs',
+  'timeouts.codingAgentMin',
+  'timeouts.masterAgentMin',
+  'timeouts.planAgentMin',
+  'timeouts.summarizerAgentMin',
+  'timeouts.commitAgentMin',
 ] as const;
 
 export type GeneralConfigKey = (typeof GENERAL_CONFIG_KEYS)[number];

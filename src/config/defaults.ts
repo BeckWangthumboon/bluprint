@@ -6,11 +6,11 @@ export const DEFAULT_LIMITS_CONFIG: LimitsConfig = {
 };
 
 export const DEFAULT_TIMEOUTS_CONFIG: TimeoutsConfig = {
-  codingAgentMs: 300000,
-  masterAgentMs: 300000,
-  planAgentMs: 600000,
-  summarizerAgentMs: 300000,
-  commitAgentMs: 300000,
+  codingAgentMin: 5,
+  masterAgentMin: 5,
+  planAgentMin: 10,
+  summarizerAgentMin: 5,
+  commitAgentMin: 5,
 };
 
 export const DEFAULT_GENERAL_CONFIG: GeneralConfig = {

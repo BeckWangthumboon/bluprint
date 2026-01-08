@@ -28,11 +28,11 @@ export const LimitsConfigSchema = z.object({
 });
 
 export const TimeoutsConfigSchema = z.object({
-  codingAgentMs: z.number().int().positive(),
-  masterAgentMs: z.number().int().positive(),
-  planAgentMs: z.number().int().positive(),
-  summarizerAgentMs: z.number().int().positive(),
-  commitAgentMs: z.number().int().positive(),
+  codingAgentMin: z.number().int().positive(),
+  masterAgentMin: z.number().int().positive(),
+  planAgentMin: z.number().int().positive(),
+  summarizerAgentMin: z.number().int().positive(),
+  commitAgentMin: z.number().int().positive(),
 });
 
 export const BluprintConfigSchema = z.object({
