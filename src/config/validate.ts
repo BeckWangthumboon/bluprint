@@ -2,7 +2,7 @@ import { Result, ResultAsync, err, ok } from 'neverthrow';
 import type { ModelPreset, ModelConfig, ResolvedConfig } from './schemas.js';
 import { AGENT_TYPES } from './schemas.js';
 import type { ConfigValidationError } from './types.js';
-import { configUtils, modelConfigEquals } from './io.js';
+import { configUtils, modelConfigEquals, formatModelConfig } from './io.js';
 
 /**
  * Validates a model preset. Check if all models are in model pool,
@@ -35,32 +35,71 @@ export const validatePresetPool = (
 };
 
 /**
- * Resolves and validates the configuration, ensuring the default model preset exists and is valid.
+ * Gets the default preset name from the bluprint config.
  *
+ * @returns ResultAsync containing the default preset name (or undefined if not set) or a ConfigValidationError
+ */
+export const getDefaultPresetName = (): ResultAsync<string | undefined, ConfigValidationError> => {
+  return configUtils.bluprint.read().map((config) => config.defaultPreset);
+};
+
+/**
+ * Resolves and validates the configuration with a specific preset.
+ *
+ * @param presetName - The name of the preset to use
  * @returns ResultAsync containing the resolved configuration or a ConfigValidationError
  */
-export const resolveConfig = (): ResultAsync<ResolvedConfig, ConfigValidationError> => {
+export const resolveConfigWithPreset = (
+  presetName: string
+): ResultAsync<ResolvedConfig, ConfigValidationError> => {
   return ResultAsync.combine([configUtils.bluprint.read(), configUtils.models.read()]).andThen(
     ([bluprintConfig, modelsConfig]) => {
-      const { defaultPreset, limits, timeouts } = bluprintConfig;
-      const preset = modelsConfig.presets[defaultPreset];
+      const { limits, timeouts } = bluprintConfig;
+
+      const preset = modelsConfig.presets[presetName];
 
       if (!preset) {
         return err({
           type: 'PRESET_NOT_FOUND',
-          presetName: defaultPreset,
+          presetName,
         } as const);
       }
 
-      return validatePresetPool(preset, modelsConfig.models, defaultPreset).map(() => {
+      return validatePresetPool(preset, modelsConfig.models, presetName).map(() => {
         const resolvedConfig: ResolvedConfig = {
           limits,
           timeouts,
           preset,
-          presetName: defaultPreset,
+          presetName,
         };
         return resolvedConfig;
       });
     }
   );
+};
+
+/**
+ * Formats a configuration error into a user-friendly message.
+ *
+ * @param error - The ConfigValidationError to format
+ * @returns A string describing the error
+ */
+export const formatConfigError = (error: ConfigValidationError): string => {
+  switch (error.type) {
+    case 'CONFIG_FILE_MISSING':
+      return `Configuration file not found: ${error.file}`;
+    case 'CONFIG_FILE_READ_ERROR':
+      return `Failed to read configuration file ${error.file}: ${error.message}`;
+    case 'CONFIG_FILE_INVALID_JSON':
+      return `Invalid JSON in ${error.file}: ${error.message}`;
+    case 'CONFIG_SCHEMA_INVALID':
+      return `Invalid configuration in ${error.file}: ${error.message}`;
+    case 'PRESET_NOT_FOUND':
+      return `Model preset "${error.presetName}" not found in models.json`;
+    case 'MODEL_NOT_IN_POOL':
+      return `Preset "${error.presetName}" uses model ${formatModelConfig(error.model)} for ${error.agentType}, but it's not in the models pool`;
+    default:
+      const exhaustiveCheck: never = error;
+      return exhaustiveCheck;
+  }
 };

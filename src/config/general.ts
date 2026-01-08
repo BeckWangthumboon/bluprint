@@ -4,16 +4,7 @@ import type { ConfigValidationError } from './types.js';
 import { configUtils } from './io.js';
 import { DEFAULT_GENERAL_CONFIG } from './defaults.js';
 
-export type GeneralConfigKey =
-  | 'limits.maxIterations'
-  | 'limits.maxTimeMinutes'
-  | 'timeouts.codingAgentMs'
-  | 'timeouts.masterAgentMs'
-  | 'timeouts.planAgentMs'
-  | 'timeouts.summarizerAgentMs'
-  | 'timeouts.commitAgentMs';
-
-export const GENERAL_CONFIG_KEYS: GeneralConfigKey[] = [
+export const GENERAL_CONFIG_KEYS = [
   'limits.maxIterations',
   'limits.maxTimeMinutes',
   'timeouts.codingAgentMs',
@@ -21,8 +12,18 @@ export const GENERAL_CONFIG_KEYS: GeneralConfigKey[] = [
   'timeouts.planAgentMs',
   'timeouts.summarizerAgentMs',
   'timeouts.commitAgentMs',
-];
+] as const;
 
+export type GeneralConfigKey = (typeof GENERAL_CONFIG_KEYS)[number];
+
+/**
+ * Reads the general configuration from the bluprint config file.
+ *
+ * Extracts the limits and timeouts sections from the bluprint config.
+ * Returns default values if the config file is missing.
+ *
+ * @returns A ResultAsync containing the GeneralConfig on success, or a ConfigValidationError on failure.
+ */
 export const readGeneralConfig = (): ResultAsync<GeneralConfig, ConfigValidationError> => {
   return configUtils.bluprint
     .read()

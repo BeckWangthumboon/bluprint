@@ -15,6 +15,12 @@ export type GeneralConfigCliError =
   | { type: 'INVALID_VALUE'; key: string; value: string }
   | { type: 'RESET_USAGE_ERROR'; message: string };
 
+/**
+ * Parses and validates a string as a GeneralConfigKey.
+ *
+ * @param key - The string to parse as a config key.
+ * @returns A Result containing the validated GeneralConfigKey on success, or an UNKNOWN_KEY error.
+ */
 function parseKey(key: string): Result<GeneralConfigKey, GeneralConfigCliError> {
   if (GENERAL_CONFIG_KEYS.includes(key as GeneralConfigKey)) {
     return ok(key as GeneralConfigKey);
@@ -22,6 +28,15 @@ function parseKey(key: string): Result<GeneralConfigKey, GeneralConfigCliError> 
   return err({ type: 'UNKNOWN_KEY', key });
 }
 
+/**
+ * Parses a string as a positive integer for a config key.
+ *
+ * Validates that the string represents a positive safe integer.
+ *
+ * @param key - The config key this value is for (used in error messages).
+ * @param raw - The raw string value to parse.
+ * @returns A Result containing the parsed number on success, or an INVALID_VALUE error.
+ */
 function parsePositiveInt(
   key: GeneralConfigKey,
   raw: string
@@ -40,6 +55,12 @@ function parsePositiveInt(
   return ok(parsed);
 }
 
+/**
+ * Gets the default value for a general config key.
+ *
+ * @param key - The config key to get the default value for.
+ * @returns The default numeric value for the specified key.
+ */
 function getDefaultForKey(key: GeneralConfigKey): number {
   const [section, field] = key.split('.') as ['limits' | 'timeouts', string];
   return DEFAULT_GENERAL_CONFIG[section][
@@ -47,11 +68,28 @@ function getDefaultForKey(key: GeneralConfigKey): number {
   ];
 }
 
+/**
+ * Gets the current value for a config key from a GeneralConfig object.
+ *
+ * @param key - The config key to retrieve (e.g., 'limits.maxIterations').
+ * @param config - The GeneralConfig object to read from.
+ * @returns The numeric value for the specified key.
+ */
 function getConfigValue(key: GeneralConfigKey, config: GeneralConfig): number {
   const [section, field] = key.split('.') as ['limits' | 'timeouts', string];
   return config[section][field as keyof (typeof config)[typeof section]];
 }
 
+/**
+ * Creates a new BluprintConfig with an updated value for the specified key.
+ *
+ * Returns a new config object with the value set, leaving other fields unchanged.
+ *
+ * @param key - The config key to update (e.g., 'timeouts.codingAgentMs').
+ * @param value - The new numeric value to set.
+ * @param config - The existing BluprintConfig to update.
+ * @returns A new BluprintConfig with the updated value.
+ */
 function setConfigValue(
   key: GeneralConfigKey,
   value: number,
@@ -67,6 +105,12 @@ function setConfigValue(
   };
 }
 
+/**
+ * Formats a ConfigValidationError into a human-readable error message.
+ *
+ * @param error - The config validation error to format.
+ * @returns A user-friendly error message string.
+ */
 function formatConfigFileError(error: ConfigValidationError): string {
   switch (error.type) {
     case 'CONFIG_FILE_MISSING':
@@ -82,6 +126,15 @@ function formatConfigFileError(error: ConfigValidationError): string {
   }
 }
 
+/**
+ * Handles the "config show" CLI command.
+ *
+ * Displays all general config values in either JSON or human-readable format.
+ * Exits the process after displaying.
+ *
+ * @param options - Command options.
+ * @param options.json - If true, outputs config as formatted JSON; otherwise displays as key-value pairs.
+ */
 export async function handleConfigShow(options: { json: boolean }): Promise<void> {
   const result = await readGeneralConfig();
 
@@ -109,6 +162,14 @@ export async function handleConfigShow(options: { json: boolean }): Promise<void
   await exit(0);
 }
 
+/**
+ * Handles the "config get" CLI command.
+ *
+ * Retrieves and displays the value of a single config key.
+ * Exits with error if the key is invalid.
+ *
+ * @param key - The config key to retrieve (e.g., 'limits.maxIterations').
+ */
 export async function handleConfigGet(key: string): Promise<void> {
   const keyResult = parseKey(key);
   if (keyResult.isErr()) {
@@ -131,6 +192,15 @@ export async function handleConfigGet(key: string): Promise<void> {
   await exit(0);
 }
 
+/**
+ * Handles the "config set" CLI command.
+ *
+ * Updates a single config key to a new value. Creates the config file if it doesn't exist.
+ * Validates that the key is known and the value is a positive integer.
+ *
+ * @param key - The config key to update (e.g., 'timeouts.codingAgentMs').
+ * @param value - The new value as a string (must be a positive integer).
+ */
 export async function handleConfigSet(key: string, value: string): Promise<void> {
   const keyResult = parseKey(key);
   if (keyResult.isErr()) {
@@ -161,7 +231,6 @@ export async function handleConfigSet(key: string, value: string): Promise<void>
   } else if (configResult.error.type === 'CONFIG_FILE_MISSING') {
     config = {
       ...DEFAULT_GENERAL_CONFIG,
-      defaultPreset: '',
     };
   } else {
     console.error(formatConfigFileError(configResult.error));
@@ -185,6 +254,16 @@ export async function handleConfigSet(key: string, value: string): Promise<void>
   await exit(0);
 }
 
+/**
+ * Handles the "config reset" CLI command.
+ *
+ * Resets config values to their defaults. Can reset a single key or all keys with --all.
+ * Requires an existing config file; errors if none exists.
+ *
+ * @param key - The config key to reset, or undefined if using --all.
+ * @param options - Command options.
+ * @param options.all - If true, resets all general config keys to defaults.
+ */
 export async function handleConfigReset(
   key: string | undefined,
   options: { all: boolean }

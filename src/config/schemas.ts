@@ -38,7 +38,7 @@ export const TimeoutsConfigSchema = z.object({
 export const BluprintConfigSchema = z.object({
   limits: LimitsConfigSchema,
   timeouts: TimeoutsConfigSchema,
-  defaultPreset: z.string().min(1),
+  defaultPreset: z.string().min(1).optional(),
 });
 
 export const GeneralConfigSchema = z.object({
