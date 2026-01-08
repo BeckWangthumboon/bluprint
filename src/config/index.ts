@@ -9,6 +9,9 @@ export {
   formatConfigError,
 } from './validate.js';
 
+export type { PresetRequiredError, ResolveConfigError } from './resolve.js';
+export { resolveRuntimeConfig, formatResolveError } from './resolve.js';
+
 export {
   getConfigDir,
   getConfigFilePath,
