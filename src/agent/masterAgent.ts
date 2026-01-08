@@ -220,9 +220,7 @@ export const reviewAndGenerateTask = (
   const model = getModelConfig('MASTER_AGENT_MODEL', MASTER_DEFAULT_MODEL);
 
   return getOpenCodeLib().andThen((lib) =>
-    lib.provider
-      .validate(model.providerID, model.modelID, { log: true })
-      .andThen((isValid) => {
+    lib.provider.validate(model.providerID, model.modelID, { log: true }).andThen((isValid) => {
       if (!isValid) {
         return err(new Error(`Invalid master model: ${model.providerID}/${model.modelID}`));
       }
