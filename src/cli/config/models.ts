@@ -273,8 +273,9 @@ async function promptRemoveInvalidModels(
   for (const model of models) {
     const validateResult = await lib.provider.validate(model.providerID, model.modelID);
     if (validateResult.isErr()) {
-      invalidModels.push({ model, reason: 'validation failed' });
-      continue;
+      p.note('Failed to validate models in OpenCode', 'Error');
+      await exit(1);
+      return null;
     }
     if (!validateResult.value) {
       invalidModels.push({ model, reason: 'not found in OpenCode' });
