@@ -7,23 +7,6 @@ import { logSessionData } from './logger.js';
 
 export const toError = (e: unknown): Error => (e instanceof Error ? e : new Error(String(e)));
 
-/**
- * Get timeout value from environment variable or use provided default
- */
-export const getTimeoutMs = (envVarName: string, defaultMs: number): number => {
-  const envValue = process.env[envVarName];
-  if (!envValue) return defaultMs;
-
-  const parsed = parseInt(envValue, 10);
-  if (isNaN(parsed) || parsed <= 0) {
-    console.warn(
-      `Invalid ${envVarName} value: "${envValue}". Expected positive integer (ms). Using default.`
-    );
-    return defaultMs;
-  }
-  return parsed;
-};
-
 type TimeoutOptions = {
   ms: number;
   label: string;
@@ -135,25 +118,6 @@ export const withTimeout = async <T>(promise: Promise<T>, options: TimeoutOption
 
 export const isObject = (data: unknown): data is Record<string, unknown> =>
   typeof data === 'object' && data !== null;
-
-export const parseModelFromEnv = (envVarName: string): ModelConfig | null => {
-  const modelEnv = process.env[envVarName];
-  if (!modelEnv) return null;
-
-  const [providerID, modelID] = modelEnv.split('/');
-  if (!providerID || !modelID) {
-    console.warn(
-      `Invalid ${envVarName} format: "${modelEnv}". Expected "provider/model". Using default.`
-    );
-    return null;
-  }
-
-  return { providerID, modelID };
-};
-
-export const getModelConfig = (envVarName: string, defaultModel: ModelConfig): ModelConfig => {
-  return parseModelFromEnv(envVarName) || defaultModel;
-};
 
 export const loadPromptFile = (promptFileName: string): ResultAsync<string, Error> => {
   const promptPath = join(dirname(new URL(import.meta.url).pathname), 'prompts', promptFileName);
