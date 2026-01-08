@@ -30,12 +30,20 @@ export const LimitsConfigSchema = z.object({
 export const TimeoutsConfigSchema = z.object({
   codingAgentMs: z.number().int().positive(),
   masterAgentMs: z.number().int().positive(),
+  planAgentMs: z.number().int().positive(),
+  summarizerAgentMs: z.number().int().positive(),
+  commitAgentMs: z.number().int().positive(),
 });
 
 export const BluprintConfigSchema = z.object({
   limits: LimitsConfigSchema,
   timeouts: TimeoutsConfigSchema,
   defaultPreset: z.string().min(1),
+});
+
+export const GeneralConfigSchema = z.object({
+  limits: LimitsConfigSchema,
+  timeouts: TimeoutsConfigSchema,
 });
 
 export type ModelConfig = z.infer<typeof ModelConfigSchema>;
@@ -45,6 +53,7 @@ export type ModelsConfig = z.infer<typeof ModelsConfigSchema>;
 export type LimitsConfig = z.infer<typeof LimitsConfigSchema>;
 export type TimeoutsConfig = z.infer<typeof TimeoutsConfigSchema>;
 export type BluprintConfig = z.infer<typeof BluprintConfigSchema>;
+export type GeneralConfig = z.infer<typeof GeneralConfigSchema>;
 
 export interface ResolvedConfig {
   limits: LimitsConfig;
