@@ -185,7 +185,8 @@ export async function handlePresetsEdit(): Promise<void> {
 
   const presetNames = Object.keys(config.presets);
   if (presetNames.length === 0) {
-    p.note('No presets added.', 'Warning');
+    p.log.message('No presets added. Run "bluprint config presets add" first.');
+    p.log.message('');
     await exit(0);
     return;
   }
@@ -270,7 +271,8 @@ export async function handlePresetsRemove(): Promise<void> {
 
   const presetNames = Object.keys(config.presets);
   if (presetNames.length === 0) {
-    p.note('No presets added.', 'Warning');
+    p.log.message('No presets added. Run "bluprint config presets add" first.');
+    p.log.message('');
     await exit(0);
     return;
   }
@@ -372,6 +374,16 @@ export async function handlePresetsList(): Promise<void> {
     return;
   }
 
+  let defaultPresetName: string | undefined = undefined;
+  const bluprintConfigResult = await configUtils.bluprint.read();
+  if (bluprintConfigResult.isOk()) {
+    defaultPresetName = bluprintConfigResult.value.defaultPreset;
+  } else if (bluprintConfigResult.error.type !== 'CONFIG_FILE_MISSING') {
+    p.note('Failed to read bluprint config', 'Error');
+    await exit(1);
+    return;
+  }
+
   const lib = await connectToOpenCodeOrExit(false);
   if (!lib) return;
 
@@ -379,11 +391,19 @@ export async function handlePresetsList(): Promise<void> {
     usePrompts: false,
   });
 
-  const sortedPresetNames = Object.keys(presets).sort((a, b) => a.localeCompare(b));
+  const presetNames = Object.keys(presets);
+  const sortedPresetNames = presetNames
+    .filter((presetName) => presetName !== defaultPresetName)
+    .sort((a, b) => a.localeCompare(b));
+  const orderedPresetNames =
+    defaultPresetName && presets[defaultPresetName]
+      ? [defaultPresetName, ...sortedPresetNames]
+      : sortedPresetNames;
 
-  console.log(`Presets (${sortedPresetNames.length}):`);
-  for (const presetName of sortedPresetNames) {
-    console.log(`  ${presetName}:`);
+  console.log(`Presets (${presetNames.length}):`);
+  for (const presetName of orderedPresetNames) {
+    const defaultSuffix = presetName === defaultPresetName ? ' (default)' : '';
+    console.log(`  ${presetName}${defaultSuffix}:`);
     const preset = presets[presetName]!;
     for (const agentType of AGENT_TYPES) {
       const model = preset[agentType];
@@ -413,15 +433,37 @@ export async function handlePresetsDefault(): Promise<void> {
 
   const presetNames = Object.keys(config.presets);
   if (presetNames.length === 0) {
-    p.note('No presets added.', 'Warning');
+    p.log.message('No presets added. Run "bluprint config presets add" first.');
+    p.log.message('');
     await exit(0);
+    return;
+  }
+
+  const bluprintConfigResult = await configUtils.bluprint.read();
+  if (bluprintConfigResult.isErr() && bluprintConfigResult.error.type !== 'CONFIG_FILE_MISSING') {
+    p.note('Failed to read bluprint config', 'Error');
+    await exit(1);
     return;
   }
 
   const lib = await connectToOpenCodeOrExit(true);
   if (!lib) return;
 
-  const presetOptions = buildPresetOptions(config.presets);
+  const configuredDefaultPreset = bluprintConfigResult.isOk()
+    ? bluprintConfigResult.value.defaultPreset
+    : undefined;
+  const defaultPresetExistsInPresets =
+    configuredDefaultPreset !== undefined && config.presets[configuredDefaultPreset] !== undefined;
+  const presetOptionsBase = buildPresetOptions(config.presets);
+  const presetOptions = defaultPresetExistsInPresets
+    ? [
+        {
+          value: configuredDefaultPreset!,
+          label: `${configuredDefaultPreset} (default)`,
+        },
+        ...presetOptionsBase.filter((option) => option.value !== configuredDefaultPreset),
+      ]
+    : presetOptionsBase;
   const selectedPresetResult = await p.select({
     message: 'Select a preset',
     options: presetOptions,
@@ -476,13 +518,6 @@ export async function handlePresetsDefault(): Promise<void> {
   const ensureDirResult = await ensureConfigDir();
   if (ensureDirResult.isErr()) {
     p.note('Failed to ensure config directory exists', 'Error');
-    await exit(1);
-    return;
-  }
-
-  const bluprintConfigResult = await configUtils.bluprint.read();
-  if (bluprintConfigResult.isErr() && bluprintConfigResult.error.type !== 'CONFIG_FILE_MISSING') {
-    p.note('Failed to read bluprint config', 'Error');
     await exit(1);
     return;
   }
