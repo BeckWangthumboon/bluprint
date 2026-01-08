@@ -80,9 +80,17 @@ await yargs(hideBin(process.argv))
   .command(
     'build',
     'Run the agent loop',
-    () => {},
-    async () => {
-      const result = await runLoop();
+    (yargs) =>
+      yargs.option('preset', {
+        type: 'string',
+        description: 'Model preset to use (uses default if not specified)',
+      }),
+    async (argv) => {
+      const presetOverride = argv.preset as string | undefined;
+
+      const result = await runLoop({
+        config: presetOverride ? { preset: presetOverride } : undefined,
+      });
 
       if (result.isErr()) {
         console.error('Error:', result.error.message);
