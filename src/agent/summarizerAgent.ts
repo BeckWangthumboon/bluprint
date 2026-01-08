@@ -2,24 +2,22 @@ import { ResultAsync, err } from 'neverthrow';
 import { workspace } from '../workspace.js';
 import {
   toError,
-  getModelConfig,
   loadPromptFile,
   parseTextResponse,
   unwrapResultAsync,
   cleanupSession,
   withTimeout,
-  getTimeoutMs,
 } from './utils.js';
-import { getOpenCodeLib, type Session } from './opencodesdk.js';
-import type { ModelConfig } from './types.js';
+import { getOpenCodeLib } from './opencodesdk.js';
+import type { ModelConfig } from '../config/index.js';
 
-export const SUMMARIZER_DEFAULT_MODEL: ModelConfig = {
-  providerID: 'google',
-  modelID: 'gemini-3-flash',
-};
+export interface SummarizerAgentConfig {
+  model: ModelConfig;
+  timeoutMs: number;
+}
 
-const generateSummary = (): ResultAsync<void, Error> => {
-  const model = getModelConfig('SUMMARIZER_AGENT_MODEL', SUMMARIZER_DEFAULT_MODEL);
+const generateSummary = (config: SummarizerAgentConfig): ResultAsync<void, Error> => {
+  const model = config.model;
 
   return workspace.cache.spec
     .read()
@@ -46,8 +44,6 @@ const generateSummary = (): ResultAsync<void, Error> => {
       }));
     })
     .andThen(({ spec, plan, systemPrompt }) => {
-      const timeoutMs = getTimeoutMs('SUMMARIZER_AGENT_TIMEOUT_MS', 300_000);
-
       return getOpenCodeLib().andThen((lib) =>
         lib.session.create('Summary Generation').andThen((session) =>
           ResultAsync.fromPromise(
@@ -66,7 +62,7 @@ const generateSummary = (): ResultAsync<void, Error> => {
                 })
               ),
               {
-                ms: timeoutMs,
+                ms: config.timeoutMs,
                 label: 'Summarizer agent prompt',
                 onTimeout: () => session.abort(),
               }
