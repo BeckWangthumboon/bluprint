@@ -20,7 +20,6 @@ import { isObject, toError } from './utils.js';
 import { initLogger, type ManifestData } from './logger.js';
 import { getAbortSignal } from '../exit.js';
 import { resolveRuntimeConfig, getTimeoutMs, formatResolveError } from '../config/index.js';
-import type { ResolvedConfig } from '../config/index.js';
 
 export interface LoopConfig {
   preset?: string;

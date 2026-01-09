@@ -20,8 +20,6 @@ export interface LoopState {
 }
 
 const STATE_VERSION = '1.0.0';
-const DEFAULT_MAX_ITERATIONS = 50;
-const DEFAULT_MAX_TIME_MINUTES = 15;
 
 const validateState = (data: unknown): data is LoopState => {
   if (typeof data !== 'object' || data === null) return false;
