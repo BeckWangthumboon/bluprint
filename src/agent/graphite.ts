@@ -55,13 +55,13 @@ const getBaseBranch = (): ResultAsync<string, Error> => {
 
 /**
  * Creates a new stacked branch using Graphite CLI.
- * Uses `gt branch create <name>` which automatically tracks the parent branch.
+ * Uses `gt create <name>` which automatically tracks the parent branch.
  *
  * @param branchName - The name of the branch to create
  * @returns ResultAsync resolving to void on success
  */
 const createStackedBranch = (branchName: string): ResultAsync<void, Error> => {
-  return exec('gt', ['branch', 'create', branchName])
+  return exec('gt', ['create', branchName])
     .map(() => undefined)
     .mapErr(
       (error) => new Error(`Failed to create stacked branch '${branchName}': ${error.message}`)
