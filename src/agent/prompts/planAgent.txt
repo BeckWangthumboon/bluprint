@@ -31,27 +31,34 @@ You must output ONLY the plan in the following exact format:
    - Each task should build on previous tasks
    - Group related functionality into the same steps.
 
-4. **Actionable Steps**: 
+4. **Commit-Worthy Steps**:
+   - Each step should represent a single, reviewable unit of work (like a PR)
+   - Steps are implementation-focused, NOT verification-focused
+   - Testing and verification are IMPLICIT - coding agents verify their own work within each step
+   - NEVER create standalone steps like "Run tests", "Verify implementation", "Integration testing", or "Final validation"
+   - Instead, embed verification criteria within each implementation step's Completion Criteria
+
+5. **Actionable Steps**: 
    - Use imperative verbs (Create, Implement, Add, Update)
    - Be specific about what needs to be done
    - Avoid vague descriptions
 
-5. **Testable Outcomes**: 
+6. **Testable Outcomes**: 
    - Each task should have clear completion criteria
    - Mention what should work and shouldn't work after the task is done
 
-6. **Code Examples**: When helpful, include:
+7. **Code Examples**: When helpful, include:
    - Type definitions
    - Function signatures
    - Database schemas
    - API request/response formats
    - Do not include actual code implementations in the plan
 
-7. **Context**:
+8. **Context**:
    - Assume that whoever reads the plan does not have access to the spec file but has access to the codebase
    - Be as explicit as possible for the information regarding the spec file. Leave no room for ambuiguity. 
 
-8. **Tool Use**:
+9. **Tool Use**:
    - Take your time to explore the codebase and affected files to get context before writing your plan
    - Use the explore agent via the task tool for codebase exploration
    - If you need more details about a specific file, use the read tool to read it.

@@ -128,7 +128,8 @@
     2. The JSON must be valid and parseable
     3. The "decision" field must be exactly "accept" or "reject" (lowercase)
     4. The "task" field is REQUIRED only when decision is "reject" and must be a non-empty string
-    5. Do NOT output markdown code blocks - just the raw JSON
+    5. Do NOT wrap output in markdown code blocks (no ```json or ```) - output RAW JSON only
+    6. Your entire response must be parseable by JSON.parse() with no preprocessing
   </json_output_rules>
 
   <behavior_rules>
