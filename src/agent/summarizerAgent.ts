@@ -64,7 +64,7 @@ const generateSummary = (config: SummarizerAgentConfig): ResultAsync<void, Error
               {
                 ms: config.timeoutMs,
                 label: 'Summarizer agent prompt',
-                onTimeout: () => session.abort(),
+                onTimeout: () => void session.abort(),
               }
             ),
             toError

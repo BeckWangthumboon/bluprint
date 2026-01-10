@@ -53,7 +53,19 @@ const serializeValue = (value: unknown, indent = 0): string => {
   }
 
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-    return String(value);
+    return value.toString();
+  }
+
+  if (typeof value === 'bigint') {
+    return value.toString();
+  }
+
+  if (typeof value === 'symbol') {
+    return value.toString();
+  }
+
+  if (typeof value === 'function') {
+    return value.name ? `[Function ${value.name}]` : '[Function]';
   }
 
   if (Array.isArray(value)) {
@@ -77,7 +89,7 @@ const serializeValue = (value: unknown, indent = 0): string => {
       .join('\n');
   }
 
-  return String(value);
+  return JSON.stringify(value) ?? 'null';
 };
 
 const toFrontmatter = (data: Record<string, unknown>): string => {
@@ -91,25 +103,46 @@ const toFrontmatter = (data: Record<string, unknown>): string => {
   return `---\n${lines.join('\n')}\n---`;
 };
 
-/**
- * Combined logger for run logs and debug events
- */
+const isMasterAgentDecision = (
+  value: unknown
+): value is { decision: 'accept' | 'reject'; task?: string } => {
+  if (value === null || typeof value !== 'object') {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+  const decision = record.decision;
+  if (decision !== 'accept' && decision !== 'reject') {
+    return false;
+  }
+
+  if (record.task === undefined) {
+    return true;
+  }
+
+  return typeof record.task === 'string';
+};
+
 const formatMasterAgentResponse = (response: string): string => {
   const parsedJson = Result.fromThrowable(
-    () => JSON.parse(response),
+    (): unknown => JSON.parse(response),
     () => new Error('Invalid JSON')
   )();
 
   if (parsedJson.isErr()) {
     return response;
-  } else {
-    const { decision, task } = parsedJson.value;
-    let returnString = `Decision: ${decision}`;
-    if (decision === 'reject' && task) {
-      returnString += ` \n \n Task: ${task}`;
-    }
-    return returnString;
   }
+
+  if (!isMasterAgentDecision(parsedJson.value)) {
+    return response;
+  }
+
+  const { decision, task } = parsedJson.value;
+  let returnString = `Decision: ${decision}`;
+  if (decision === 'reject' && task) {
+    returnString += ` \n \n Task: ${task}`;
+  }
+  return returnString;
 };
 
 const formatCodingAgentResponse = (response: string): string => {
@@ -317,7 +350,7 @@ const getDebugLogger = (): Pick<Logger, 'debug'> => currentLogger ?? noopLogger;
 /**
  * Initialize a new logger
  */
-const initLogger = async (runId: string): Promise<Logger> => {
+const initLogger = (runId: string): Logger => {
   currentLogger = new Logger(runId);
   return currentLogger;
 };

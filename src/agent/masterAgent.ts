@@ -124,7 +124,7 @@ const callModelWithRepair = (
         ms: timeoutMs,
         label: `Master agent prompt (attempt ${attemptNumber})`,
         signal,
-        onTimeout: () => session.abort(),
+        onTimeout: () => void session.abort(),
         onAbort,
       }
     ),

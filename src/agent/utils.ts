@@ -1,7 +1,6 @@
 import { ResultAsync, errAsync } from 'neverthrow';
 import { fsUtils } from '../fs.js';
 import { join, dirname } from 'path';
-import type { ModelConfig } from '../config/index.js';
 import type { Session } from './opencodesdk.js';
 import { logSessionData } from './logger.js';
 
@@ -108,7 +107,7 @@ export const withTimeout = async <T>(promise: Promise<T>, options: TimeoutOption
       })
     : null;
 
-  const racers: Promise<T | never>[] = [promise, timeoutPromise];
+  const racers: Promise<T>[] = [promise, timeoutPromise as Promise<T>];
   if (abortPromise) {
     racers.push(abortPromise);
   }

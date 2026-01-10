@@ -48,7 +48,9 @@ export async function exit(code: number = 0): Promise<never> {
     try {
       const server = await getOpencodeServer();
       server.close();
-    } catch {}
+    } catch {
+      // Ignore cleanup errors during exit
+    }
   }
   process.exit(code);
 }

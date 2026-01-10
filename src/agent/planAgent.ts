@@ -95,7 +95,7 @@ export const generatePlan = (config?: PlanAgentConfig): ResultAsync<void, Error>
                   {
                     ms: timeoutMs,
                     label: 'Plan agent prompt',
-                    onTimeout: () => session.abort(),
+                    onTimeout: () => void session.abort(),
                   }
                 ),
                 toError

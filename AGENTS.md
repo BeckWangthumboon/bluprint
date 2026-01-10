@@ -12,7 +12,6 @@ Bluprint is a TypeScript CLI tool built with Bun that orchestrates AI agents for
 
 ```bash
 bun run typecheck       # Run TypeScript type checking
-bun tsc --noEmit        # Direct tsc invocation
 ```
 
 ### Formatting
@@ -20,6 +19,14 @@ bun tsc --noEmit        # Direct tsc invocation
 ```bash
 bun run format          # Format all files with Prettier
 bun run format:check    # Check formatting without modifying files
+```
+
+### Linting
+
+```bash
+bun run lint            # Run ESLint with zero warnings allowed
+bun run lint:fix        # Run ESLint and automatically fix issues
+bun run lint:clean      # Run ESLint without cache
 ```
 
 ### Running the CLI
