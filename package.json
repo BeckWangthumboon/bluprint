@@ -4,8 +4,12 @@
   "type": "module",
   "private": true,
   "devDependencies": {
+    "@eslint/js": "^9.21.0",
     "@types/bun": "latest",
-    "prettier": "^3.7.4"
+    "eslint": "^9.21.0",
+    "eslint-config-prettier": "^10.1.1",
+    "prettier": "^3.7.4",
+    "typescript-eslint": "^8.28.0"
   },
   "peerDependencies": {
     "typescript": "^5"
@@ -21,6 +25,8 @@
   "scripts": {
     "typecheck": "bun tsc --noEmit",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
-    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\""
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
   }
 }
