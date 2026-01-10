@@ -16,4 +16,5 @@ export const DEFAULT_TIMEOUTS_CONFIG: TimeoutsConfig = {
 export const DEFAULT_GENERAL_CONFIG: GeneralConfig = {
   limits: DEFAULT_LIMITS_CONFIG,
   timeouts: DEFAULT_TIMEOUTS_CONFIG,
+  specFile: 'spec.md',
 };

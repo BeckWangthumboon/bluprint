@@ -39,11 +39,13 @@ export const BluprintConfigSchema = z.object({
   limits: LimitsConfigSchema,
   timeouts: TimeoutsConfigSchema,
   defaultPreset: z.string().min(1).optional(),
+  specFile: z.string().min(1),
 });
 
 export const GeneralConfigSchema = z.object({
   limits: LimitsConfigSchema,
   timeouts: TimeoutsConfigSchema,
+  specFile: z.string().min(1),
 });
 
 export type ModelConfig = z.infer<typeof ModelConfigSchema>;

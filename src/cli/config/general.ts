@@ -28,6 +28,12 @@ function parseKey(key: string): Result<GeneralConfigKey, GeneralConfigCliError> 
   return err({ type: 'UNKNOWN_KEY', key });
 }
 
+type NestedGeneralConfigKey = Extract<GeneralConfigKey, `${string}.${string}`>;
+
+function isNestedGeneralConfigKey(key: GeneralConfigKey): key is NestedGeneralConfigKey {
+  return key.includes('.');
+}
+
 /**
  * Parses a string as a positive integer for a config key.
  *
@@ -59,9 +65,12 @@ function parsePositiveInt(
  * Gets the default value for a general config key.
  *
  * @param key - The config key to get the default value for.
- * @returns The default numeric value for the specified key.
+ * @returns The default value for the specified key (number or string).
  */
-function getDefaultForKey(key: GeneralConfigKey): number {
+function getDefaultForKey(key: GeneralConfigKey): number | string {
+  if (!isNestedGeneralConfigKey(key)) {
+    return DEFAULT_GENERAL_CONFIG[key];
+  }
   const [section, field] = key.split('.') as ['limits' | 'timeouts', string];
   return DEFAULT_GENERAL_CONFIG[section][
     field as keyof (typeof DEFAULT_GENERAL_CONFIG)[typeof section]
@@ -73,9 +82,12 @@ function getDefaultForKey(key: GeneralConfigKey): number {
  *
  * @param key - The config key to retrieve (e.g., 'limits.maxIterations').
  * @param config - The GeneralConfig object to read from.
- * @returns The numeric value for the specified key.
+ * @returns The value for the specified key (number or string).
  */
-function getConfigValue(key: GeneralConfigKey, config: GeneralConfig): number {
+function getConfigValue(key: GeneralConfigKey, config: GeneralConfig): number | string {
+  if (!isNestedGeneralConfigKey(key)) {
+    return config[key];
+  }
   const [section, field] = key.split('.') as ['limits' | 'timeouts', string];
   return config[section][field as keyof (typeof config)[typeof section]];
 }
@@ -85,16 +97,22 @@ function getConfigValue(key: GeneralConfigKey, config: GeneralConfig): number {
  *
  * Returns a new config object with the value set, leaving other fields unchanged.
  *
- * @param key - The config key to update (e.g., 'timeouts.codingAgentMin').
- * @param value - The new numeric value to set.
+ * @param key - The config key to update (e.g., 'timeouts.codingAgentMin' or 'specFile').
+ * @param value - The new value to set (number for limits/timeouts, string for specFile).
  * @param config - The existing BluprintConfig to update.
  * @returns A new BluprintConfig with the updated value.
  */
 function setConfigValue(
   key: GeneralConfigKey,
-  value: number,
+  value: number | string,
   config: BluprintConfig
 ): BluprintConfig {
+  if (!isNestedGeneralConfigKey(key)) {
+    return {
+      ...config,
+      [key]: value as string,
+    };
+  }
   const [section, field] = key.split('.') as ['limits' | 'timeouts', string];
   return {
     ...config,
@@ -157,6 +175,7 @@ export async function handleConfigShow(options: { json: boolean }): Promise<void
     console.log(`  ${GENERAL_CONFIG_KEYS[4]}: ${config.timeouts.planAgentMin}`);
     console.log(`  ${GENERAL_CONFIG_KEYS[5]}: ${config.timeouts.summarizerAgentMin}`);
     console.log(`  ${GENERAL_CONFIG_KEYS[6]}: ${config.timeouts.commitAgentMin}`);
+    console.log(`  ${GENERAL_CONFIG_KEYS[7]}: ${config.specFile}`);
   }
 
   await exit(0);
@@ -196,10 +215,11 @@ export async function handleConfigGet(key: string): Promise<void> {
  * Handles the "config set" CLI command.
  *
  * Updates a single config key to a new value. Creates the config file if it doesn't exist.
- * Validates that the key is known and the value is a positive integer.
+ * For numeric keys (limits/timeouts), validates that the value is a positive integer.
+ * For string keys (specFile), accepts any non-empty string.
  *
- * @param key - The config key to update (e.g., 'timeouts.codingAgentMin').
- * @param value - The new value as a string (must be a positive integer).
+ * @param key - The config key to update (e.g., 'timeouts.codingAgentMin' or 'specFile').
+ * @param value - The new value as a string.
  */
 export async function handleConfigSet(key: string, value: string): Promise<void> {
   const keyResult = parseKey(key);
@@ -209,11 +229,23 @@ export async function handleConfigSet(key: string, value: string): Promise<void>
     return;
   }
 
-  const valueResult = parsePositiveInt(keyResult.value, value);
-  if (valueResult.isErr()) {
-    console.error(`Invalid value for ${key}: "${value}". Expected a positive integer.`);
-    await exit(1);
-    return;
+  const validatedKey = keyResult.value;
+  let parsedValue: number | string;
+  if (!isNestedGeneralConfigKey(validatedKey)) {
+    if (!value.trim()) {
+      console.error(`Invalid value for ${key}: value cannot be empty.`);
+      await exit(1);
+      return;
+    }
+    parsedValue = value;
+  } else {
+    const valueResult = parsePositiveInt(validatedKey, value);
+    if (valueResult.isErr()) {
+      console.error(`Invalid value for ${key}: "${value}". Expected a positive integer.`);
+      await exit(1);
+      return;
+    }
+    parsedValue = valueResult.value;
   }
 
   const ensureDirResult = await ensureConfigDir();
@@ -238,7 +270,7 @@ export async function handleConfigSet(key: string, value: string): Promise<void>
     return;
   }
 
-  config = setConfigValue(keyResult.value, valueResult.value, config);
+  config = setConfigValue(validatedKey, parsedValue, config);
 
   const writeResult = await configUtils.bluprint.write(config);
   if (writeResult.isErr()) {

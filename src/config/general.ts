@@ -12,6 +12,7 @@ export const GENERAL_CONFIG_KEYS = [
   'timeouts.planAgentMin',
   'timeouts.summarizerAgentMin',
   'timeouts.commitAgentMin',
+  'specFile',
 ] as const;
 
 export type GeneralConfigKey = (typeof GENERAL_CONFIG_KEYS)[number];
@@ -31,7 +32,7 @@ export const getTimeoutMs = (timeouts: TimeoutsConfig, agent: AgentType): number
 /**
  * Reads the general configuration from the bluprint config file.
  *
- * Extracts the limits and timeouts sections from the bluprint config.
+ * Extracts the limits, timeouts, and specFile from the bluprint config.
  * Returns default values if the config file is missing.
  *
  * @returns A ResultAsync containing the GeneralConfig on success, or a ConfigValidationError on failure.
@@ -43,6 +44,7 @@ export const readGeneralConfig = (): ResultAsync<GeneralConfig, ConfigValidation
       (bluprintConfig): GeneralConfig => ({
         limits: bluprintConfig.limits,
         timeouts: bluprintConfig.timeouts,
+        specFile: bluprintConfig.specFile,
       })
     )
     .orElse((error) => {

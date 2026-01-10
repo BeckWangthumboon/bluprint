@@ -1,8 +1,5 @@
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
-import { ResultAsync } from 'neverthrow';
-import { runLoop } from './src/agent/loop.js';
-import { generatePlan, type PlanAgentConfig } from './src/agent/planAgent.js';
 import { exit } from './src/exit.js';
 import {
   handleModelsEdit,
@@ -22,7 +19,7 @@ import {
   handlePresetsList,
   handlePresetsDefault,
 } from './src/cli/config/presets.js';
-import { resolveRuntimeConfig, getTimeoutMs, formatResolveError } from './src/config/index.js';
+import { handleRun } from './src/cli/run.js';
 
 process.once('SIGINT', () => void exit(130));
 process.once('SIGTERM', () => void exit(143));
@@ -39,65 +36,43 @@ await yargs(hideBin(process.argv))
   .scriptName('bluprint')
   .version('0.0.0')
   .command(
-    'plan',
-    'Generate implementation plan from spec',
+    'run',
+    'Generate plan and execute build from a spec file',
     (yargs) =>
-      yargs.option('preset', {
-        type: 'string',
-        description: 'Model preset to use (uses default if not specified)',
-      }),
+      yargs
+        .option('spec', {
+          type: 'string',
+          description: 'Path to the specification file',
+        })
+        .option('plan', {
+          type: 'boolean',
+          description: 'Only generate the plan',
+          default: false,
+        })
+        .option('build', {
+          type: 'boolean',
+          description: 'Only run build (planning, requires existing plan in cache)',
+          default: false,
+        })
+        .option('preset', {
+          type: 'string',
+          description: 'Model preset to use (uses default if not specified)',
+        })
+        .check((argv) => {
+          if (argv['plan-only'] && argv['build-only']) {
+            throw new Error(
+              'Options --plan-only and --build-only cannot be used together. Please choose only one of these flags.'
+            );
+          }
+          return true;
+        }),
     async (argv) => {
-      const presetOverride = argv.preset as string | undefined;
-
-      // If preset override provided, resolve config and build PlanAgentConfig
-      let configOverride: PlanAgentConfig | undefined;
-      if (presetOverride) {
-        const configResult = await resolveRuntimeConfig(presetOverride);
-        if (configResult.isErr()) {
-          console.error('Error:', formatResolveError(configResult.error));
-          await exit(1);
-          return;
-        }
-        const resolved = configResult.value;
-        configOverride = {
-          planModel: resolved.preset.plan,
-          planTimeoutMs: getTimeoutMs(resolved.timeouts, 'plan'),
-          summarizerModel: resolved.preset.summarizer,
-          summarizerTimeoutMs: getTimeoutMs(resolved.timeouts, 'summarizer'),
-        };
-      }
-
-      const result = await generatePlan(configOverride);
-
-      if (result.isErr()) {
-        console.error('Error:', result.error.message);
-        await exit(1);
-      }
-
-      await exit(0);
-    }
-  )
-  .command(
-    'build',
-    'Run the agent loop',
-    (yargs) =>
-      yargs.option('preset', {
-        type: 'string',
-        description: 'Model preset to use (uses default if not specified)',
-      }),
-    async (argv) => {
-      const presetOverride = argv.preset as string | undefined;
-
-      const result = await runLoop({
-        config: presetOverride ? { preset: presetOverride } : undefined,
+      await handleRun({
+        spec: argv.spec,
+        planOnly: argv['plan'],
+        buildOnly: argv['build'],
+        preset: argv.preset,
       });
-
-      if (result.isErr()) {
-        console.error('Error:', result.error.message);
-        await exit(1);
-      }
-
-      await exit(0);
     }
   )
   .command(
