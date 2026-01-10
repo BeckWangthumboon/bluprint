@@ -182,7 +182,7 @@ export async function handleConfigSet(key: string, value: string): Promise<void>
   const writeResult = await configUtils.bluprint.write(config);
   if (writeResult.isErr()) {
     const error = writeResult.error;
-    const errorMessage = 'message' in error ? error.message : String(error);
+    const errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
     console.error(`Failed to write bluprint config: ${errorMessage}`);
     await exit(1);
     return;
@@ -266,7 +266,7 @@ export async function handleConfigReset(
   const writeResult = await configUtils.bluprint.write(config);
   if (writeResult.isErr()) {
     const error = writeResult.error;
-    const errorMessage = 'message' in error ? error.message : String(error);
+    const errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
     console.error(`Failed to write bluprint config: ${errorMessage}`);
     await exit(1);
     return;

@@ -136,7 +136,7 @@ export const runLoop = (options?: {
       };
 
       // Initialize new logger
-      const logger = await initLogger(runId);
+      const logger = initLogger(runId);
 
       const writeManifestSafe = async (
         status: ManifestData['status'],
@@ -339,9 +339,9 @@ export const runLoop = (options?: {
         await writeManifestSafe('failed', errorMessage);
 
         if (stateInitialized && !loopFailed && !loopAborted) {
-          const failResult = await failLoop();
-          if (failResult.isErr()) {
-          }
+          await failLoop().mapErr((e) => {
+            console.error(`Failed to update state file: ${e.message}`);
+          });
         }
         await finalizeRunOnFailureOrAbort();
         throw error;

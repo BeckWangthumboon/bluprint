@@ -212,7 +212,12 @@ const formatHttpError = (error: unknown, context: string): Error => {
   if (isObject(error)) {
     if (typeof error.name === 'string') {
       const data = error.data as Record<string, unknown> | undefined;
-      const message = data?.message ?? JSON.stringify(data ?? {});
+      let message: string;
+      if (isObject(data) && typeof data.message === 'string') {
+        message = data.message;
+      } else {
+        message = JSON.stringify(data ?? {});
+      }
       return new Error(`${context}: [${error.name}] ${message}`);
     }
 
@@ -269,7 +274,7 @@ const createSessionObject = (rawClient: OpencodeClient, sessionId: string): Sess
           body: params,
         }),
       `Session prompt`,
-      OpenCodeErrorUtils.fromPrompt
+      (resp) => OpenCodeErrorUtils.fromPrompt(resp)
     ),
 
   abort: () =>
@@ -284,7 +289,7 @@ const createSessionObject = (rawClient: OpencodeClient, sessionId: string): Sess
     wrapCall(
       () => rawClient.session.messages({ path: { id: sessionId } }),
       `Session messages`,
-      OpenCodeErrorUtils.fromMessages
+      (resp) => OpenCodeErrorUtils.fromMessages(resp)
     ),
 
   getData: () => wrapCall(() => rawClient.session.get({ path: { id: sessionId } }), `Session get`),

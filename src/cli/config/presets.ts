@@ -126,7 +126,7 @@ export async function handlePresetsAdd(): Promise<void> {
     return;
   }
 
-  const presetName = (presetNameResult).trim();
+  const presetName = presetNameResult.trim();
 
   if (!presetName) {
     p.note('Preset name is required', 'Error');
@@ -290,7 +290,8 @@ export async function handlePresetsRemove(): Promise<void> {
   }
 
   const selectedName = selectedPresetResult;
-  const { [selectedName]: removedPreset, ...remainingPresets } = config.presets;
+  const remainingPresets = { ...config.presets };
+  delete remainingPresets[selectedName];
 
   const ensureDirResult = await ensureConfigDir();
   if (ensureDirResult.isErr()) {

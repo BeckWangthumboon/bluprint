@@ -45,9 +45,10 @@ export const formatConfigError = (error: ConfigValidationError): string => {
       return `Model preset "${error.presetName}" not found in models.json`;
     case 'MODEL_NOT_IN_POOL':
       return `Preset "${error.presetName}" uses model ${formatModelConfig(error.model)} for ${error.agentType}, but it's not in the models pool`;
-    default:
+    default: {
       const exhaustiveCheck: never = error;
       return exhaustiveCheck;
+    }
   }
 };
 

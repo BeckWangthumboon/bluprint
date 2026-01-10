@@ -100,7 +100,7 @@ export const readState = (): ResultAsync<LoopState, Error> =>
     .mapErr((e: Error) => new Error(`Failed to read state file: ${e.message}`))
     .andThen((content: string) => {
       try {
-        const parsed = JSON.parse(content);
+        const parsed: unknown = JSON.parse(content);
         if (!validateState(parsed)) {
           return ResultAsync.fromSafePromise(
             Promise.reject(new Error('Invalid state file structure'))
