@@ -1,19 +1,26 @@
-import { ResultAsync, ok, err, Result } from 'neverthrow';
-import type { BluprintConfig, GeneralConfig, GeneralConfigKey } from '../../config/index.js';
+import { ok, err, Result } from 'neverthrow';
+import type { BluprintConfig, GeneralConfigKey, GeneralConfigValue } from '../../config/index.js';
 import {
   readGeneralConfig,
   configUtils,
   GENERAL_CONFIG_KEYS,
+  CONFIG_KEYS,
   DEFAULT_GENERAL_CONFIG,
   ensureConfigDir,
+  getDefaultForKey,
+  getConfigValue,
+  setConfigValue,
+  formatConfigError,
 } from '../../config/index.js';
 import type { ConfigValidationError } from '../../config/index.js';
 import { exit } from '../../exit.js';
 
 export type GeneralConfigCliError =
   | { type: 'UNKNOWN_KEY'; key: string }
-  | { type: 'INVALID_VALUE'; key: string; value: string }
+  | { type: 'INVALID_VALUE'; key: string; value: string; message: string }
   | { type: 'RESET_USAGE_ERROR'; message: string };
+
+type InvalidValueError = Extract<GeneralConfigCliError, { type: 'INVALID_VALUE' }>;
 
 /**
  * Parses and validates a string as a GeneralConfigKey.
@@ -28,130 +35,47 @@ function parseKey(key: string): Result<GeneralConfigKey, GeneralConfigCliError> 
   return err({ type: 'UNKNOWN_KEY', key });
 }
 
-type NestedGeneralConfigKey = Extract<GeneralConfigKey, `${string}.${string}`>;
-
-function isNestedGeneralConfigKey(key: GeneralConfigKey): key is NestedGeneralConfigKey {
-  return key.includes('.');
-}
-
 /**
- * Parses a string as a positive integer for a config key.
+ * Parses a raw CLI value using the Zod schema for the given key.
  *
- * Validates that the string represents a positive safe integer.
- *
- * @param key - The config key this value is for (used in error messages).
- * @param raw - The raw string value to parse.
- * @returns A Result containing the parsed number on success, or an INVALID_VALUE error.
+ * @param key - The config key to parse a value for.
+ * @param raw - The raw string value from the CLI.
+ * @returns A Result containing the parsed value on success, or an INVALID_VALUE error.
  */
-function parsePositiveInt(
+function parseConfigValue(
   key: GeneralConfigKey,
   raw: string
-): Result<number, GeneralConfigCliError> {
-  const isInt = /^\d+$/.test(raw);
-  if (!isInt) {
-    return err({ type: 'INVALID_VALUE', key, value: raw });
+): Result<GeneralConfigValue, InvalidValueError> {
+  const { schema } = CONFIG_KEYS[key];
+  const result = schema.safeParse(raw);
+
+  if (!result.success) {
+    const message = result.error.issues[0]?.message ?? 'Invalid value';
+    return err({ type: 'INVALID_VALUE', key, value: raw, message });
   }
 
-  const parsed = Number.parseInt(raw, 10);
-
-  if (parsed <= 0 || !Number.isSafeInteger(parsed)) {
-    return err({ type: 'INVALID_VALUE', key, value: raw });
-  }
-
-  return ok(parsed);
+  return ok(result.data);
 }
 
 /**
- * Gets the default value for a general config key.
+ * Formats a ConfigValidationError into a CLI-friendly error message.
  *
- * @param key - The config key to get the default value for.
- * @returns The default value for the specified key (number or string).
- */
-function getDefaultForKey(key: GeneralConfigKey): number | string {
-  if (!isNestedGeneralConfigKey(key)) {
-    return DEFAULT_GENERAL_CONFIG[key];
-  }
-  const [section, field] = key.split('.') as ['limits' | 'timeouts', string];
-  return DEFAULT_GENERAL_CONFIG[section][
-    field as keyof (typeof DEFAULT_GENERAL_CONFIG)[typeof section]
-  ];
-}
-
-/**
- * Gets the current value for a config key from a GeneralConfig object.
- *
- * @param key - The config key to retrieve (e.g., 'limits.maxIterations').
- * @param config - The GeneralConfig object to read from.
- * @returns The value for the specified key (number or string).
- */
-function getConfigValue(key: GeneralConfigKey, config: GeneralConfig): number | string {
-  if (!isNestedGeneralConfigKey(key)) {
-    return config[key];
-  }
-  const [section, field] = key.split('.') as ['limits' | 'timeouts', string];
-  return config[section][field as keyof (typeof config)[typeof section]];
-}
-
-/**
- * Creates a new BluprintConfig with an updated value for the specified key.
- *
- * Returns a new config object with the value set, leaving other fields unchanged.
- *
- * @param key - The config key to update (e.g., 'timeouts.codingAgentMin' or 'specFile').
- * @param value - The new value to set (number for limits/timeouts, string for specFile).
- * @param config - The existing BluprintConfig to update.
- * @returns A new BluprintConfig with the updated value.
- */
-function setConfigValue(
-  key: GeneralConfigKey,
-  value: number | string,
-  config: BluprintConfig
-): BluprintConfig {
-  if (!isNestedGeneralConfigKey(key)) {
-    return {
-      ...config,
-      [key]: value as string,
-    };
-  }
-  const [section, field] = key.split('.') as ['limits' | 'timeouts', string];
-  return {
-    ...config,
-    [section]: {
-      ...config[section],
-      [field]: value,
-    },
-  };
-}
-
-/**
- * Formats a ConfigValidationError into a human-readable error message.
+ * Uses the centralized formatConfigError but filters to file-related errors only.
  *
  * @param error - The config validation error to format.
  * @returns A user-friendly error message string.
  */
 function formatConfigFileError(error: ConfigValidationError): string {
-  switch (error.type) {
-    case 'CONFIG_FILE_MISSING':
-      return `Missing config file: ${error.file}`;
-    case 'CONFIG_FILE_READ_ERROR':
-      return `Failed to read bluprint config: ${error.message}`;
-    case 'CONFIG_FILE_INVALID_JSON':
-      return `Invalid JSON in bluprint.config.json: ${error.message}`;
-    case 'CONFIG_SCHEMA_INVALID':
-      return `Invalid bluprint config: ${error.message}`;
-    default:
-      return 'Unknown config file error';
-  }
+  return formatConfigError(error);
 }
 
 /**
  * Handles the "config show" CLI command.
  *
  * Displays all general config values in either JSON or human-readable format.
- * Exits the process after displaying.
  *
  * @param options - Command options.
- * @param options.json - If true, outputs config as formatted JSON; otherwise displays as key-value pairs.
+ * @param options.json - If true, outputs config as formatted JSON.
  */
 export async function handleConfigShow(options: { json: boolean }): Promise<void> {
   const result = await readGeneralConfig();
@@ -168,14 +92,10 @@ export async function handleConfigShow(options: { json: boolean }): Promise<void
     console.log(JSON.stringify(config, null, 2));
   } else {
     console.log('General config:');
-    console.log(`  ${GENERAL_CONFIG_KEYS[0]}: ${config.limits.maxIterations}`);
-    console.log(`  ${GENERAL_CONFIG_KEYS[1]}: ${config.limits.maxTimeMinutes}`);
-    console.log(`  ${GENERAL_CONFIG_KEYS[2]}: ${config.timeouts.codingAgentMin}`);
-    console.log(`  ${GENERAL_CONFIG_KEYS[3]}: ${config.timeouts.masterAgentMin}`);
-    console.log(`  ${GENERAL_CONFIG_KEYS[4]}: ${config.timeouts.planAgentMin}`);
-    console.log(`  ${GENERAL_CONFIG_KEYS[5]}: ${config.timeouts.summarizerAgentMin}`);
-    console.log(`  ${GENERAL_CONFIG_KEYS[6]}: ${config.timeouts.commitAgentMin}`);
-    console.log(`  ${GENERAL_CONFIG_KEYS[7]}: ${config.specFile}`);
+    for (const key of GENERAL_CONFIG_KEYS) {
+      const value = getConfigValue(key, config);
+      console.log(`  ${key}: ${value}`);
+    }
   }
 
   await exit(0);
@@ -185,9 +105,8 @@ export async function handleConfigShow(options: { json: boolean }): Promise<void
  * Handles the "config get" CLI command.
  *
  * Retrieves and displays the value of a single config key.
- * Exits with error if the key is invalid.
  *
- * @param key - The config key to retrieve (e.g., 'limits.maxIterations').
+ * @param key - The config key to retrieve.
  */
 export async function handleConfigGet(key: string): Promise<void> {
   const keyResult = parseKey(key);
@@ -215,10 +134,8 @@ export async function handleConfigGet(key: string): Promise<void> {
  * Handles the "config set" CLI command.
  *
  * Updates a single config key to a new value. Creates the config file if it doesn't exist.
- * For numeric keys (limits/timeouts), validates that the value is a positive integer.
- * For string keys (specFile), accepts any non-empty string.
  *
- * @param key - The config key to update (e.g., 'timeouts.codingAgentMin' or 'specFile').
+ * @param key - The config key to update.
  * @param value - The new value as a string.
  */
 export async function handleConfigSet(key: string, value: string): Promise<void> {
@@ -230,23 +147,13 @@ export async function handleConfigSet(key: string, value: string): Promise<void>
   }
 
   const validatedKey = keyResult.value;
-  let parsedValue: number | string;
-  if (!isNestedGeneralConfigKey(validatedKey)) {
-    if (!value.trim()) {
-      console.error(`Invalid value for ${key}: value cannot be empty.`);
-      await exit(1);
-      return;
-    }
-    parsedValue = value;
-  } else {
-    const valueResult = parsePositiveInt(validatedKey, value);
-    if (valueResult.isErr()) {
-      console.error(`Invalid value for ${key}: "${value}". Expected a positive integer.`);
-      await exit(1);
-      return;
-    }
-    parsedValue = valueResult.value;
+  const valueResult = parseConfigValue(validatedKey, value);
+  if (valueResult.isErr()) {
+    console.error(`Invalid value for ${key}: "${value}". ${valueResult.error.message}`);
+    await exit(1);
+    return;
   }
+  const parsedValue = valueResult.value;
 
   const ensureDirResult = await ensureConfigDir();
   if (ensureDirResult.isErr()) {
@@ -281,7 +188,7 @@ export async function handleConfigSet(key: string, value: string): Promise<void>
     return;
   }
 
-  console.log(`Updated ${key} to ${value}.`);
+  console.log(`Updated ${key} to ${String(parsedValue)}.`);
 
   await exit(0);
 }
@@ -290,7 +197,6 @@ export async function handleConfigSet(key: string, value: string): Promise<void>
  * Handles the "config reset" CLI command.
  *
  * Resets config values to their defaults. Can reset a single key or all keys with --all.
- * Requires an existing config file; errors if none exists.
  *
  * @param key - The config key to reset, or undefined if using --all.
  * @param options - Command options.

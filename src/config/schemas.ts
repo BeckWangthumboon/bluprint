@@ -63,3 +63,19 @@ export interface ResolvedConfig {
   preset: ModelPreset;
   presetName: string;
 }
+
+/**
+ * Parses a digit-only string into a positive safe integer.
+ * Used for CLI input validation.
+ */
+export const PositiveIntFromStringSchema = z
+  .string()
+  .regex(/^\d+$/, 'Expected a positive integer')
+  .transform((v) => Number.parseInt(v, 10))
+  .pipe(z.number().int().positive().safe());
+
+/**
+ * Trims whitespace and ensures the string is non-empty.
+ * Used for CLI input validation.
+ */
+export const NonEmptyStringSchema = z.string().trim().min(1, 'Value cannot be empty');

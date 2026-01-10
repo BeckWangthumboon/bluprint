@@ -1,8 +1,8 @@
 import { Result, ResultAsync, err, ok } from 'neverthrow';
 import type { ModelPreset, ModelConfig, ResolvedConfig } from './schemas.js';
 import { AGENT_TYPES } from './schemas.js';
-import type { ConfigValidationError } from './types.js';
-import { configUtils, modelConfigEquals, formatModelConfig } from './io.js';
+import type { ConfigValidationError } from './errors.js';
+import { configUtils, modelConfigEquals } from './io.js';
 
 /**
  * Validates a model preset. Check if all models are in model pool,
@@ -76,30 +76,4 @@ export const resolveConfigWithPreset = (
       });
     }
   );
-};
-
-/**
- * Formats a configuration error into a user-friendly message.
- *
- * @param error - The ConfigValidationError to format
- * @returns A string describing the error
- */
-export const formatConfigError = (error: ConfigValidationError): string => {
-  switch (error.type) {
-    case 'CONFIG_FILE_MISSING':
-      return `Configuration file not found: ${error.file}`;
-    case 'CONFIG_FILE_READ_ERROR':
-      return `Failed to read configuration file ${error.file}: ${error.message}`;
-    case 'CONFIG_FILE_INVALID_JSON':
-      return `Invalid JSON in ${error.file}: ${error.message}`;
-    case 'CONFIG_SCHEMA_INVALID':
-      return `Invalid configuration in ${error.file}: ${error.message}`;
-    case 'PRESET_NOT_FOUND':
-      return `Model preset "${error.presetName}" not found in models.json`;
-    case 'MODEL_NOT_IN_POOL':
-      return `Preset "${error.presetName}" uses model ${formatModelConfig(error.model)} for ${error.agentType}, but it's not in the models pool`;
-    default:
-      const exhaustiveCheck: never = error;
-      return exhaustiveCheck;
-  }
 };

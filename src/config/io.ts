@@ -1,7 +1,7 @@
 import { ResultAsync, ok, err, errAsync, Result } from 'neverthrow';
 import { z } from 'zod';
 import type { BluprintConfig, ModelsConfig, ModelConfig } from './schemas.js';
-import type { ConfigValidationError } from './types.js';
+import type { ConfigValidationError } from './errors.js';
 import { fsUtils } from '../fs.js';
 import * as path from 'path';
 import { BluprintConfigSchema, ModelsConfigSchema } from './schemas.js';

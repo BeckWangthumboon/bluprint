@@ -1,27 +1,7 @@
 import { ResultAsync, err } from 'neverthrow';
 import type { ResolvedConfig } from './schemas.js';
-import type { ConfigValidationError } from './types.js';
-import { resolveConfigWithPreset, getDefaultPresetName, formatConfigError } from './validate.js';
-
-export type PresetRequiredError = {
-  type: 'PRESET_REQUIRED';
-  message: string;
-};
-
-export type ResolveConfigError = ConfigValidationError | PresetRequiredError;
-
-/**
- * Formats a ResolveConfigError into a human-readable string message.
- *
- * @param error - The error to format
- * @returns A formatted error message string
- */
-export const formatResolveError = (error: ResolveConfigError): string => {
-  if (error.type === 'PRESET_REQUIRED') {
-    return error.message;
-  }
-  return formatConfigError(error);
-};
+import type { ResolveConfigError } from './errors.js';
+import { resolveConfigWithPreset, getDefaultPresetName } from './validate.js';
 
 /**
  * Resolves the runtime configuration by attempting to use a preset.
