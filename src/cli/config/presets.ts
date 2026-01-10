@@ -126,7 +126,7 @@ export async function handlePresetsAdd(): Promise<void> {
     return;
   }
 
-  const presetName = (presetNameResult as string).trim();
+  const presetName = (presetNameResult).trim();
 
   if (!presetName) {
     p.note('Preset name is required', 'Error');
@@ -155,7 +155,7 @@ export async function handlePresetsAdd(): Promise<void> {
       return;
     }
 
-    const selectedModelStr = selectResult as string;
+    const selectedModelStr = selectResult;
     preset[agentType] = parseModelSelection(selectedModelStr);
   }
 
@@ -206,7 +206,7 @@ export async function handlePresetsEdit(): Promise<void> {
     return;
   }
 
-  const presetName = selectPresetResult as string;
+  const presetName = selectPresetResult;
   const currentPreset = config.presets[presetName]!;
 
   p.log.message(`\nCurrent configuration for "${presetName}":`);
@@ -249,7 +249,7 @@ export async function handlePresetsEdit(): Promise<void> {
       return;
     }
 
-    const selectedModelStr = selectResult as string;
+    const selectedModelStr = selectResult;
     updatedPreset[agentType] = parseModelSelection(selectedModelStr);
   }
 
@@ -289,7 +289,7 @@ export async function handlePresetsRemove(): Promise<void> {
     return;
   }
 
-  const selectedName = selectedPresetResult as string;
+  const selectedName = selectedPresetResult;
   const { [selectedName]: removedPreset, ...remainingPresets } = config.presets;
 
   const ensureDirResult = await ensureConfigDir();
@@ -458,7 +458,7 @@ export async function handlePresetsDefault(): Promise<void> {
   const presetOptions = defaultPresetExistsInPresets
     ? [
         {
-          value: configuredDefaultPreset!,
+          value: configuredDefaultPreset,
           label: `${configuredDefaultPreset} (default)`,
         },
         ...presetOptionsBase.filter((option) => option.value !== configuredDefaultPreset),
@@ -475,7 +475,7 @@ export async function handlePresetsDefault(): Promise<void> {
     return;
   }
 
-  const selectedPresetName = selectedPresetResult as string;
+  const selectedPresetName = selectedPresetResult;
   const selectedPreset = config.presets[selectedPresetName]!;
 
   const poolValidation = validatePresetPool(selectedPreset, config.models, selectedPresetName);

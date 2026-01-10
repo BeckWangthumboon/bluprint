@@ -79,7 +79,7 @@ async function selectModelsFromProviders(
       break;
     }
 
-    const providerID = providerSelectResult as string;
+    const providerID = providerSelectResult;
 
     const availableModels = providerModels.get(providerID) ?? [];
 
@@ -126,7 +126,7 @@ async function selectModelsFromProviders(
       await exit(0);
       return null;
     }
-    const selectedModelIDs = modelSelectResult as string[];
+    const selectedModelIDs = modelSelectResult;
 
     for (const modelID of selectedModelIDs) {
       const validateResult = await lib.provider.validate(providerID, modelID);

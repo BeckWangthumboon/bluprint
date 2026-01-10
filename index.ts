@@ -123,7 +123,7 @@ await yargs(hideBin(process.argv))
               default: false,
             }),
           async (argv) => {
-            await handleConfigShow({ json: argv.json as boolean });
+            await handleConfigShow({ json: argv.json });
           }
         )
         .command(
@@ -136,7 +136,7 @@ await yargs(hideBin(process.argv))
               demandOption: true,
             }),
           async (argv) => {
-            await handleConfigGet(argv.key as string);
+            await handleConfigGet(argv.key);
           }
         )
         .command(
@@ -155,7 +155,7 @@ await yargs(hideBin(process.argv))
                 demandOption: true,
               }),
           async (argv) => {
-            await handleConfigSet(argv.key as string, argv.value as string);
+            await handleConfigSet(argv.key, argv.value);
           }
         )
         .command(
@@ -173,8 +173,8 @@ await yargs(hideBin(process.argv))
                 default: false,
               }),
           async (argv) => {
-            await handleConfigReset(argv.key as string | undefined, {
-              all: argv.all as boolean,
+            await handleConfigReset(argv.key, {
+              all: argv.all,
             });
           }
         )

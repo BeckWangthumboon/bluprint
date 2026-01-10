@@ -181,7 +181,7 @@ export function setConfigValue(
  * @returns The timeout value in milliseconds
  */
 export const getTimeoutMs = (timeouts: TimeoutsConfig, agent: AgentType): number => {
-  const key = `${agent}AgentMin` as keyof TimeoutsConfig;
+  const key = `${agent}AgentMin`;
   return timeouts[key] * 60 * 1000;
 };
 
