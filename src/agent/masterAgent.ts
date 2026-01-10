@@ -1,4 +1,4 @@
-import { ResultAsync, err, errAsync, ok } from 'neverthrow';
+import { Result, ResultAsync, err, errAsync, ok } from 'neverthrow';
 import { workspace } from '../workspace.js';
 import {
   parseTextResponse,
@@ -28,6 +28,28 @@ export interface MasterAgentConfig {
 }
 
 const MAX_REPAIR_ATTEMPTS = 2;
+
+/**
+ * Strips outer markdown code block wrappers from text if present.
+ * Handles ```json and other info strings by removing the first fence line.
+ */
+const stripCodeBlock = (text: string): string => {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith('```') || !trimmed.endsWith('```')) {
+    return trimmed;
+  }
+
+  const firstNewlineIndex = trimmed.indexOf('\n');
+  if (firstNewlineIndex === -1) {
+    return trimmed;
+  }
+
+  const withoutFences = trimmed.slice(firstNewlineIndex + 1, trimmed.length - 3);
+  return withoutFences.trim();
+};
+
+const parseJson = (text: string): Result<unknown, Error> =>
+  Result.fromThrowable(() => JSON.parse(text) as unknown, toError)();
 
 /**
  * Validates the master agent output against the expected schema
@@ -141,21 +163,21 @@ const callModelWithRepair = (
       }
     ).andThen((rawOutput) => {
       // Try to parse JSON
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(rawOutput);
-      } catch (e) {
+      const parsedResult = parseJson(rawOutput).orElse(() =>
+        parseJson(stripCodeBlock(rawOutput))
+      );
+      if (parsedResult.isErr()) {
         if (attemptNumber >= MAX_REPAIR_ATTEMPTS) {
           return err(
             new Error(
-              `Failed to parse master agent output after ${MAX_REPAIR_ATTEMPTS} attempts: ${toError(e).message}`
+              `Failed to parse master agent output after ${MAX_REPAIR_ATTEMPTS} attempts: ${parsedResult.error.message}`
             )
           );
         }
 
         // Attempt repair
         const repairPrompt = createRepairPrompt(
-          `Invalid JSON: ${toError(e).message}`,
+          `Invalid JSON: ${parsedResult.error.message}`,
           userPrompt,
           rawOutput
         );
@@ -172,7 +194,7 @@ const callModelWithRepair = (
       }
 
       // Validate schema
-      const validation = validateMasterOutput(parsed);
+      const validation = validateMasterOutput(parsedResult.value);
       if (!validation.ok) {
         if (attemptNumber >= MAX_REPAIR_ATTEMPTS) {
           return err(
