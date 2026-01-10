@@ -26,7 +26,8 @@
     "typecheck": "bun tsc --noEmit",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
-    "lint": "eslint .",
-    "lint:fix": "eslint . --fix"
+    "lint": "eslint . --max-warnings 0 --cache",
+    "lint:fix": "eslint . --fix --cache",
+    "lint:clean": "eslint . --max-warnings 0 --no-cache"
   }
 }

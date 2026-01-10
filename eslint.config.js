@@ -5,7 +5,7 @@ import eslintConfigPrettier from 'eslint-config-prettier';
 const tsFiles = ['**/*.ts', '**/*.tsx', '**/*.mts', '**/*.cts'];
 
 export default [
-  { ignores: ['node_modules', 'dist'] },
+  { ignores: ['node_modules', 'dist', 'build'] },
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked.map((config) => ({
     ...config,
