@@ -28,6 +28,7 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "lint": "eslint . --max-warnings 0 --cache",
     "lint:fix": "eslint . --fix --cache",
-    "lint:clean": "eslint . --max-warnings 0 --no-cache"
+    "lint:clean": "eslint . --max-warnings 0 --no-cache",
+    "check": "bun run typecheck && bun run lint"
   }
 }
