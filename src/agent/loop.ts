@@ -23,6 +23,7 @@ import { resolveRuntimeConfig, getTimeoutMs, formatResolveError } from '../confi
 
 export interface LoopConfig {
   preset?: string;
+  graphite: boolean;
 }
 
 const parseMasterOutput = (raw: string): MasterAgentOutput => {
@@ -205,6 +206,8 @@ export const runLoop = (options?: {
           throw new Error('summary.md is empty. Please generate a summary first.');
         }
 
+        const graphiteEnabled = options?.config?.graphite ?? false;
+
         // Initialize state
         await unwrapOrThrow(initializeState(resolvedConfig.limits));
         stateInitialized = true;
@@ -280,6 +283,7 @@ export const runLoop = (options?: {
             const commitAgentConfig: CommitAgentConfig = {
               model: resolvedConfig.preset.commit,
               timeoutMs: getTimeoutMs(resolvedConfig.timeouts, 'commit'),
+              graphite: graphiteEnabled,
             };
             const commitResult = await unwrapOrThrow(
               createCommitForTask(iteration, signal, commitAgentConfig)

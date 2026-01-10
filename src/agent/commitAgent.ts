@@ -10,13 +10,15 @@ import {
 } from './utils.js';
 import { readState } from '../state.js';
 import { workspace } from '../workspace.js';
-import { getPlanStep } from './planUtils.js';
+import { getPlanStep, extractPlanOutline } from './planUtils.js';
 import { getOpenCodeLib, abortAndCleanup } from './opencodesdk.js';
 import type { ModelConfig } from '../config/index.js';
+import { graphite } from './graphite.js';
 
 export interface CommitAgentConfig {
   model: ModelConfig;
   timeoutMs: number;
+  graphite: boolean;
 }
 
 export interface CommitResult {
@@ -138,7 +140,7 @@ If you need more context about any files, use your tools to read them.`;
 /**
  * Commits the staged changes and returns the commit hash and cleaned message
  */
-const commitAndGetResult = (commitMessage: string): ResultAsync<CommitResult, Error> => {
+const performNormalCommit = (commitMessage: string): ResultAsync<CommitResult, Error> => {
   const cleanMessage = commitMessage
     .replace(/^```[^\n]*\n?/, '')
     .replace(/\n?```$/, '')
@@ -151,6 +153,30 @@ const commitAndGetResult = (commitMessage: string): ResultAsync<CommitResult, Er
       message: cleanMessage,
     }))
     .mapErr((error) => new Error(`Failed to commit: ${error.message}`));
+};
+
+/**
+ * Creates a stacked branch via Graphite CLI then commits.
+ * Falls back to normal commit if Graphite fails.
+ */
+const performGraphiteCommit = (
+  commitMessage: string,
+  stepNumber: number,
+  stepTitle: string
+): ResultAsync<CommitResult, Error> => {
+  return graphite
+    .getBaseBranch()
+    .andThen((baseBranch) => graphite.createStackedBranchForStep(baseBranch, stepNumber, stepTitle))
+    .andThen((branchName) => {
+      console.log(`[graphite] Created stacked branch: ${branchName}`);
+      return performNormalCommit(commitMessage);
+    })
+    .orElse((error) => {
+      console.warn(
+        `[graphite] Failed to create stacked branch: ${error.message}. Falling back to normal commit.`
+      );
+      return performNormalCommit(commitMessage);
+    });
 };
 
 /**
@@ -185,15 +211,17 @@ const createCommitForTask = (
       .andThen(({ state, plan }) =>
         getPlanStep(plan, state.currentTaskNumber, {
           missingStep: (stepNumber) => `Could not find task ${stepNumber} in plan.md`,
-        }).map((currentStep) => currentStep)
+        }).map((currentStep) => ({ state, plan, currentStep }))
       )
-      .andThen((currentStep) =>
+      .andThen(({ state, plan, currentStep }) =>
         loadPromptFile('commitAgent.txt').map((systemPrompt) => ({
+          state,
+          plan,
           currentStep,
           systemPrompt,
         }))
       )
-      .andThen(({ currentStep, systemPrompt }) =>
+      .andThen(({ state, plan, currentStep, systemPrompt }) =>
         generateCommitMessage(
           systemPrompt,
           currentStep,
@@ -203,7 +231,16 @@ const createCommitForTask = (
           iteration,
           signal,
           config.timeoutMs
-        ).andThen((commitMessage) => commitAndGetResult(commitMessage))
+        ).andThen((commitMessage) => {
+          if (config.graphite) {
+            const stepNumber = state.currentTaskNumber;
+            const planOutline = extractPlanOutline(plan);
+            const stepHeader = planOutline.find((h) => h.stepNumber === stepNumber);
+            const stepTitle = stepHeader?.title ?? `step-${stepNumber}`;
+            return performGraphiteCommit(commitMessage, stepNumber, stepTitle);
+          }
+          return performNormalCommit(commitMessage);
+        })
       );
   });
 };
