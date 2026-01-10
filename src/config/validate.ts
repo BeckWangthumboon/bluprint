@@ -54,8 +54,6 @@ export const resolveConfigWithPreset = (
 ): ResultAsync<ResolvedConfig, ConfigValidationError> => {
   return ResultAsync.combine([configUtils.bluprint.read(), configUtils.models.read()]).andThen(
     ([bluprintConfig, modelsConfig]) => {
-      const { limits, timeouts } = bluprintConfig;
-
       const preset = modelsConfig.presets[presetName];
 
       if (!preset) {
@@ -67,10 +65,9 @@ export const resolveConfigWithPreset = (
 
       return validatePresetPool(preset, modelsConfig.models, presetName).map(() => {
         const resolvedConfig: ResolvedConfig = {
-          limits,
-          timeouts,
           preset,
           presetName,
+          ...bluprintConfig,
         };
         return resolvedConfig;
       });

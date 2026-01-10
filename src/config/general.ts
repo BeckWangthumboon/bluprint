@@ -1,7 +1,12 @@
 import { z } from 'zod';
 import { ResultAsync, ok, err } from 'neverthrow';
 import type { GeneralConfig, TimeoutsConfig, AgentType, BluprintConfig } from './schemas.js';
-import { PositiveIntFromStringSchema, NonEmptyStringSchema } from './schemas.js';
+import {
+  PositiveIntFromStringSchema,
+  NonEmptyStringSchema,
+  BooleanFromStringSchema,
+  GeneralConfigSchema,
+} from './schemas.js';
 import type { ConfigValidationError } from './errors.js';
 import { configUtils } from './io.js';
 import { DEFAULT_GENERAL_CONFIG } from './defaults.js';
@@ -15,11 +20,12 @@ export const GENERAL_CONFIG_KEYS = [
   'timeouts.summarizerAgentMin',
   'timeouts.commitAgentMin',
   'specFile',
+  'graphite.enabled',
 ] as const;
 
 export type GeneralConfigKey = (typeof GENERAL_CONFIG_KEYS)[number];
 
-export type GeneralConfigValue = number | string;
+export type GeneralConfigValue = number | string | boolean;
 
 export type ConfigKeyDef = {
   path: readonly string[];
@@ -65,6 +71,10 @@ export const CONFIG_KEYS: Record<GeneralConfigKey, ConfigKeyDef> = {
     path: ['specFile'],
     schema: NonEmptyStringSchema,
   },
+  'graphite.enabled': {
+    path: ['graphite', 'enabled'],
+    schema: BooleanFromStringSchema,
+  },
 };
 
 /**
@@ -92,7 +102,11 @@ export function getValueFromPath(
     current = record[segment];
   }
 
-  return current as GeneralConfigValue;
+  const value = current;
+  if (typeof value === 'number' || typeof value === 'string' || typeof value === 'boolean') {
+    return value;
+  }
+  throw new Error(`Invalid config value type at path: ${path.join('.')}`);
 }
 
 /**
@@ -181,14 +195,20 @@ export function setConfigValue(
  * @returns The timeout value in milliseconds
  */
 export const getTimeoutMs = (timeouts: TimeoutsConfig, agent: AgentType): number => {
-  const key = `${agent}AgentMin`;
-  return timeouts[key] * 60 * 1000;
+  const keyMap = {
+    coding: 'codingAgentMin',
+    master: 'masterAgentMin',
+    plan: 'planAgentMin',
+    summarizer: 'summarizerAgentMin',
+    commit: 'commitAgentMin',
+  } as const;
+  return timeouts[keyMap[agent]] * 60 * 1000;
 };
 
 /**
  * Reads the general configuration from the bluprint config file.
  *
- * Extracts the limits, timeouts, and specFile from the bluprint config.
+ * Strips preset-specific fields (like defaultPreset) using the GeneralConfigSchema.
  * Returns default values if the config file is missing.
  *
  * @returns A ResultAsync containing the GeneralConfig on success, or a ConfigValidationError on failure.
@@ -196,13 +216,7 @@ export const getTimeoutMs = (timeouts: TimeoutsConfig, agent: AgentType): number
 export const readGeneralConfig = (): ResultAsync<GeneralConfig, ConfigValidationError> => {
   return configUtils.bluprint
     .read()
-    .map(
-      (bluprintConfig): GeneralConfig => ({
-        limits: bluprintConfig.limits,
-        timeouts: bluprintConfig.timeouts,
-        specFile: bluprintConfig.specFile,
-      })
-    )
+    .map((bluprintConfig): GeneralConfig => GeneralConfigSchema.parse(bluprintConfig))
     .orElse((error) => {
       if (error.type === 'CONFIG_FILE_MISSING') {
         return ok(DEFAULT_GENERAL_CONFIG);

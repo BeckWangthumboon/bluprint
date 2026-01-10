@@ -5,7 +5,7 @@ import {
   configUtils,
   GENERAL_CONFIG_KEYS,
   CONFIG_KEYS,
-  DEFAULT_GENERAL_CONFIG,
+  DEFAULT_BLUPRINT_CONFIG,
   ensureConfigDir,
   getDefaultForKey,
   getConfigValue,
@@ -168,9 +168,7 @@ export async function handleConfigSet(key: string, value: string): Promise<void>
   if (configResult.isOk()) {
     config = configResult.value;
   } else if (configResult.error.type === 'CONFIG_FILE_MISSING') {
-    config = {
-      ...DEFAULT_GENERAL_CONFIG,
-    };
+    config = DEFAULT_BLUPRINT_CONFIG;
   } else {
     console.error(formatConfigFileError(configResult.error));
     await exit(1);
@@ -246,7 +244,7 @@ export async function handleConfigReset(
 
   if (options.all) {
     config = {
-      ...DEFAULT_GENERAL_CONFIG,
+      ...DEFAULT_BLUPRINT_CONFIG,
       defaultPreset: config.defaultPreset,
     };
     console.log('Reset general config to defaults.');

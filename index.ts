@@ -58,6 +58,11 @@ await yargs(hideBin(process.argv))
           type: 'string',
           description: 'Model preset to use (uses default if not specified)',
         })
+        .option('graphite', {
+          alias: 'g',
+          type: 'boolean',
+          description: 'Create stacked branches using Graphite CLI',
+        })
         .check((argv) => {
           if (argv['plan-only'] && argv['build-only']) {
             throw new Error(
@@ -72,6 +77,7 @@ await yargs(hideBin(process.argv))
         planOnly: argv['plan'],
         buildOnly: argv['build'],
         preset: argv.preset,
+        graphite: argv.graphite,
       });
     }
   )

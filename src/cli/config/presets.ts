@@ -6,7 +6,7 @@ import {
   validatePresetPool,
   configUtils,
   ensureConfigDir,
-  DEFAULT_GENERAL_CONFIG,
+  DEFAULT_BLUPRINT_CONFIG,
 } from '../../config/index.js';
 import { exit } from '../../exit.js';
 import {
@@ -524,7 +524,7 @@ export async function handlePresetsDefault(): Promise<void> {
   }
 
   const updatedBluprintConfig: BluprintConfig = {
-    ...(bluprintConfigResult.isOk() ? bluprintConfigResult.value : DEFAULT_GENERAL_CONFIG),
+    ...(bluprintConfigResult.isOk() ? bluprintConfigResult.value : DEFAULT_BLUPRINT_CONFIG),
     defaultPreset: selectedPresetName,
   };
 

@@ -11,12 +11,14 @@ import {
   DEFAULT_GENERAL_CONFIG,
 } from '../config/index.js';
 import { exit } from '../exit.js';
+import { graphite } from '../agent/graphite.js';
 
 export interface RunOptions {
   spec?: string;
   planOnly: boolean;
   buildOnly: boolean;
   preset?: string;
+  graphite?: boolean;
 }
 
 /**
@@ -54,6 +56,25 @@ async function resolveSpecPath(cliSpec?: string): Promise<string> {
  * @param options - Command options
  */
 export async function handleRun(options: RunOptions): Promise<void> {
+  const configResult = await resolveRuntimeConfig(options.preset);
+  if (configResult.isErr()) {
+    console.error('Error:', formatResolveError(configResult.error));
+    await exit(1);
+    return;
+  }
+  const resolved = configResult.value;
+  const graphiteEnabled = options.graphite ?? resolved.graphite.enabled;
+
+  if (!options.planOnly && graphiteEnabled) {
+    const gtAvailableResult = await graphite.isGraphiteAvailable();
+    if (gtAvailableResult.isErr() || !gtAvailableResult.value) {
+      console.error('Error: Graphite CLI (gt) is required but not available.');
+      console.error('Please install Graphite CLI or disable the --graphite flag.');
+      await exit(1);
+      return;
+    }
+  }
+
   if (!options.buildOnly) {
     const specPath = await resolveSpecPath(options.spec);
 
@@ -78,14 +99,6 @@ export async function handleRun(options: RunOptions): Promise<void> {
     }
   }
 
-  const configResult = await resolveRuntimeConfig(options.preset);
-  if (configResult.isErr()) {
-    console.error('Error:', formatResolveError(configResult.error));
-    await exit(1);
-    return;
-  }
-  const resolved = configResult.value;
-
   if (!options.buildOnly) {
     const planConfig: PlanAgentConfig = {
       planModel: resolved.preset.plan,
@@ -103,7 +116,10 @@ export async function handleRun(options: RunOptions): Promise<void> {
 
   if (!options.planOnly) {
     const buildResult = await runLoop({
-      config: options.preset ? { preset: options.preset } : undefined,
+      config: {
+        preset: options.preset,
+        graphite: graphiteEnabled,
+      },
     });
     if (buildResult.isErr()) {
       console.error('Error:', buildResult.error.message);
