@@ -122,6 +122,26 @@ const archiveCacheToRun = (
     (err) => (err instanceof Error ? err : new Error(String(err)))
   );
 
+/**
+ * Populate cache files from a source run directory.
+ * Copies files from .bluprint/runs/<runId>/ to .bluprint/cache/
+ *
+ * @param runId - The source run identifier
+ *
+ * Returns an error if any required file is missing or fails to copy.
+ */
+const populateCacheFromRun = (runId: string): ResultAsync<void, Error> =>
+  fsUtils.ensureDir(CACHE_DIR).andThen(() =>
+    ResultAsync.combine([
+      fsUtils.copyFile(join(RUNS_DIR, runId, 'spec.md'), SPEC_FILE),
+      fsUtils.copyFile(join(RUNS_DIR, runId, 'plan.md'), PLAN_FILE),
+      fsUtils.copyFile(join(RUNS_DIR, runId, 'summary.md'), SUMMARY_FILE),
+      fsUtils.copyFile(join(RUNS_DIR, runId, 'state.json'), STATE_FILE),
+    ])
+      .map(() => undefined)
+      .mapErr((e) => new Error(`Failed to populate cache from run ${runId}: ${e.message}`))
+  );
+
 const workspaceConstants = {
   BLUPRINT_DIR,
   RUNS_DIR,
@@ -166,4 +186,4 @@ const workspace = {
   },
 };
 
-export { workspace, workspaceConstants, archiveCacheToRun, listRuns };
+export { workspace, workspaceConstants, archiveCacheToRun, listRuns, populateCacheFromRun };
