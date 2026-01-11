@@ -24,6 +24,8 @@ import { resolveRuntimeConfig, getTimeoutMs, formatResolveError } from '../confi
 export interface LoopConfig {
   preset?: string;
   graphite: boolean;
+  resume?: boolean;
+  runId?: string;
 }
 
 const parseMasterOutput = (raw: string): MasterAgentOutput => {
@@ -116,7 +118,9 @@ export const runLoop = (options?: {
       let loopFailed = false;
       let loopAborted = false;
       let iteration = 0;
-      const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const isResume = options?.config?.resume ?? false;
+      const runId =
+        options?.config?.runId ?? `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const startedAt = new Date();
 
       // Resolve runtime configuration
@@ -209,10 +213,27 @@ export const runLoop = (options?: {
 
         const graphiteEnabled = options?.config?.graphite ?? false;
 
-        // Initialize state
-        await unwrapOrThrow(initializeState(resolvedConfig.limits));
-        stateInitialized = true;
-        await unwrapOrThrow(startExecution());
+        // Initialize state (skip for resume mode - state already in cache)
+        if (isResume) {
+          // Resume mode: state was already populated by handleResume
+          // Just verify it exists by reading it
+          await unwrapOrThrow(readState());
+          stateInitialized = true;
+          // Read parentRunId from state for manifest
+          const currentState = await unwrapOrThrow(readState());
+          if (currentState.parentRunId) {
+            manifestData.parentRunId = currentState.parentRunId;
+          }
+          if (currentState.branch) {
+            manifestData.branch = currentState.branch;
+          }
+        } else {
+          // Normal mode: initialize fresh state
+          await unwrapOrThrow(initializeState(resolvedConfig.limits));
+          stateInitialized = true;
+          await unwrapOrThrow(startExecution());
+        }
+        // Always clear task and report for clean start
         await unwrapOrThrow(workspace.cache.task.write(''));
         await unwrapOrThrow(workspace.cache.report.write(''));
         await logger.writeManifest(manifestData);
