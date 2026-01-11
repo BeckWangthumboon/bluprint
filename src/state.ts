@@ -1,5 +1,6 @@
 import { ResultAsync } from 'neverthrow';
 import { workspace } from './workspace.js';
+import { exec } from './shell.js';
 
 export interface TaskStatus {
   taskNumber: number;
@@ -161,17 +162,25 @@ export const initializeState = (config: InitStateConfig): ResultAsync<void, Erro
     });
 
 export const startExecution = (): ResultAsync<void, Error> =>
-  readState().andThen((state) => {
-    const updatedState: LoopState = {
-      ...state,
-      status: 'executing',
-      startedAt: new Date().toISOString(),
-      tasks: state.tasks.map((task, index) =>
-        index === 0 ? { ...task, status: 'in_progress' } : task
-      ),
-    };
-    return writeState(updatedState);
-  });
+  exec('git', ['rev-parse', '--abbrev-ref', 'HEAD'])
+    .map((result) => result.stdout.trim())
+    .orElse(() => {
+      return ResultAsync.fromSafePromise(Promise.resolve(''));
+    })
+    .andThen((branch) =>
+      readState().andThen((state) => {
+        const updatedState: LoopState = {
+          ...state,
+          status: 'executing',
+          startedAt: new Date().toISOString(),
+          branch,
+          tasks: state.tasks.map((task, index) =>
+            index === 0 ? { ...task, status: 'in_progress' } : task
+          ),
+        };
+        return writeState(updatedState);
+      })
+    );
 
 export const incrementIteration = (): ResultAsync<void, Error> =>
   readState().andThen((state) => {
