@@ -55,13 +55,17 @@ const getBaseBranch = (): ResultAsync<string, Error> => {
 
 /**
  * Creates a new stacked branch using Graphite CLI.
- * Uses `gt create <name>` which automatically tracks the parent branch.
+ * Uses `gt create <name> -m <message>` which automatically commits staged changes.
  *
  * @param branchName - The name of the branch to create
+ * @param commitMessage - The commit message to use
  * @returns ResultAsync resolving to void on success
  */
-const createStackedBranch = (branchName: string): ResultAsync<void, Error> => {
-  return exec('gt', ['create', branchName])
+const createStackedBranch = (
+  branchName: string,
+  commitMessage: string
+): ResultAsync<void, Error> => {
+  return exec('gt', ['create', branchName, '-m', commitMessage])
     .map(() => undefined)
     .mapErr(
       (error) => new Error(`Failed to create stacked branch '${branchName}': ${error.message}`)
@@ -76,15 +80,17 @@ const createStackedBranch = (branchName: string): ResultAsync<void, Error> => {
  * @param baseBranch - The base branch name
  * @param stepNumber - The plan step number
  * @param title - The plan step title
+ * @param commitMessage - The commit message to use
  * @returns ResultAsync resolving to the created branch name, or an error
  */
 const createStackedBranchForStep = (
   baseBranch: string,
   stepNumber: number,
-  title: string
+  title: string,
+  commitMessage: string
 ): ResultAsync<string, Error> => {
   const branchName = generateBranchName(baseBranch, stepNumber, title);
-  return createStackedBranch(branchName).map(() => branchName);
+  return createStackedBranch(branchName, commitMessage).map(() => branchName);
 };
 
 export const graphite = {
