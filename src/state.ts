@@ -60,7 +60,7 @@ const validateState = (data: unknown): data is LoopState => {
 
 const toError = (e: unknown): Error => (e instanceof Error ? e : new Error(String(e)));
 
-const writeState = (state: LoopState): ResultAsync<void, Error> => {
+export const writeState = (state: LoopState): ResultAsync<void, Error> => {
   const json = JSON.stringify(state, null, 2);
   return workspace.cache.state
     .write(json)
@@ -99,6 +99,15 @@ const parsePlanTasks = (planContent: string): ResultAsync<number[], Error> => {
 
   return ResultAsync.fromSafePromise(Promise.resolve(taskNumbers));
 };
+
+export const setParentRunId = (parentRunId: string): ResultAsync<void, Error> =>
+  readState().andThen((state) => {
+    const updatedState: LoopState = {
+      ...state,
+      parentRunId,
+    };
+    return writeState(updatedState);
+  });
 
 export const readState = (): ResultAsync<LoopState, Error> =>
   workspace.cache.state
