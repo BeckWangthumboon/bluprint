@@ -21,16 +21,19 @@ const slugify = (title: string, maxLength = 50): string => {
 };
 
 /**
- * Generates a stacked branch name from the base branch, step number, and title.
+ * Generates a stacked branch name from step number and title.
+ * Note: We don't include the base branch prefix because graphite
+ * automatically tracks the parent-child relationship, and including
+ * the base branch name can cause git ref conflicts when the base
+ * branch already exists.
  *
- * @param baseBranch - The base branch name (e.g., "add-dark-mode")
  * @param stepNumber - The plan step number
  * @param title - The plan step title
- * @returns The full branch name (e.g., "add-dark-mode/1-add-config-schema")
+ * @returns The branch name (e.g., "1-add-config-schema")
  */
-const generateBranchName = (baseBranch: string, stepNumber: number, title: string): string => {
+const generateBranchName = (stepNumber: number, title: string): string => {
   const slug = slugify(title);
-  return `${baseBranch}/${stepNumber}-${slug}`;
+  return `${stepNumber}-${slug}`;
 };
 
 /**
@@ -74,22 +77,20 @@ const createStackedBranch = (
 
 /**
  * Creates a stacked branch for a plan step.
- * Generates the branch name from base branch, step number, and title,
+ * Generates the branch name from step number and title,
  * then creates it via Graphite CLI.
  *
- * @param baseBranch - The base branch name
  * @param stepNumber - The plan step number
  * @param title - The plan step title
  * @param commitMessage - The commit message to use
  * @returns ResultAsync resolving to the created branch name, or an error
  */
 const createStackedBranchForStep = (
-  baseBranch: string,
   stepNumber: number,
   title: string,
   commitMessage: string
 ): ResultAsync<string, Error> => {
-  const branchName = generateBranchName(baseBranch, stepNumber, title);
+  const branchName = generateBranchName(stepNumber, title);
   return createStackedBranch(branchName, commitMessage).map(() => branchName);
 };
 

@@ -156,7 +156,9 @@ const performNormalCommit = (commitMessage: string): ResultAsync<CommitResult, E
 };
 
 /**
- * Creates a stacked branch via Graphite CLI then commits.
+ * Creates a stacked branch via Graphite CLI.
+ * Note: gt create automatically commits staged changes.
+ *
  * Falls back to normal commit if Graphite fails.
  */
 const performGraphiteCommit = (
@@ -164,12 +166,19 @@ const performGraphiteCommit = (
   stepNumber: number,
   stepTitle: string
 ): ResultAsync<CommitResult, Error> => {
+  const cleanMessage = commitMessage
+    .replace(/^```[^\n]*\n?/, '')
+    .replace(/\n?```$/, '')
+    .trim();
+
   return graphite
-    .getBaseBranch()
-    .andThen((baseBranch) => graphite.createStackedBranchForStep(baseBranch, stepNumber, stepTitle))
+    .createStackedBranchForStep(stepNumber, stepTitle, cleanMessage)
     .andThen((branchName) => {
       console.log(`[graphite] Created stacked branch: ${branchName}`);
-      return performNormalCommit(commitMessage);
+      return exec('git', ['rev-parse', 'HEAD']).map((result) => ({
+        hash: result.stdout.trim(),
+        message: cleanMessage,
+      }));
     })
     .orElse((error) => {
       console.warn(
