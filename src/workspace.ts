@@ -1,4 +1,5 @@
 import { join } from 'path';
+import { promises as fs } from 'fs';
 import { ResultAsync } from 'neverthrow';
 import { fsUtils } from './fs.js';
 
@@ -13,6 +14,8 @@ const SUMMARY_FILE = join(CACHE_DIR, 'summary.md');
 const STATE_FILE = join(CACHE_DIR, 'state.json');
 const TASK_MD_FILE = join(CACHE_DIR, 'task.md');
 const REPORT_FILE = join(CACHE_DIR, 'report.md');
+
+const toError = (err: unknown): Error => (err instanceof Error ? err : new Error(String(err)));
 
 const CACHE_FILES_TO_ARCHIVE = [
   { name: 'spec.md', path: SPEC_FILE },
@@ -34,6 +37,8 @@ const writeReport = (content: string): ResultAsync<void, Error> =>
   fsUtils.writeFile(REPORT_FILE, content);
 
 const readSpec = (): ResultAsync<string, Error> => fsUtils.readFile(SPEC_FILE);
+const writeSpec = (content: string): ResultAsync<void, Error> =>
+  fsUtils.writeFile(SPEC_FILE, content);
 
 const readPlan = (): ResultAsync<string, Error> => fsUtils.readFile(PLAN_FILE);
 const writePlan = (content: string): ResultAsync<void, Error> =>
@@ -46,6 +51,29 @@ const writeSummary = (content: string): ResultAsync<void, Error> =>
 const readState = (): ResultAsync<string, Error> => fsUtils.readFile(STATE_FILE);
 const writeState = (content: string): ResultAsync<void, Error> =>
   fsUtils.writeFile(STATE_FILE, content);
+
+/**
+ * List all run IDs from the runs directory.
+ * Returns an array of run IDs (directory names) sorted by name.
+ */
+const listRuns = (): ResultAsync<string[], Error> =>
+  ResultAsync.fromPromise(
+    (async () => {
+      const entries = await fs.readdir(RUNS_DIR);
+      const runIds: string[] = [];
+
+      for (const entry of entries) {
+        const entryPath = join(RUNS_DIR, entry);
+        const stats = await fs.stat(entryPath);
+        if (stats.isDirectory()) {
+          runIds.push(entry);
+        }
+      }
+
+      return runIds;
+    })(),
+    toError
+  );
 
 /**
  * Archive cache files to the run directory.
@@ -110,6 +138,7 @@ const workspace = {
   cache: {
     spec: {
       read: readSpec,
+      write: writeSpec,
     },
     plan: {
       read: readPlan,
@@ -132,7 +161,9 @@ const workspace = {
       write: writeReport,
     },
   },
-  config: {},
+  runs: {
+    list: listRuns,
+  },
 };
 
-export { workspace, workspaceConstants, archiveCacheToRun };
+export { workspace, workspaceConstants, archiveCacheToRun, listRuns };
