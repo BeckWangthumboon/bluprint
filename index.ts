@@ -20,6 +20,7 @@ import {
   handlePresetsDefault,
 } from './src/cli/config/presets.js';
 import { handleRun } from './src/cli/run.js';
+import { handleResume } from './src/cli/resume.js';
 
 process.once('SIGINT', () => void exit(130));
 process.once('SIGTERM', () => void exit(143));
@@ -78,6 +79,37 @@ await yargs(hideBin(process.argv))
         buildOnly: argv['build'],
         preset: argv.preset,
         graphite: argv.graphite,
+      });
+    }
+  )
+  .command(
+    'resume',
+    'Resume a previous run from a saved state',
+    (yargs) =>
+      yargs
+        .option('interactive', {
+          alias: 'i',
+          type: 'boolean',
+          description: 'Interactive mode to select from available runs',
+          default: false,
+        })
+        .option('from', {
+          type: 'string',
+          description: 'Run ID to resume from',
+        })
+        .check((argv) => {
+          if (!argv.interactive && !argv.from) {
+            throw new Error('Use --interactive (-i) or --from to resume a run');
+          }
+          if (argv.interactive && argv.from) {
+            throw new Error('Cannot specify both --interactive and --from. Use one or the other.');
+          }
+          return true;
+        }),
+    async (argv) => {
+      await handleResume({
+        interactive: argv.interactive,
+        from: argv.from,
       });
     }
   )
