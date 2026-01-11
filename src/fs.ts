@@ -79,6 +79,18 @@ const ensureDir = (dirPath: string): ResultAsync<void, Error> =>
     toError
   );
 
+const listDir = (dirPath: string): ResultAsync<string[], Error> =>
+  ResultAsync.fromPromise(fs.readdir(dirPath), toError);
+
+const copyFile = (src: string, dest: string): ResultAsync<void, Error> =>
+  ResultAsync.fromPromise(
+    (async () => {
+      await fs.mkdir(dirname(dest), { recursive: true });
+      await fs.copyFile(src, dest);
+    })(),
+    toError
+  );
+
 export const fsUtils = {
   readFile,
   writeFile,
@@ -89,4 +101,6 @@ export const fsUtils = {
   removeFile,
   fileExists,
   ensureDir,
+  listDir,
+  copyFile,
 };
