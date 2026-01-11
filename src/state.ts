@@ -17,6 +17,8 @@ export interface LoopState {
   startedAt?: string;
   iterationCount: number;
   tasks: TaskStatus[];
+  parentRunId?: string;
+  branch?: string;
 }
 
 const STATE_VERSION = '1.0.0';
@@ -48,7 +50,10 @@ const validateState = (data: unknown): data is LoopState => {
           task.status === 'failed' ||
           task.status === 'aborted') &&
         (task.commitHash === undefined || typeof task.commitHash === 'string')
-    )
+    ) &&
+    (state.startedAt === undefined || typeof state.startedAt === 'string') &&
+    (state.parentRunId === undefined || typeof state.parentRunId === 'string') &&
+    (state.branch === undefined || typeof state.branch === 'string')
   );
 };
 
