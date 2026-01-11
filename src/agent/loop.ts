@@ -134,6 +134,7 @@ export const runLoop = (options?: {
         totalIterations: 0,
         inputSizes: { spec: 0, plan: 0, summary: 0 },
         iterations: [],
+        branch: undefined, // Will be populated after branch capture
       };
 
       // Initialize new logger

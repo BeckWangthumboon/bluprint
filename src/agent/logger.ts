@@ -28,6 +28,8 @@ interface ManifestData {
   totalIterations: number;
   inputSizes: { spec: number; plan: number; summary: number };
   error?: string;
+  parentRunId?: string;
+  branch?: string;
   iterations: Array<{
     iteration: number;
     planStep: number;
@@ -258,6 +260,14 @@ ${data.error ? `\n## Error\n\n${data.error}` : ''}`;
       frontmatterData.error = data.error;
     }
 
+    if (data.parentRunId) {
+      frontmatterData.parentRunId = data.parentRunId;
+    }
+
+    if (data.branch) {
+      frontmatterData.branch = data.branch;
+    }
+
     const frontmatter = toFrontmatter(frontmatterData);
 
     const duration = data.endedAt
@@ -300,6 +310,10 @@ ${data.error ? `\n## Error\n\n${data.error}` : ''}`;
     const content = `${frontmatter}
 
 # Run Summary
+
+**Run ID:** ${data.runId}
+**Branch:** ${data.branch || '(unknown)'}
+${data.parentRunId ? `\n**Parent Run:** ${data.parentRunId}` : ''}
 
 ${statusLine}
 
