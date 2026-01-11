@@ -1,6 +1,8 @@
 import { join } from 'path';
+import * as p from '@clack/prompts';
 import { ResultAsync } from 'neverthrow';
 import type { LoopState, TaskStatus } from '../state.js';
+import { exit } from '../exit.js';
 import { fsUtils } from '../fs.js';
 import { workspaceConstants } from '../workspace.js';
 
@@ -31,6 +33,26 @@ export interface RunSelection {
 const toError = (err: unknown): Error => (err instanceof Error ? err : new Error(String(err)));
 
 const getRunDir = (runId: string): string => join(workspaceConstants.RUNS_DIR, runId);
+
+const formatTimeAgo = (isoDate: string): string => {
+  const date = new Date(isoDate);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffSecs = Math.floor(diffMs / 1000);
+  const diffMins = Math.floor(diffSecs / 60);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffSecs < 60) {
+    return `${diffSecs} seconds ago`;
+  } else if (diffMins < 60) {
+    return `${diffMins} minute${diffMins !== 1 ? 's' : ''} ago`;
+  } else if (diffHours < 24) {
+    return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+  } else {
+    return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
+  }
+};
 
 export const loadRunState = (runId: string): ResultAsync<LoopState, Error> => {
   const runDir = getRunDir(runId);
@@ -169,7 +191,7 @@ const buildResumableRun = (runId: string, state: LoopState): ResultAsync<Resumab
   return fsUtils.readFile(specPath).andThen((specContent) => {
     const title = extractTitleFromSpec(specContent);
     const startedAt = state.startedAt !== undefined ? state.startedAt : new Date().toISOString();
-    const branch = state.branch !== undefined ? state.branch : 'unknown';
+    const branch = state.branch !== undefined ? state.branch : 'unknown branch';
 
     const resumableRun: ResumableRun = {
       runId,
@@ -234,6 +256,77 @@ export const scanResumableRuns = (): ResultAsync<ResumableRun[], Error> => {
     });
 };
 
-export async function handleResume(_options: ResumeOptions): Promise<void> {
-  console.log('Resume not implemented yet');
+const displayResumableRuns = async (runs: ResumableRun[]): Promise<RunSelection | null> => {
+  p.intro('Resume a previous run');
+
+  if (runs.length === 0) {
+    p.log.message('No resumable runs found');
+    p.outro('Nothing to resume');
+    return null;
+  }
+
+  const selectOptions = runs.map((run) => {
+    const timeAgo = formatTimeAgo(run.startedAt);
+    const branch = run.branch;
+    const status = run.status;
+    const progress = `${run.completedTasks}/${run.totalTasks} tasks completed`;
+
+    const label = [
+      run.title,
+      `  Run ID: ${run.runId}`,
+      `  Branch: ${branch}`,
+      `  Status: ${status}`,
+      `  Started: ${timeAgo}`,
+      `  Progress: ${progress}`,
+    ].join('\n');
+
+    return {
+      value: run.runId,
+      label,
+    };
+  });
+
+  const selectedRunId = await p.select({
+    message: 'Select a run to resume',
+    options: selectOptions,
+  });
+
+  if (p.isCancel(selectedRunId)) {
+    p.cancel('Resume cancelled');
+    await exit(0);
+    return null;
+  }
+
+  const selectedRun = runs.find((r) => r.runId === selectedRunId);
+  if (selectedRun) {
+    return { runId: selectedRun.runId, title: selectedRun.title };
+  }
+
+  return null;
+};
+
+export async function handleResume(options: ResumeOptions): Promise<void> {
+  if (options.from) {
+    p.intro('Bluprint Resume');
+    p.log.message(`Resuming from specified run: ${options.from}`);
+    p.outro('Ready to resume');
+    return;
+  }
+
+  const scanResult = await scanResumableRuns();
+  if (scanResult.isErr()) {
+    p.note(scanResult.error.message, 'Error');
+    await exit(1);
+    return;
+  }
+
+  const resumableRuns = scanResult.value;
+
+  if (options.interactive) {
+    const selection = await displayResumableRuns(resumableRuns);
+    if (selection) {
+      p.log.message(`Selected: ${selection.title} (${selection.runId})`);
+      p.outro('Ready to resume');
+    }
+  }
 }
