@@ -166,11 +166,20 @@ const selectModelsToAdd = async (
       continue;
     }
 
-    const modelOptions = availableModels.map((modelID) => ({
-      value: modelID,
-      label: modelID,
-      hint: existingModelKeys.has(`${providerID}/${modelID}`) ? 'already in pool' : undefined,
-    }));
+    const modelOptions = availableModels
+      .filter((modelID) => !existingModelKeys.has(`${providerID}/${modelID}`))
+      .map((modelID) => ({ value: modelID, label: modelID }));
+
+    if (modelOptions.length === 0) {
+      const continueResult = await p.confirm({
+        message: `All models from ${providerID} are already in your pool. Add models from another provider?`,
+        initialValue: true,
+      });
+      if (p.isCancel(continueResult) || !continueResult) {
+        break;
+      }
+      continue;
+    }
 
     const modelSelectResult = await p.multiselect({
       message: 'Select models to add',
@@ -185,11 +194,8 @@ const selectModelsToAdd = async (
     }
 
     const selectedModelIDs = modelSelectResult;
-    const modelsToAdd = selectedModelIDs.filter(
-      (modelID) => !existingModelKeys.has(`${providerID}/${modelID}`)
-    );
 
-    for (const modelID of modelsToAdd) {
+    for (const modelID of selectedModelIDs) {
       const validateResult = await lib.provider.validate(providerID, modelID);
       if (validateResult.isErr()) {
         p.note(`Failed to validate ${providerID}/${modelID}`, 'Error');
@@ -203,7 +209,7 @@ const selectModelsToAdd = async (
       }
     }
 
-    for (const modelID of modelsToAdd) {
+    for (const modelID of selectedModelIDs) {
       currentModels.push({ providerID, modelID });
       existingModelKeys.add(`${providerID}/${modelID}`);
     }
