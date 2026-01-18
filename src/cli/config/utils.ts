@@ -269,7 +269,9 @@ export async function buildModelOptionsWithStatus(
     modelOptions.push({ value: formatted, label: formatted, hint });
   }
 
-  return modelOptions.sort((a, b) => a.label.localeCompare(b.label));
+  return modelOptions.sort((firstOption, secondOption) =>
+    firstOption.label.localeCompare(secondOption.label)
+  );
 }
 
 /**
@@ -288,7 +290,7 @@ export async function requireModelsConfigOrExit(options: {
   const result = await configUtils.models.read();
   if (result.isErr()) {
     const error = result.error;
-    const missingMsg = "No models.json found. Run 'bluprint config models edit' first.";
+    const missingMsg = "No models.json found. Run 'bluprint models add' first.";
     const errorMsg = 'Failed to read models config';
     const msg = error.type === 'CONFIG_FILE_MISSING' ? missingMsg : errorMsg;
 
