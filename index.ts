@@ -2,10 +2,11 @@ import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import { exit } from './src/exit.js';
 import {
-  handleModelsEdit,
+  handleModelsAdd,
+  handleModelsRemove,
   handleModelsList,
   handleModelsValidate,
-} from './src/cli/config/models.js';
+} from './src/cli/config/models/index.js';
 import {
   handleConfigShow,
   handleConfigGet,
@@ -82,43 +83,103 @@ await yargs(hideBin(process.argv))
     }
   )
   .command(
+    'models',
+    'Manage the model pool',
+    (yargs) =>
+      yargs
+        .command(
+          'add',
+          'Add models to the pool',
+          (yargs) =>
+            yargs
+              .option('model', {
+                type: 'string',
+                description: 'Model identifier in provider/model format',
+                array: true,
+              })
+              .option('yes', {
+                alias: 'y',
+                type: 'boolean',
+                description: 'Skip confirmation prompts',
+                default: false,
+              }),
+          async (argv) => {
+            await handleModelsAdd({
+              models: argv.model,
+              yes: argv.yes,
+            });
+          }
+        )
+        .command(
+          'remove',
+          'Remove models from the pool',
+          (yargs) =>
+            yargs
+              .option('model', {
+                type: 'string',
+                description: 'Model identifier in provider/model format',
+                array: true,
+              })
+              .option('all', {
+                type: 'boolean',
+                description: 'Remove all models from the pool',
+                default: false,
+              })
+              .option('yes', {
+                alias: 'y',
+                type: 'boolean',
+                description: 'Skip confirmation prompts',
+                default: false,
+              }),
+          async (argv) => {
+            await handleModelsRemove({
+              models: argv.model,
+              flags: { all: argv.all, yes: argv.yes },
+            });
+          }
+        )
+        .command(
+          'list',
+          'List all models in the pool',
+          (yargs) =>
+            yargs.option('json', {
+              type: 'boolean',
+              description: 'Output as JSON',
+              default: false,
+            }),
+          async (argv) => {
+            await handleModelsList({ json: argv.json });
+          }
+        )
+        .command(
+          'validate',
+          'Validate existing models in pool',
+          (yargs) =>
+            yargs
+              .option('json', {
+                type: 'boolean',
+                description: 'Output as JSON',
+                default: false,
+              })
+              .option('verbose', {
+                alias: 'v',
+                type: 'boolean',
+                description: 'Show all models, not just invalid ones',
+                default: false,
+              }),
+          async (argv) => {
+            await handleModelsValidate({ json: argv.json, verbose: argv.verbose });
+          }
+        )
+        .demandCommand(1, 'You must provide a models subcommand')
+        .strict(),
+    () => {}
+  )
+  .command(
     'config',
     'Manage Bluprint configuration',
     (yargs) =>
       yargs
-        .command(
-          'models',
-          'Manage the model pool',
-          (yargs) =>
-            yargs
-              .command(
-                'edit',
-                'Add/remove models in the pool',
-                () => {},
-                async () => {
-                  await handleModelsEdit();
-                }
-              )
-              .command(
-                'list',
-                'List all models in the pool',
-                () => {},
-                async () => {
-                  await handleModelsList();
-                }
-              )
-              .command(
-                'validate',
-                'Validate existing models in pool',
-                () => {},
-                async () => {
-                  await handleModelsValidate();
-                }
-              )
-              .demandCommand(1, 'You must provide a models subcommand')
-              .strict(),
-          () => {}
-        )
         .command(
           'show',
           'Show all general config values',

@@ -163,9 +163,7 @@ const callModelWithRepair = (
       }
     ).andThen((rawOutput) => {
       // Try to parse JSON
-      const parsedResult = parseJson(rawOutput).orElse(() =>
-        parseJson(stripCodeBlock(rawOutput))
-      );
+      const parsedResult = parseJson(rawOutput).orElse(() => parseJson(stripCodeBlock(rawOutput)));
       if (parsedResult.isErr()) {
         if (attemptNumber >= MAX_REPAIR_ATTEMPTS) {
           return err(

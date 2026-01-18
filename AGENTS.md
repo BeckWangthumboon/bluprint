@@ -35,7 +35,7 @@ bun run lint:clean      # Run ESLint without cache
 bun run index.ts run --spec <path>           # Run full pipeline
 bun run index.ts run --plan                  # Generate plan only
 bun run index.ts run --build                 # Execute build only
-bun run index.ts config models list          # List model pool
+bun run index.ts models list                 # List model pool
 bun run index.ts config presets list         # List model presets
 ```
 
