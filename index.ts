@@ -6,7 +6,7 @@ import {
   handleModelsRemove,
   handleModelsList,
   handleModelsValidate,
-} from './src/cli/config/models/index.js';
+} from './src/cli/models/index.js';
 import {
   handleConfigList,
   handleConfigGet,
@@ -19,7 +19,7 @@ import {
   handlePresetsEdit,
   handlePresetsList,
   handlePresetsRemove,
-} from './src/cli/config/presets/index.js';
+} from './src/cli/presets/index.js';
 import { handleRun } from './src/cli/run.js';
 
 process.once('SIGINT', () => void exit(130));

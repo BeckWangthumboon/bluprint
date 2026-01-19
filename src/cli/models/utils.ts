@@ -1,14 +1,14 @@
 import * as p from '@clack/prompts';
-import type { ModelConfig, ModelPreset, ModelsConfig } from '../../../config/index.js';
+import type { ModelConfig, ModelPreset, ModelsConfig } from '../../config/index.js';
 import {
   configUtils,
   ensureConfigDir,
   formatModelConfig,
   modelConfigEquals,
-} from '../../../config/index.js';
-import type { Provider } from '../../../agent/opencodesdk.js';
-import { exit } from '../../../exit.js';
-import { findPresetsUsingModel, type SDKWithProviders } from '../utils.js';
+} from '../../config/index.js';
+import type { Provider } from '../../agent/opencodesdk.js';
+import { exit } from '../../exit.js';
+import { findPresetsUsingModel, type SDKWithProviders } from '../shared/utils.js';
 
 const parseModelReference = (value: string): ModelConfig | null => {
   const parts = value

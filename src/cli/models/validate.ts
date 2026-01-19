@@ -1,8 +1,8 @@
 import * as p from '@clack/prompts';
-import type { ModelConfig } from '../../../config/index.js';
-import { formatModelConfig } from '../../../config/index.js';
-import { exit } from '../../../exit.js';
-import { connectToOpenCodeOrExit, requireModelsConfigOrExit } from '../utils.js';
+import type { ModelConfig } from '../../config/index.js';
+import { formatModelConfig } from '../../config/index.js';
+import { exit } from '../../exit.js';
+import { connectToOpenCodeOrExit, requireModelsConfigOrExit } from '../shared/utils.js';
 import { saveEditedModelsToConfig } from './utils.js';
 
 enum ModelValidationErrorReason {

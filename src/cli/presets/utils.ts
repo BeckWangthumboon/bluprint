@@ -5,16 +5,16 @@ import type {
   ModelConfig,
   ModelPreset,
   ModelsConfig,
-} from '../../../config/index.js';
+} from '../../config/index.js';
 import {
   AGENT_TYPES,
   configUtils,
   ensureConfigDir,
   formatModelConfig,
   validatePresetPool,
-} from '../../../config/index.js';
-import { exit } from '../../../exit.js';
-import type { ModelValidationStatus } from '../utils.js';
+} from '../../config/index.js';
+import { exit } from '../../exit.js';
+import type { ModelValidationStatus } from '../shared/utils.js';
 
 /**
  * Parses a provider/model string into a ModelConfig.
@@ -190,10 +190,7 @@ const writeBluprintConfigOrExit = async (
 ): Promise<boolean> => {
   const writeResult = await configUtils.bluprint.write(config);
   if (writeResult.isErr()) {
-    reportError(
-      options.usePrompts,
-      options.errorMessage ?? 'Failed to write bluprint config'
-    );
+    reportError(options.usePrompts, options.errorMessage ?? 'Failed to write bluprint config');
     await exit(1);
     return false;
   }

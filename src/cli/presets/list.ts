@@ -1,12 +1,12 @@
-import type { ModelPreset } from '../../../config/index.js';
-import { AGENT_TYPES, formatModelConfig } from '../../../config/index.js';
-import { exit } from '../../../exit.js';
+import type { ModelPreset } from '../../config/index.js';
+import { AGENT_TYPES, formatModelConfig } from '../../config/index.js';
+import { exit } from '../../exit.js';
 import {
   connectToOpenCodeOrExit,
   formatModelWithStatus,
   requireModelsConfigOrExit,
   validateMultiplePresets,
-} from '../utils.js';
+} from '../shared/utils.js';
 import { buildPresetStatus, readBluprintConfigOrExit } from './utils.js';
 
 const orderPresetNames = (

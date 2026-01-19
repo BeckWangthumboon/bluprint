@@ -1,12 +1,12 @@
 import * as p from '@clack/prompts';
-import type { AgentType, ModelPreset } from '../../../config/index.js';
-import { AGENT_TYPES } from '../../../config/index.js';
-import { exit } from '../../../exit.js';
+import type { AgentType, ModelPreset } from '../../config/index.js';
+import { AGENT_TYPES } from '../../config/index.js';
+import { exit } from '../../exit.js';
 import {
   buildModelOptionsWithStatus,
   connectToOpenCodeOrExit,
   requireModelsConfigOrExit,
-} from '../utils.js';
+} from '../shared/utils.js';
 import {
   parseModelReference,
   parsePresetModelArgs,

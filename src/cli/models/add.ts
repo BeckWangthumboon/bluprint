@@ -1,7 +1,7 @@
 import * as p from '@clack/prompts';
-import { formatModelConfig, modelConfigEquals } from '../../../config/index.js';
-import { exit } from '../../../exit.js';
-import { connectToOpenCodeOrExit, fetchProvidersWithModels } from '../utils.js';
+import { formatModelConfig, modelConfigEquals } from '../../config/index.js';
+import { exit } from '../../exit.js';
+import { connectToOpenCodeOrExit, fetchProvidersWithModels } from '../shared/utils.js';
 import {
   dedupeModels,
   parseModelArgs,

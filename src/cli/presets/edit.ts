@@ -1,14 +1,14 @@
 import * as p from '@clack/prompts';
-import type { AgentType, ModelPreset } from '../../../config/index.js';
-import { AGENT_TYPES, formatModelConfig, modelConfigEquals } from '../../../config/index.js';
-import { exit } from '../../../exit.js';
+import type { AgentType, ModelPreset } from '../../config/index.js';
+import { AGENT_TYPES, formatModelConfig, modelConfigEquals } from '../../config/index.js';
+import { exit } from '../../exit.js';
 import {
   buildModelOptionsWithStatus,
   connectToOpenCodeOrExit,
   requireModelsConfigOrExit,
   formatModelWithStatus,
   validatePresets,
-} from '../utils.js';
+} from '../shared/utils.js';
 import {
   buildPresetOptions,
   parseModelReference,
@@ -77,7 +77,10 @@ const handlePresetsEdit = async (options: {
     }
 
     if (Object.keys(parsed.preset).length === 0) {
-      reportError(usePrompts, 'No model updates provided. Use interactive mode or pass model flags.');
+      reportError(
+        usePrompts,
+        'No model updates provided. Use interactive mode or pass model flags.'
+      );
       await exit(1);
       return;
     }

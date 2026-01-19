@@ -1,6 +1,6 @@
-import { formatModelConfig } from '../../../config/index.js';
-import { exit } from '../../../exit.js';
-import { requireModelsConfigOrExit } from '../utils.js';
+import { formatModelConfig } from '../../config/index.js';
+import { exit } from '../../exit.js';
+import { requireModelsConfigOrExit } from '../shared/utils.js';
 
 /**
  * Handles the "models list" command.

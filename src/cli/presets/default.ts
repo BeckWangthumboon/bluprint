@@ -1,17 +1,13 @@
 import * as p from '@clack/prompts';
-import type { BluprintConfig } from '../../../config/index.js';
-import {
-  AGENT_TYPES,
-  DEFAULT_BLUPRINT_CONFIG,
-  validatePresetPool,
-} from '../../../config/index.js';
-import { exit } from '../../../exit.js';
+import type { BluprintConfig } from '../../config/index.js';
+import { AGENT_TYPES, DEFAULT_BLUPRINT_CONFIG, validatePresetPool } from '../../config/index.js';
+import { exit } from '../../exit.js';
 import {
   connectToOpenCodeOrExit,
   formatModelWithStatus,
   requireModelsConfigOrExit,
   validatePresets,
-} from '../utils.js';
+} from '../shared/utils.js';
 import {
   buildPresetOptions,
   ensureConfigDirOrExit,

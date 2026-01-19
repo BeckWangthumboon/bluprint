@@ -1,7 +1,7 @@
 import * as p from '@clack/prompts';
-import { formatModelConfig } from '../../../config/index.js';
-import { exit } from '../../../exit.js';
-import { requireModelsConfigOrExit } from '../utils.js';
+import { formatModelConfig } from '../../config/index.js';
+import { exit } from '../../exit.js';
+import { requireModelsConfigOrExit } from '../shared/utils.js';
 import {
   buildModelKeySet,
   buildRemovalOptions,

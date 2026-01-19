@@ -1,6 +1,6 @@
 import * as p from '@clack/prompts';
-import { exit } from '../../../exit.js';
-import { requireModelsConfigOrExit } from '../utils.js';
+import { exit } from '../../exit.js';
+import { requireModelsConfigOrExit } from '../shared/utils.js';
 import {
   buildPresetOptions,
   removePresetAndPersist,
