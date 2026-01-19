@@ -146,6 +146,7 @@ const handleModelsValidate = async (options: {
       await saveEditedModelsToConfig(config.models, remainingModels, config.presets, {
         skipConfirmations: false,
         confirmRemovals: false,
+        usePrompts,
       });
       return;
     }

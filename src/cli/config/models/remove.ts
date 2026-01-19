@@ -7,6 +7,8 @@ import {
   buildRemovalOptions,
   dedupeModels,
   parseModelArgs,
+  reportError,
+  reportWarning,
   saveEditedModelsToConfig,
 } from './utils.js';
 
@@ -24,28 +26,32 @@ const handleModelsRemove = async (options: {
   models: string[] | undefined;
   flags: Record<string, boolean>;
 }): Promise<void> => {
-  p.intro('Remove models');
-
   const modelArgs = options.models ?? [];
   const flags = {
     all: options.flags.all ?? false,
     yes: options.flags.yes ?? false,
   };
+  const hasSelectionArgs = flags.all || modelArgs.length > 0;
+  const usePrompts = !hasSelectionArgs || !flags.yes;
+
+  if (usePrompts) {
+    p.intro('Remove models');
+  }
 
   if (flags.all && modelArgs.length > 0) {
-    p.log.error('Cannot use --all with --model.');
+    reportError(usePrompts, 'Cannot use --all with --model.');
     await exit(1);
     return;
   }
 
-  const config = await requireModelsConfigOrExit({ usePrompts: true });
+  const config = await requireModelsConfigOrExit({ usePrompts });
   if (!config) return;
 
   const originalModels = config.models;
   const presets = config.presets;
 
   if (originalModels.length === 0) {
-    p.log.warn('No models added.');
+    reportWarning(usePrompts, 'No models added.');
     await exit(0);
     return;
   }
@@ -54,6 +60,7 @@ const handleModelsRemove = async (options: {
     await saveEditedModelsToConfig(originalModels, [], presets, {
       skipConfirmations: flags.yes,
       confirmRemovals: true,
+      usePrompts,
     });
     return;
   }
@@ -61,7 +68,7 @@ const handleModelsRemove = async (options: {
   if (modelArgs.length > 0) {
     const parsedModels = parseModelArgs(modelArgs);
     if (parsedModels.invalid.length > 0) {
-      p.log.error(`Invalid model format: ${parsedModels.invalid.join(', ')}`);
+      reportError(usePrompts, `Invalid model format: ${parsedModels.invalid.join(', ')}`);
       await exit(1);
       return;
     }
@@ -71,7 +78,8 @@ const handleModelsRemove = async (options: {
     const missingModels = uniqueModels.filter((model) => !poolKeys.has(formatModelConfig(model)));
 
     if (missingModels.length > 0) {
-      p.log.error(
+      reportError(
+        usePrompts,
         `Model(s) not in pool: ${missingModels.map((model) => formatModelConfig(model)).join(', ')}`
       );
       await exit(1);
@@ -86,6 +94,7 @@ const handleModelsRemove = async (options: {
     await saveEditedModelsToConfig(originalModels, remainingModels, presets, {
       skipConfirmations: flags.yes,
       confirmRemovals: true,
+      usePrompts,
     });
     return;
   }
@@ -111,6 +120,7 @@ const handleModelsRemove = async (options: {
   await saveEditedModelsToConfig(originalModels, remainingModels, presets, {
     skipConfirmations: flags.yes,
     confirmRemovals: true,
+    usePrompts,
   });
 };
 

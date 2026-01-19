@@ -6,6 +6,9 @@ import {
   dedupeModels,
   parseModelArgs,
   readModelsConfigForAdd,
+  reportError,
+  reportInfo,
+  reportWarning,
   saveEditedModelsToConfig,
   selectModelsToAdd,
 } from './utils.js';
@@ -22,19 +25,23 @@ const handleModelsAdd = async (options: {
   models: string[] | undefined;
   yes: boolean;
 }): Promise<void> => {
-  p.intro('Add models');
+  const modelArgs = options.models ?? [];
+  const usePrompts = modelArgs.length === 0;
 
-  const config = await readModelsConfigForAdd();
+  if (usePrompts) {
+    p.intro('Add models');
+  }
+
+  const config = await readModelsConfigForAdd({ usePrompts });
   if (!config) return;
 
   const originalModels = config.models;
   const presets = config.presets;
-  const modelArgs = options.models ?? [];
 
   if (modelArgs.length > 0) {
     const parsedModels = parseModelArgs(modelArgs);
     if (parsedModels.invalid.length > 0) {
-      p.note(`Invalid model format: ${parsedModels.invalid.join(', ')}`, 'Error');
+      reportError(usePrompts, `Invalid model format: ${parsedModels.invalid.join(', ')}`);
       await exit(1);
       return;
     }
@@ -46,27 +53,27 @@ const handleModelsAdd = async (options: {
 
     const skippedCount = uniqueModels.length - modelsToAdd.length;
     if (skippedCount > 0) {
-      p.log.warn(`Skipping ${skippedCount} model(s) already in pool`);
+      reportWarning(usePrompts, `Skipping ${skippedCount} model(s) already in pool`);
     }
 
     if (modelsToAdd.length === 0) {
-      p.note('All provided models are already in the pool', 'Info');
+      reportInfo(usePrompts, 'All provided models are already in the pool');
       await exit(0);
       return;
     }
 
-    const lib = await connectToOpenCodeOrExit(false);
+    const lib = await connectToOpenCodeOrExit(usePrompts);
     if (!lib) return;
 
     for (const model of modelsToAdd) {
       const validateResult = await lib.provider.validate(model.providerID, model.modelID);
       if (validateResult.isErr()) {
-        console.error(`Failed to validate ${formatModelConfig(model)}`);
+        reportError(usePrompts, `Failed to validate ${formatModelConfig(model)}`);
         await exit(1);
         return;
       }
       if (!validateResult.value) {
-        console.error(`Model ${formatModelConfig(model)} is not valid`);
+        reportError(usePrompts, `Model ${formatModelConfig(model)} is not valid`);
         await exit(1);
         return;
       }
@@ -76,6 +83,7 @@ const handleModelsAdd = async (options: {
     await saveEditedModelsToConfig(originalModels, updatedModels, presets, {
       skipConfirmations: options.yes,
       confirmRemovals: false,
+      usePrompts,
     });
     return;
   }
@@ -105,6 +113,7 @@ const handleModelsAdd = async (options: {
   await saveEditedModelsToConfig(originalModels, finalModels, presets, {
     skipConfirmations: options.yes,
     confirmRemovals: false,
+    usePrompts: true,
   });
 };
 

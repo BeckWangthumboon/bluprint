@@ -25,6 +25,38 @@ const parseModelReference = (value: string): ModelConfig | null => {
   return { providerID, modelID };
 };
 
+const reportError = (usePrompts: boolean, message: string): void => {
+  if (usePrompts) {
+    p.note(message, 'Error');
+  } else {
+    console.error(message);
+  }
+};
+
+const reportWarning = (usePrompts: boolean, message: string): void => {
+  if (usePrompts) {
+    p.log.warn(message);
+  } else {
+    console.warn(message);
+  }
+};
+
+const reportInfo = (usePrompts: boolean, message: string): void => {
+  if (usePrompts) {
+    p.log.message(message);
+  } else {
+    console.log(message);
+  }
+};
+
+const reportOutro = (usePrompts: boolean, message: string): void => {
+  if (usePrompts) {
+    p.outro(message);
+  } else {
+    console.log(message);
+  }
+};
+
 /**
  * Parses CLI model arguments into model configs.
  *
@@ -72,9 +104,13 @@ const buildModelKeySet = (models: ModelConfig[]): Set<string> => {
 /**
  * Reads models config for add operations, returning defaults if missing.
  *
+ * @param options - Configuration options.
+ * @param options.usePrompts - Whether to use prompt-friendly output.
  * @returns Models config or null when an error occurs.
  */
-const readModelsConfigForAdd = async (): Promise<ModelsConfig | null> => {
+const readModelsConfigForAdd = async (options: {
+  usePrompts: boolean;
+}): Promise<ModelsConfig | null> => {
   const configResult = await configUtils.models.read();
   if (configResult.isOk()) {
     return configResult.value;
@@ -82,7 +118,7 @@ const readModelsConfigForAdd = async (): Promise<ModelsConfig | null> => {
   if (configResult.error.type === 'CONFIG_FILE_MISSING') {
     return { models: [], presets: {} };
   }
-  p.note('Failed to read models config', 'Error');
+  reportError(options.usePrompts, 'Failed to read models config');
   await exit(1);
   return null;
 };
@@ -244,17 +280,19 @@ const selectModelsToAdd = async (
  * @param options - Configuration options.
  * @param options.skipConfirmations - Skip confirmation prompts.
  * @param options.confirmRemovals - Ask for removal confirmation.
+ * @param options.usePrompts - Whether to use prompt-friendly output.
  * @returns Resolves when the operation completes.
  */
 const saveEditedModelsToConfig = async (
   originalModels: ModelConfig[],
   newModels: ModelConfig[],
   presets: Record<string, ModelPreset>,
-  options: { skipConfirmations: boolean; confirmRemovals: boolean }
+  options: { skipConfirmations: boolean; confirmRemovals: boolean; usePrompts: boolean }
 ): Promise<void> => {
+  const usePrompts = options.usePrompts;
   const configDirResult = await ensureConfigDir();
   if (configDirResult.isErr()) {
-    p.note('Failed to ensure config directory exists', 'Error');
+    reportError(usePrompts, 'Failed to ensure config directory exists');
     await exit(1);
     return;
   }
@@ -278,14 +316,14 @@ const saveEditedModelsToConfig = async (
   }
 
   if (presetUsages.length > 0) {
-    p.log.warn('The following models to be removed are used in presets:');
+    reportWarning(usePrompts, 'The following models to be removed are used in presets:');
     for (const { model, presetNames } of presetUsages) {
-      p.log.message(`  - ${formatModelConfig(model)}`);
-      p.log.message(`    Used in: ${presetNames.join(', ')}`);
+      reportInfo(usePrompts, `  - ${formatModelConfig(model)}`);
+      reportInfo(usePrompts, `    Used in: ${presetNames.join(', ')}`);
     }
-    p.log.message('Removing them will make those presets invalid.');
+    reportInfo(usePrompts, 'Removing them will make those presets invalid.');
 
-    if (!skipConfirmations) {
+    if (usePrompts && !skipConfirmations) {
       const confirmResult = await p.confirm({
         message: 'Continue anyway?',
       });
@@ -298,7 +336,7 @@ const saveEditedModelsToConfig = async (
     }
   }
 
-  if (confirmRemovals && removedModels.length > 0 && !skipConfirmations) {
+  if (confirmRemovals && removedModels.length > 0 && usePrompts && !skipConfirmations) {
     const confirmResult = await p.confirm({
       message: `Remove ${removedModels.length} model(s)?`,
     });
@@ -311,7 +349,7 @@ const saveEditedModelsToConfig = async (
   }
 
   if (addedModels.length === 0 && removedModels.length === 0) {
-    p.outro('No changes made');
+    reportOutro(usePrompts, 'No changes made');
     await exit(0);
     return;
   }
@@ -323,26 +361,26 @@ const saveEditedModelsToConfig = async (
 
   const writeResult = await configUtils.models.write(updatedConfig);
   if (writeResult.isErr()) {
-    p.note('Failed to write config', 'Error');
+    reportError(usePrompts, 'Failed to write config');
     await exit(1);
     return;
   }
 
   if (addedModels.length > 0) {
-    p.log.message(`Added ${addedModels.length} model(s):`);
+    reportInfo(usePrompts, `Added ${addedModels.length} model(s):`);
     addedModels.forEach((model) => {
-      p.log.message(`  + ${formatModelConfig(model)}`);
+      reportInfo(usePrompts, `  + ${formatModelConfig(model)}`);
     });
   }
 
   if (removedModels.length > 0) {
-    p.log.message(`Removed ${removedModels.length} model(s):`);
+    reportInfo(usePrompts, `Removed ${removedModels.length} model(s):`);
     removedModels.forEach((model) => {
-      p.log.message(`  - ${formatModelConfig(model)}`);
+      reportInfo(usePrompts, `  - ${formatModelConfig(model)}`);
     });
   }
 
-  p.outro('Done!');
+  reportOutro(usePrompts, 'Done!');
   await exit(0);
 };
 
@@ -352,6 +390,10 @@ export {
   dedupeModels,
   parseModelArgs,
   readModelsConfigForAdd,
+  reportError,
+  reportInfo,
+  reportOutro,
+  reportWarning,
   saveEditedModelsToConfig,
   selectModelsToAdd,
 };
