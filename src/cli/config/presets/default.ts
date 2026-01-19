@@ -137,6 +137,15 @@ const handlePresetsDefault = async (options: {
   if (hasInvalidModels) {
     logInvalidPresetWarning(usePrompts);
 
+    if (!usePrompts && !options.yes) {
+      reportError(
+        usePrompts,
+        'Selected preset contains invalid models. Re-run with --yes to set it anyway.'
+      );
+      await exit(1);
+      return;
+    }
+
     if (usePrompts && !options.yes) {
       const confirmResult = await p.confirm({
         message: 'Set as default anyway?',
