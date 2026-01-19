@@ -28,7 +28,7 @@ export const resolveRuntimeConfig = (
     return err({
       type: 'PRESET_REQUIRED',
       message:
-        'No preset specified. Set a default with `bluprint config presets default` or use `--preset <name>`',
+        'No preset specified. Set a default with `bluprint presets default` or use `--preset <name>`',
     } as const);
   });
 };

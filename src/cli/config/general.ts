@@ -231,9 +231,7 @@ export async function handleConfigReset(
   if (configResult.isOk()) {
     config = configResult.value;
   } else if (configResult.error.type === 'CONFIG_FILE_MISSING') {
-    console.error(
-      "No bluprint.config.json found. Run 'bluprint config presets default <name>' first."
-    );
+    console.error("No bluprint.config.json found. Run 'bluprint presets default <name>' first.");
     await exit(1);
     return;
   } else {

@@ -15,11 +15,11 @@ import {
 } from './src/cli/config/general.js';
 import {
   handlePresetsAdd,
-  handlePresetsEdit,
-  handlePresetsRemove,
-  handlePresetsList,
   handlePresetsDefault,
-} from './src/cli/config/presets.js';
+  handlePresetsEdit,
+  handlePresetsList,
+  handlePresetsRemove,
+} from './src/cli/config/presets/index.js';
 import { handleRun } from './src/cli/run.js';
 
 process.once('SIGINT', () => void exit(130));
@@ -176,6 +176,153 @@ await yargs(hideBin(process.argv))
     () => {}
   )
   .command(
+    'presets',
+    'Manage model presets',
+    (yargs) =>
+      yargs
+        .command(
+          'add',
+          'Add a new model preset',
+          (yargs) =>
+            yargs
+              .option('name', {
+                type: 'string',
+                description: 'Preset name',
+              })
+              .option('coding', {
+                type: 'string',
+                description: 'Model identifier in provider/model format',
+              })
+              .option('master', {
+                type: 'string',
+                description: 'Model identifier in provider/model format',
+              })
+              .option('plan', {
+                type: 'string',
+                description: 'Model identifier in provider/model format',
+              })
+              .option('summarizer', {
+                type: 'string',
+                description: 'Model identifier in provider/model format',
+              })
+              .option('commit', {
+                type: 'string',
+                description: 'Model identifier in provider/model format',
+              }),
+          async (argv) => {
+            await handlePresetsAdd({
+              name: argv.name,
+              models: {
+                coding: argv.coding,
+                master: argv.master,
+                plan: argv.plan,
+                summarizer: argv.summarizer,
+                commit: argv.commit,
+              },
+            });
+          }
+        )
+        .command(
+          'edit',
+          'Edit an existing model preset',
+          (yargs) =>
+            yargs
+              .option('name', {
+                type: 'string',
+                description: 'Preset name',
+              })
+              .option('coding', {
+                type: 'string',
+                description: 'Model identifier in provider/model format',
+              })
+              .option('master', {
+                type: 'string',
+                description: 'Model identifier in provider/model format',
+              })
+              .option('plan', {
+                type: 'string',
+                description: 'Model identifier in provider/model format',
+              })
+              .option('summarizer', {
+                type: 'string',
+                description: 'Model identifier in provider/model format',
+              })
+              .option('commit', {
+                type: 'string',
+                description: 'Model identifier in provider/model format',
+              }),
+          async (argv) => {
+            await handlePresetsEdit({
+              name: argv.name,
+              models: {
+                coding: argv.coding,
+                master: argv.master,
+                plan: argv.plan,
+                summarizer: argv.summarizer,
+                commit: argv.commit,
+              },
+            });
+          }
+        )
+        .command(
+          'remove',
+          'Remove a model preset',
+          (yargs) =>
+            yargs
+              .option('name', {
+                type: 'string',
+                description: 'Preset name',
+              })
+              .option('yes', {
+                alias: 'y',
+                type: 'boolean',
+                description: 'Skip confirmation prompts',
+                default: false,
+              }),
+          async (argv) => {
+            await handlePresetsRemove({
+              name: argv.name,
+              yes: argv.yes,
+            });
+          }
+        )
+        .command(
+          'list',
+          'List all model presets',
+          (yargs) =>
+            yargs.option('json', {
+              type: 'boolean',
+              description: 'Output as JSON',
+              default: false,
+            }),
+          async (argv) => {
+            await handlePresetsList({ json: argv.json });
+          }
+        )
+        .command(
+          'default',
+          'Set the default model preset',
+          (yargs) =>
+            yargs
+              .option('name', {
+                type: 'string',
+                description: 'Preset name',
+              })
+              .option('yes', {
+                alias: 'y',
+                type: 'boolean',
+                description: 'Skip confirmation prompts',
+                default: false,
+              }),
+          async (argv) => {
+            await handlePresetsDefault({ name: argv.name, yes: argv.yes });
+          }
+        )
+        .demandCommand(1, 'You must provide a presets subcommand')
+        .strict(),
+    () => {}
+  )
+  .command(
     'config',
     'Manage Bluprint configuration',
     (yargs) =>
@@ -244,55 +391,6 @@ await yargs(hideBin(process.argv))
               all: argv.all,
             });
           }
-        )
-        .command(
-          'presets',
-          'Manage model presets',
-          (yargs) =>
-            yargs
-              .command(
-                'add',
-                'Add a new model preset',
-                () => {},
-                async () => {
-                  await handlePresetsAdd();
-                }
-              )
-              .command(
-                'edit',
-                'Edit an existing model preset',
-                () => {},
-                async () => {
-                  await handlePresetsEdit();
-                }
-              )
-              .command(
-                'remove',
-                'Remove a model preset',
-                () => {},
-                async () => {
-                  await handlePresetsRemove();
-                }
-              )
-              .command(
-                'list',
-                'List all model presets',
-                () => {},
-                async () => {
-                  await handlePresetsList();
-                }
-              )
-              .command(
-                'default',
-                'Set the default model preset',
-                () => {},
-                async () => {
-                  await handlePresetsDefault();
-                }
-              )
-              .demandCommand(1, 'You must provide a presets subcommand')
-              .strict(),
-          () => {}
         )
         .demandCommand(1, 'You must provide a config subcommand')
         .strict(),
