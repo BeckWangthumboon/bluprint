@@ -21,6 +21,7 @@ export type GeneralConfigCliError =
   | { type: 'RESET_USAGE_ERROR'; message: string };
 
 type InvalidValueError = Extract<GeneralConfigCliError, { type: 'INVALID_VALUE' }>;
+type JsonOutputOptions = { json: boolean };
 
 /**
  * Parses and validates a string as a GeneralConfigKey.
@@ -69,6 +70,18 @@ function formatConfigFileError(error: ConfigValidationError): string {
   return formatConfigError(error);
 }
 
+const outputJson = (payload: unknown): void => {
+  console.log(JSON.stringify(payload, null, 2));
+};
+
+const reportError = (message: string, options: JsonOutputOptions): void => {
+  if (options.json) {
+    outputJson({ error: message });
+  } else {
+    console.error(message);
+  }
+};
+
 /**
  * Handles the "config list" CLI command.
  *
@@ -81,7 +94,7 @@ export async function handleConfigList(options: { json: boolean }): Promise<void
   const result = await readGeneralConfig();
 
   if (result.isErr()) {
-    console.error(formatConfigFileError(result.error));
+    reportError(formatConfigFileError(result.error), options);
     await exit(1);
     return;
   }
@@ -89,7 +102,7 @@ export async function handleConfigList(options: { json: boolean }): Promise<void
   const config = result.value;
 
   if (options.json) {
-    console.log(JSON.stringify(config, null, 2));
+    outputJson(config);
   } else {
     console.log('General config:');
     for (const key of GENERAL_CONFIG_KEYS) {
@@ -108,10 +121,10 @@ export async function handleConfigList(options: { json: boolean }): Promise<void
  *
  * @param key - The config key to retrieve.
  */
-export async function handleConfigGet(key: string): Promise<void> {
+export async function handleConfigGet(key: string, options: JsonOutputOptions): Promise<void> {
   const keyResult = parseKey(key);
   if (keyResult.isErr()) {
-    console.error(`Invalid config key: "${key}". Valid keys: ${GENERAL_CONFIG_KEYS.join(', ')}`);
+    reportError(`Invalid config key: "${key}". Valid keys: ${GENERAL_CONFIG_KEYS.join(', ')}`, options);
     await exit(1);
     return;
   }
@@ -119,13 +132,17 @@ export async function handleConfigGet(key: string): Promise<void> {
   const configResult = await readGeneralConfig();
 
   if (configResult.isErr()) {
-    console.error(formatConfigFileError(configResult.error));
+    reportError(formatConfigFileError(configResult.error), options);
     await exit(1);
     return;
   }
 
   const value = getConfigValue(keyResult.value, configResult.value);
-  console.log(value);
+  if (options.json) {
+    outputJson({ key: keyResult.value, value });
+  } else {
+    console.log(value);
+  }
 
   await exit(0);
 }
@@ -138,10 +155,14 @@ export async function handleConfigGet(key: string): Promise<void> {
  * @param key - The config key to update.
  * @param value - The new value as a string.
  */
-export async function handleConfigSet(key: string, value: string): Promise<void> {
+export async function handleConfigSet(
+  key: string,
+  value: string,
+  options: JsonOutputOptions
+): Promise<void> {
   const keyResult = parseKey(key);
   if (keyResult.isErr()) {
-    console.error(`Invalid config key: "${key}". Valid keys: ${GENERAL_CONFIG_KEYS.join(', ')}`);
+    reportError(`Invalid config key: "${key}". Valid keys: ${GENERAL_CONFIG_KEYS.join(', ')}`, options);
     await exit(1);
     return;
   }
@@ -149,7 +170,7 @@ export async function handleConfigSet(key: string, value: string): Promise<void>
   const validatedKey = keyResult.value;
   const valueResult = parseConfigValue(validatedKey, value);
   if (valueResult.isErr()) {
-    console.error(`Invalid value for ${key}: "${value}". ${valueResult.error.message}`);
+    reportError(`Invalid value for ${key}: "${value}". ${valueResult.error.message}`, options);
     await exit(1);
     return;
   }
@@ -157,7 +178,7 @@ export async function handleConfigSet(key: string, value: string): Promise<void>
 
   const ensureDirResult = await ensureConfigDir();
   if (ensureDirResult.isErr()) {
-    console.error('Failed to ensure config directory exists');
+    reportError('Failed to ensure config directory exists', options);
     await exit(1);
     return;
   }
@@ -170,7 +191,7 @@ export async function handleConfigSet(key: string, value: string): Promise<void>
   } else if (configResult.error.type === 'CONFIG_FILE_MISSING') {
     config = DEFAULT_BLUPRINT_CONFIG;
   } else {
-    console.error(formatConfigFileError(configResult.error));
+    reportError(formatConfigFileError(configResult.error), options);
     await exit(1);
     return;
   }
@@ -181,12 +202,16 @@ export async function handleConfigSet(key: string, value: string): Promise<void>
   if (writeResult.isErr()) {
     const error = writeResult.error;
     const errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
-    console.error(`Failed to write bluprint config: ${errorMessage}`);
+    reportError(`Failed to write bluprint config: ${errorMessage}`, options);
     await exit(1);
     return;
   }
 
-  console.log(`Updated ${key} to ${String(parsedValue)}.`);
+  if (options.json) {
+    outputJson({});
+  } else {
+    console.log(`Updated ${key} to ${String(parsedValue)}.`);
+  }
 
   await exit(0);
 }
@@ -202,17 +227,18 @@ export async function handleConfigSet(key: string, value: string): Promise<void>
  */
 export async function handleConfigReset(
   key: string | undefined,
-  options: { all: boolean }
+  options: { all: boolean; json: boolean }
 ): Promise<void> {
   if (options.all && key !== undefined) {
-    console.error('--all cannot be used with a config key.');
+    reportError('--all cannot be used with a config key.', options);
     await exit(1);
     return;
   }
 
   if (!options.all && key === undefined) {
-    console.error(
-      "Missing config key. Use 'bluprint config reset <key>' or 'bluprint config reset --all'."
+    reportError(
+      "Missing config key. Use 'bluprint config reset <key>' or 'bluprint config reset --all'.",
+      options
     );
     await exit(1);
     return;
@@ -220,7 +246,7 @@ export async function handleConfigReset(
 
   const ensureDirResult = await ensureConfigDir();
   if (ensureDirResult.isErr()) {
-    console.error('Failed to ensure config directory exists');
+    reportError('Failed to ensure config directory exists', options);
     await exit(1);
     return;
   }
@@ -231,11 +257,11 @@ export async function handleConfigReset(
   if (configResult.isOk()) {
     config = configResult.value;
   } else if (configResult.error.type === 'CONFIG_FILE_MISSING') {
-    console.error("No bluprint.config.json found. Run 'bluprint presets default <name>' first.");
+    reportError("No bluprint.config.json found. Run 'bluprint presets default <name>' first.", options);
     await exit(1);
     return;
   } else {
-    console.error(formatConfigFileError(configResult.error));
+    reportError(formatConfigFileError(configResult.error), options);
     await exit(1);
     return;
   }
@@ -245,27 +271,35 @@ export async function handleConfigReset(
       ...DEFAULT_BLUPRINT_CONFIG,
       defaultPreset: config.defaultPreset,
     };
-    console.log('Reset general config to defaults.');
+    if (!options.json) {
+      console.log('Reset general config to defaults.');
+    }
   } else {
     const keyResult = parseKey(key!);
     if (keyResult.isErr()) {
-      console.error(`Invalid config key: "${key}". Valid keys: ${GENERAL_CONFIG_KEYS.join(', ')}`);
+      reportError(`Invalid config key: "${key}". Valid keys: ${GENERAL_CONFIG_KEYS.join(', ')}`, options);
       await exit(1);
       return;
     }
 
     const defaultValue = getDefaultForKey(keyResult.value);
     config = setConfigValue(keyResult.value, defaultValue, config);
-    console.log(`Reset ${key} to default (${defaultValue}).`);
+    if (!options.json) {
+      console.log(`Reset ${key} to default (${defaultValue}).`);
+    }
   }
 
   const writeResult = await configUtils.bluprint.write(config);
   if (writeResult.isErr()) {
     const error = writeResult.error;
     const errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
-    console.error(`Failed to write bluprint config: ${errorMessage}`);
+    reportError(`Failed to write bluprint config: ${errorMessage}`, options);
     await exit(1);
     return;
+  }
+
+  if (options.json) {
+    outputJson({});
   }
 
   await exit(0);

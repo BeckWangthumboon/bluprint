@@ -344,13 +344,19 @@ await yargs(hideBin(process.argv))
           'get <key>',
           'Get a specific general config value',
           (yargs) =>
-            yargs.positional('key', {
-              type: 'string',
-              description: 'Config key (e.g., limits.maxIterations)',
-              demandOption: true,
-            }),
+            yargs
+              .positional('key', {
+                type: 'string',
+                description: 'Config key (e.g., limits.maxIterations)',
+                demandOption: true,
+              })
+              .option('json', {
+                type: 'boolean',
+                description: 'Output as JSON',
+                default: false,
+              }),
           async (argv) => {
-            await handleConfigGet(argv.key);
+            await handleConfigGet(argv.key, { json: argv.json });
           }
         )
         .command(
@@ -367,9 +373,14 @@ await yargs(hideBin(process.argv))
                 type: 'string',
                 description: 'Positive integer value',
                 demandOption: true,
+              })
+              .option('json', {
+                type: 'boolean',
+                description: 'Output as JSON',
+                default: false,
               }),
           async (argv) => {
-            await handleConfigSet(argv.key, argv.value);
+            await handleConfigSet(argv.key, argv.value, { json: argv.json });
           }
         )
         .command(
@@ -385,10 +396,16 @@ await yargs(hideBin(process.argv))
                 type: 'boolean',
                 description: 'Reset all general config values',
                 default: false,
+              })
+              .option('json', {
+                type: 'boolean',
+                description: 'Output as JSON',
+                default: false,
               }),
           async (argv) => {
             await handleConfigReset(argv.key, {
               all: argv.all,
+              json: argv.json,
             });
           }
         )
