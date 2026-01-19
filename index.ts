@@ -8,7 +8,7 @@ import {
   handleModelsValidate,
 } from './src/cli/config/models/index.js';
 import {
-  handleConfigShow,
+  handleConfigList,
   handleConfigGet,
   handleConfigSet,
   handleConfigReset,
@@ -328,8 +328,8 @@ await yargs(hideBin(process.argv))
     (yargs) =>
       yargs
         .command(
-          'show',
-          'Show all general config values',
+          'list',
+          'List all general config values',
           (yargs) =>
             yargs.option('json', {
               type: 'boolean',
@@ -337,7 +337,7 @@ await yargs(hideBin(process.argv))
               default: false,
             }),
           async (argv) => {
-            await handleConfigShow({ json: argv.json });
+            await handleConfigList({ json: argv.json });
           }
         )
         .command(

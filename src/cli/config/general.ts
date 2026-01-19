@@ -70,14 +70,14 @@ function formatConfigFileError(error: ConfigValidationError): string {
 }
 
 /**
- * Handles the "config show" CLI command.
+ * Handles the "config list" CLI command.
  *
  * Displays all general config values in either JSON or human-readable format.
  *
  * @param options - Command options.
  * @param options.json - If true, outputs config as formatted JSON.
  */
-export async function handleConfigShow(options: { json: boolean }): Promise<void> {
+export async function handleConfigList(options: { json: boolean }): Promise<void> {
   const result = await readGeneralConfig();
 
   if (result.isErr()) {
