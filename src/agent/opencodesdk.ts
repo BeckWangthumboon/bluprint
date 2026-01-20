@@ -1,4 +1,6 @@
 import { ResultAsync, err, ok } from 'neverthrow';
+import { resolve as resolvePath, isAbsolute, win32 as win32Path } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import {
   createOpencode,
   type OpencodeClient,
@@ -351,13 +353,19 @@ let cachedLib: Lib | null = null;
  * Get the OpenCodeLib wrapper
  * This is the main entry point for all SDK interactions
  */
-const getOpenCodeLib = (): ResultAsync<Lib, Error> =>
-  ResultAsync.fromPromise(getOpencode(), toError).map((oc) => {
+const getOpenCodeLib = (): ResultAsync<Lib, Error> => {
+  const injected = getInjectedOpenCodeLib();
+  if (injected) {
+    return injected;
+  }
+
+  return ResultAsync.fromPromise(getOpencode(), toError).map((oc) => {
     if (!cachedLib) {
       cachedLib = createOpenCodeLib(oc.client);
     }
     return cachedLib;
   });
+};
 
 /**
  * Get the OpenCode server instance (for shutdown, etc.)
@@ -381,6 +389,85 @@ const abortAndCleanup = (session: Session): void => {
         error: err.message,
       });
     });
+};
+
+// Provider module injection (optional; used by tests/custom providers).
+const OPENCODE_PROVIDER_MODULE_ENV = 'BLUPRINT_OPENCODE_PROVIDER_MODULE';
+
+type OpenCodeProviderModule = {
+  createOpenCodeLib?: () => Lib;
+  getOpenCodeLib?: () => ResultAsync<Lib, Error>;
+};
+
+const isWindowsAbsolutePath = (value: string): boolean => win32Path.isAbsolute(value);
+
+const isBareSpecifier = (value: string): boolean =>
+  !value.startsWith('.') &&
+  !value.startsWith('/') &&
+  !value.startsWith('file:') &&
+  !isWindowsAbsolutePath(value);
+
+const isFileUrl = (value: string): boolean => value.startsWith('file:');
+
+const resolveProviderModuleSpecifier = (value: string): string => {
+  if (isBareSpecifier(value)) {
+    return value;
+  }
+
+  if (isFileUrl(value)) {
+    return value;
+  }
+
+  const resolved = isAbsolute(value) ? value : resolvePath(process.cwd(), value);
+  return pathToFileURL(resolved).href;
+};
+
+const loadProviderModule = (modulePath: string): ResultAsync<Lib, Error> => {
+  const specifier = resolveProviderModuleSpecifier(modulePath);
+  return ResultAsync.fromPromise(
+    import(specifier) as Promise<OpenCodeProviderModule>,
+    toError
+  ).andThen((module) => {
+    if (typeof module.getOpenCodeLib === 'function') {
+      const getOpenCodeLib = module.getOpenCodeLib;
+      return ResultAsync.fromPromise(
+        Promise.resolve().then(() => getOpenCodeLib()),
+        toError
+      ).andThen((result) => result);
+    }
+    if (typeof module.createOpenCodeLib === 'function') {
+      const createOpenCodeLib = module.createOpenCodeLib;
+      return ResultAsync.fromPromise(
+        Promise.resolve().then(() => createOpenCodeLib()),
+        toError
+      );
+    }
+    return err(
+      new Error(
+        `Provider module must export createOpenCodeLib or getOpenCodeLib (missing in ${modulePath}).`
+      )
+    );
+  });
+};
+
+let cachedInjectedLib: Lib | null = null;
+let cachedInjectedModule: string | null = null;
+
+const getInjectedOpenCodeLib = (): ResultAsync<Lib, Error> | null => {
+  const modulePath = process.env[OPENCODE_PROVIDER_MODULE_ENV];
+  if (!modulePath) {
+    return null;
+  }
+
+  if (cachedInjectedLib && cachedInjectedModule === modulePath) {
+    return ResultAsync.fromPromise(Promise.resolve(cachedInjectedLib), toError);
+  }
+
+  return loadProviderModule(modulePath).map((lib) => {
+    cachedInjectedLib = lib;
+    cachedInjectedModule = modulePath;
+    return lib;
+  });
 };
 
 export type { SdkError, PromptParams, MessageInfo, PromptResponse, Provider, Session, Lib };

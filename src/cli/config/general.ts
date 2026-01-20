@@ -124,7 +124,10 @@ export async function handleConfigList(options: { json: boolean }): Promise<void
 export async function handleConfigGet(key: string, options: JsonOutputOptions): Promise<void> {
   const keyResult = parseKey(key);
   if (keyResult.isErr()) {
-    reportError(`Invalid config key: "${key}". Valid keys: ${GENERAL_CONFIG_KEYS.join(', ')}`, options);
+    reportError(
+      `Invalid config key: "${key}". Valid keys: ${GENERAL_CONFIG_KEYS.join(', ')}`,
+      options
+    );
     await exit(1);
     return;
   }
@@ -162,7 +165,10 @@ export async function handleConfigSet(
 ): Promise<void> {
   const keyResult = parseKey(key);
   if (keyResult.isErr()) {
-    reportError(`Invalid config key: "${key}". Valid keys: ${GENERAL_CONFIG_KEYS.join(', ')}`, options);
+    reportError(
+      `Invalid config key: "${key}". Valid keys: ${GENERAL_CONFIG_KEYS.join(', ')}`,
+      options
+    );
     await exit(1);
     return;
   }
@@ -257,7 +263,10 @@ export async function handleConfigReset(
   if (configResult.isOk()) {
     config = configResult.value;
   } else if (configResult.error.type === 'CONFIG_FILE_MISSING') {
-    reportError("No bluprint.config.json found. Run 'bluprint presets default <name>' first.", options);
+    reportError(
+      "No bluprint.config.json found. Run 'bluprint presets default <name>' first.",
+      options
+    );
     await exit(1);
     return;
   } else {
@@ -277,7 +286,10 @@ export async function handleConfigReset(
   } else {
     const keyResult = parseKey(key!);
     if (keyResult.isErr()) {
-      reportError(`Invalid config key: "${key}". Valid keys: ${GENERAL_CONFIG_KEYS.join(', ')}`, options);
+      reportError(
+        `Invalid config key: "${key}". Valid keys: ${GENERAL_CONFIG_KEYS.join(', ')}`,
+        options
+      );
       await exit(1);
       return;
     }

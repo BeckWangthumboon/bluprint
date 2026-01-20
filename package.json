@@ -29,6 +29,7 @@
     "lint": "eslint . --max-warnings 0 --cache",
     "lint:fix": "eslint . --fix --cache",
     "lint:clean": "eslint . --max-warnings 0 --no-cache",
+    "test": "bun test",
     "check": "bun run typecheck && bun run lint"
   }
 }

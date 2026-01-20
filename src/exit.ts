@@ -7,7 +7,6 @@ const globalController = new AbortController();
  */
 export function globalAbort(): void {
   if (!globalController.signal.aborted) {
-    console.log('Shutting down...');
     globalController.abort();
   }
 }
