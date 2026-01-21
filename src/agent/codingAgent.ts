@@ -11,7 +11,7 @@ import {
   unwrapResultAsync,
   cleanupSession,
 } from './utils.js';
-import { getLogger } from './logger.js';
+import { getRunTracker } from '../telemetry/index.js';
 import type { ModelConfig } from '../config/index.js';
 
 export interface CodingAgentConfig {
@@ -158,9 +158,9 @@ Implement ONLY the current step. If feedback is provided, address it first.`;
                 .andThen((report) => {
                   // Log the agent call
                   const endedAt = new Date();
-                  const logger = getLogger();
-                  return ResultAsync.fromPromise(
-                    logger.logAgentCall({
+                  const runTracker = getRunTracker();
+                  return runTracker
+                    .logAgentCall({
                       agent: 'codingAgent',
                       iteration,
                       planStep,
@@ -169,9 +169,8 @@ Implement ONLY the current step. If feedback is provided, address it first.`;
                       startedAt,
                       endedAt,
                       response: report,
-                    }),
-                    toError
-                  ).map(() => report);
+                    })
+                    .map(() => report);
                 })
                 .andThen((report) =>
                   cleanupSession(session, 'codingAgent', iteration).map(() => report)
@@ -179,8 +178,8 @@ Implement ONLY the current step. If feedback is provided, address it first.`;
                 .orElse((error) => {
                   // Log error case
                   const endedAt = new Date();
-                  const logger = getLogger();
-                  logger
+                  const runTracker = getRunTracker();
+                  runTracker
                     .logAgentCall({
                       agent: 'codingAgent',
                       iteration,
@@ -192,7 +191,7 @@ Implement ONLY the current step. If feedback is provided, address it first.`;
                       response: '',
                       error: error.message,
                     })
-                    .catch(() => {});
+                    .mapErr(() => {});
                   return cleanupSession(session, 'codingAgent', iteration).andThen(() =>
                     err(error)
                   );

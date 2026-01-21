@@ -18,7 +18,7 @@ import {
 import { readState } from '../state.js';
 import { exec } from '../shell.js';
 import { findPlanStep, getPlanStep } from './planUtils.js';
-import { getLogger } from './logger.js';
+import { getRunTracker } from '../telemetry/index.js';
 import type { ModelConfig } from '../config/index.js';
 import type { MasterAgentOutput } from './types.js';
 
@@ -388,9 +388,9 @@ Review the current task implementation and decide whether to accept or reject. O
                     .andThen(({ output, rawResponse }) => {
                       // Log the agent call
                       const endedAt = new Date();
-                      const logger = getLogger();
-                      return ResultAsync.fromPromise(
-                        logger.logAgentCall({
+                      const runTracker = getRunTracker();
+                      return runTracker
+                        .logAgentCall({
                           agent: 'masterAgent',
                           iteration,
                           planStep,
@@ -400,9 +400,8 @@ Review the current task implementation and decide whether to accept or reject. O
                           endedAt,
                           response: rawResponse,
                           decision: output.decision,
-                        }),
-                        toError
-                      ).map(() => output);
+                        })
+                        .map(() => output);
                     })
                     .andThen((output) =>
                       cleanupSession(session, 'masterAgent', iteration).map(() => output)
@@ -410,8 +409,8 @@ Review the current task implementation and decide whether to accept or reject. O
                     .orElse((error) => {
                       // Log error case
                       const endedAt = new Date();
-                      const logger = getLogger();
-                      logger
+                      const runTracker = getRunTracker();
+                      runTracker
                         .logAgentCall({
                           agent: 'masterAgent',
                           iteration,
@@ -423,7 +422,7 @@ Review the current task implementation and decide whether to accept or reject. O
                           response: '',
                           error: error.message,
                         })
-                        .catch(() => {});
+                        .mapErr(() => {});
                       return cleanupSession(session, 'masterAgent', iteration).andThen(() =>
                         err(error)
                       );

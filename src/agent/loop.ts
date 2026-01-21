@@ -17,7 +17,8 @@ import { createCommitForTask, type CommitAgentConfig } from './commitAgent.js';
 import { reviewAndGenerateTask, type MasterAgentConfig } from './masterAgent.js';
 import type { MasterAgentOutput } from './types.js';
 import { isObject, toError } from './utils.js';
-import { initLogger, type ManifestData } from './logger.js';
+import { initLogger } from './logger.js';
+import { initRunTracker, type ManifestData } from '../telemetry/index.js';
 import { getAbortSignal } from '../exit.js';
 import { resolveRuntimeConfig, getTimeoutMs, formatResolveError } from '../config/index.js';
 
@@ -136,8 +137,9 @@ export const runLoop = (options?: {
         iterations: [],
       };
 
-      // Initialize new logger
-      const logger = initLogger(runId);
+      // Initialize logger (for sessions) and run tracker (for telemetry)
+      initLogger(runId);
+      const runTracker = initRunTracker(runId);
 
       const writeManifestSafe = async (
         status: ManifestData['status'],
@@ -147,7 +149,7 @@ export const runLoop = (options?: {
         manifestData.endedAt = new Date();
         manifestData.totalIterations = iteration;
         if (error) manifestData.error = error;
-        await logger.writeManifest(manifestData);
+        await runTracker.writeManifest(manifestData);
       };
 
       /**
@@ -214,7 +216,7 @@ export const runLoop = (options?: {
         await unwrapOrThrow(startExecution());
         await unwrapOrThrow(workspace.cache.task.write(''));
         await unwrapOrThrow(workspace.cache.report.write(''));
-        await logger.writeManifest(manifestData);
+        await runTracker.writeManifest(manifestData);
 
         // Check for abort before entering main loop
         if (signal.aborted) {
@@ -300,7 +302,7 @@ export const runLoop = (options?: {
             // Track iteration
             manifestData.iterations.push(iterationData);
             manifestData.totalIterations = iteration;
-            await logger.writeManifest(manifestData);
+            await runTracker.writeManifest(manifestData);
 
             await unwrapOrThrow(incrementIteration());
 
@@ -321,7 +323,7 @@ export const runLoop = (options?: {
             // Track iteration
             manifestData.iterations.push(iterationData);
             manifestData.totalIterations = iteration;
-            await logger.writeManifest(manifestData);
+            await runTracker.writeManifest(manifestData);
 
             await unwrapOrThrow(incrementIteration());
           }
