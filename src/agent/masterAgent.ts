@@ -248,8 +248,9 @@ export const reviewAndGenerateTask = (
       }
 
       // Read all required context files
-      return stateUtils.readState()
-        .andThen((state) => {
+      return stateUtils
+        .getLoopContext()
+        .andThen((loopContext) => {
           return workspace.cache.spec
             .read()
             .mapErr((e) => new Error(`Could not read spec.md: ${e.message}`))
@@ -257,24 +258,24 @@ export const reviewAndGenerateTask = (
               return workspace.cache.plan
                 .read()
                 .mapErr((e) => new Error(`Could not read plan.md: ${e.message}`))
-                .map((plan) => ({ state, spec, plan }));
+                .map((plan) => ({ loopContext, spec, plan }));
             });
         })
-        .andThen(({ state, spec, plan }) =>
-          getPlanStep(plan, state.currentTaskNumber, {
+        .andThen(({ loopContext, spec, plan }) =>
+          getPlanStep(plan, loopContext.currentTaskNumber, {
             missingStep: (stepNumber) => `Could not find task ${stepNumber} in plan.md`,
-          }).map((currentStep) => ({ state, spec, plan, currentStep }))
+          }).map((currentStep) => ({ loopContext, spec, plan, currentStep }))
         )
-        .andThen(({ state, spec, plan, currentStep }) => {
+        .andThen(({ loopContext, spec, plan, currentStep }) => {
           // Read report (allow empty)
           return workspace.cache.report
             .read()
             .orElse(() => ResultAsync.fromSafePromise(Promise.resolve(''))) // Treat missing report as empty
-            .map((report) => ({ state, spec, plan, currentStep, report }));
+            .map((report) => ({ loopContext, spec, plan, currentStep, report }));
         })
-        .andThen(({ state, spec, plan, currentStep, report }) => {
+        .andThen(({ loopContext, spec, plan, currentStep, report }) => {
           // Check for coding agent failure: isRetry is true but report is empty
-          if (state.isRetry && report.trim() === '') {
+          if (loopContext.isRetry && report.trim() === '') {
             const rejectOutput: MasterAgentOutput = {
               decision: 'reject',
               task: `The coding agent failed to produce a report on the retry attempt. This indicates an error or crash during execution.
@@ -310,7 +311,7 @@ ${currentStep}`,
             })
             .andThen(({ gitDiff, gitStatus }) => {
               return loadPromptFile('masterAgent.txt').map((systemPrompt) => ({
-                state,
+                loopContext,
                 spec,
                 plan,
                 currentStep,
@@ -321,10 +322,19 @@ ${currentStep}`,
               }));
             })
             .andThen(
-              ({ state, spec, plan, currentStep, report, gitDiff, gitStatus, systemPrompt }) => {
+              ({
+                loopContext,
+                spec,
+                plan,
+                currentStep,
+                report,
+                gitDiff,
+                gitStatus,
+                systemPrompt,
+              }) => {
                 // Determine if there's a next step
-                const hasNextStep = state.currentTaskNumber < state.tasks.length;
-                const nextStepNumber = state.currentTaskNumber + 1;
+                const hasNextStep = loopContext.currentTaskNumber < loopContext.totalTasks;
+                const nextStepNumber = loopContext.currentTaskNumber + 1;
                 let nextStepContent = '';
 
                 if (hasNextStep) {
@@ -340,7 +350,7 @@ ${currentStep}`,
 ## Specification (spec.md)
 ${spec}
 
-## Current Plan Step (Task ${state.currentTaskNumber})
+## Current Plan Step (Task ${loopContext.currentTaskNumber})
 ${currentStep}
 
 ## Coding Agent Report (report.md)
@@ -357,9 +367,9 @@ ${gitDiff || '(no changes)'}
 \`\`\`
 
 ## Status Information
-- Current task number: ${state.currentTaskNumber}
-- Is retry: ${state.isRetry}
-- Total tasks: ${state.tasks.length}
+- Current task number: ${loopContext.currentTaskNumber}
+- Is retry: ${loopContext.isRetry}
+- Total tasks: ${loopContext.totalTasks}
 - Has next step: ${hasNextStep}
 
 ${hasNextStep ? `## Next Plan Step (Task ${nextStepNumber})\n${nextStepContent}` : '## Note\nThis is the LAST task in the plan. After acceptance, the loop will complete.'}
@@ -369,7 +379,7 @@ ${hasNextStep ? `## Next Plan Step (Task ${nextStepNumber})\n${nextStepContent}`
 Review the current task implementation and decide whether to accept or reject. Output ONLY valid JSON.`;
 
                 const startedAt = new Date();
-                const planStep = state.currentTaskNumber;
+                const planStep = loopContext.currentTaskNumber;
 
                 // Call model with repair capability
                 return lib.session.create('Master Agent Review').andThen((session) => {

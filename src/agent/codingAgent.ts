@@ -60,10 +60,12 @@ export const executeCodingAgent = (
           workspace.cache.plan
             .read()
             .mapErr((e) => new Error(`Could not read plan.md: ${e.message}`)),
-          stateUtils.readState().mapErr((e) => new Error(`Could not read state: ${e.message}`)),
+          stateUtils
+            .getPlanProgress()
+            .mapErr((e) => new Error(`Could not read state: ${e.message}`)),
           loadPromptFile('codingAgent.txt'),
-        ]).andThen(([feedback, summary, plan, state, systemPrompt]) => {
-          return getPlanStep(plan, state.currentTaskNumber, {
+        ]).andThen(([feedback, summary, plan, planProgress, systemPrompt]) => {
+          return getPlanStep(plan, planProgress.currentTaskNumber, {
             invalidStepNumber: (stepNumber) =>
               `Invalid current task number: ${stepNumber}. Must be a positive integer.`,
             missingStep: (stepNumber) =>
@@ -71,8 +73,8 @@ export const executeCodingAgent = (
             emptyStep: (stepNumber) => `Plan step ${stepNumber} is empty`,
           }).andThen((currentStep) => {
             // Extract plan outline for context (only headers in range around current step)
-            const currentStepNumber = state.currentTaskNumber;
-            const totalSteps = state.tasks.length;
+            const currentStepNumber = planProgress.currentTaskNumber;
+            const totalSteps = planProgress.totalTasks;
             const contextHeaders = extractPlanOutline(plan, {
               currentStep: currentStepNumber,
               range: 1,
@@ -116,7 +118,7 @@ Implement ONLY the current step. If feedback is provided, address it first.`;
 
             return lib.session.create('Coding Agent Execution').andThen((session) => {
               const startedAt = new Date();
-              const planStep = state.currentTaskNumber;
+              const planStep = planProgress.currentTaskNumber;
               const timeoutMs = config.timeoutMs;
 
               return ResultAsync.fromPromise(

@@ -73,6 +73,44 @@ const readState = (): ResultAsync<LoopState, Error> =>
     });
 
 /**
+ * Get the current task number from the loop state.
+ * @returns A ResultAsync with the current task number.
+ */
+const getCurrentTaskNumber = (): ResultAsync<number, Error> =>
+  readState().map((state) => state.currentTaskNumber);
+
+/**
+ * Get the current loop status from the loop state.
+ * @returns A ResultAsync with the current loop status.
+ */
+const getLoopStatus = (): ResultAsync<LoopState['status'], Error> =>
+  readState().map((state) => state.status);
+
+/**
+ * Get plan progress details from the loop state.
+ * @returns A ResultAsync with current task number and total task count.
+ */
+const getPlanProgress = (): ResultAsync<{ currentTaskNumber: number; totalTasks: number }, Error> =>
+  readState().map((state) => ({
+    currentTaskNumber: state.currentTaskNumber,
+    totalTasks: state.tasks.length,
+  }));
+
+/**
+ * Get the current task context for decision logic.
+ * @returns A ResultAsync with task number, total tasks, and retry flag.
+ */
+const getLoopContext = (): ResultAsync<
+  { currentTaskNumber: number; totalTasks: number; isRetry: boolean },
+  Error
+> =>
+  readState().map((state) => ({
+    currentTaskNumber: state.currentTaskNumber,
+    totalTasks: state.tasks.length,
+    isRetry: state.isRetry,
+  }));
+
+/**
  * Retrieve the current task status from the loop state.
  * @returns A ResultAsync with the current task status.
  */
@@ -290,7 +328,10 @@ const abortLoop = (): ResultAsync<void, Error> =>
   });
 
 const stateUtils = {
-  readState,
+  getCurrentTaskNumber,
+  getLoopStatus,
+  getPlanProgress,
+  getLoopContext,
   getCurrentTask,
   isRetry,
   initializeState,

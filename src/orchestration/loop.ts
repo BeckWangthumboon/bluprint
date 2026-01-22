@@ -250,8 +250,7 @@ const runLoop = (options?: {
           iteration += 1;
 
           // Get current plan step from state
-          const currentState = await unwrapOrThrow(stateUtils.readState());
-          const planStep = currentState.currentTaskNumber;
+          const planStep = await unwrapOrThrow(stateUtils.getCurrentTaskNumber());
 
           const iterationData: ManifestData['iterations'][0] = { iteration, planStep };
 
@@ -317,8 +316,8 @@ const runLoop = (options?: {
             await unwrapOrThrow(stateUtils.incrementIteration());
 
             // Check if all tasks are completed
-            const state = await unwrapOrThrow(stateUtils.readState());
-            if (state.status === 'completed') {
+            const loopStatus = await unwrapOrThrow(stateUtils.getLoopStatus());
+            if (loopStatus === 'completed') {
               await writeManifestSafe('completed');
               await finalizeRunOnSuccess();
               return;
@@ -346,7 +345,7 @@ const runLoop = (options?: {
           loopAborted = true;
           await writeManifestSafe('aborted', 'Operation aborted');
           if (stateInitialized) {
-          await stateUtils.abortLoop();
+            await stateUtils.abortLoop();
           }
           await finalizeRunOnFailureOrAbort();
           return;
