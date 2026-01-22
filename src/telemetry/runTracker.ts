@@ -1,5 +1,5 @@
 import { ResultAsync } from 'neverthrow';
-import { telemetryIO } from './io.js';
+import { telemetryIO, createTelemetryIO } from './io.js';
 import type { AgentCallData, ManifestData } from './types.js';
 import {
   toFrontmatter,
@@ -8,11 +8,15 @@ import {
   formatCodingAgentResponse,
 } from './utils.js';
 
+type TelemetryIO = ReturnType<typeof createTelemetryIO>;
+
 class RunTracker {
   private runId: string;
+  private io: TelemetryIO;
 
-  constructor(runId: string) {
+  constructor(runId: string, io: TelemetryIO = telemetryIO) {
     this.runId = runId;
+    this.io = io;
   }
 
   /**
@@ -59,7 +63,7 @@ class RunTracker {
 ${formattedResponse}
 ${data.error ? `\n## Error\n\n${data.error}` : ''}`;
 
-    return telemetryIO.writeAgentCallFile(this.runId, filename, frontmatter + body);
+    return this.io.writeAgentCallFile(this.runId, filename, frontmatter + body);
   }
 
   /**
@@ -136,7 +140,7 @@ ${iterationsSummary}
 ${data.error ? `\n## Error\n\n\`\`\`\n${data.error}\n\`\`\`` : ''}
 `;
 
-    return telemetryIO.writeManifestFile(this.runId, content);
+    return this.io.writeManifestFile(this.runId, content);
   }
 }
 
@@ -160,4 +164,12 @@ const getRunTracker = (): RunTracker => {
   return currentRunTracker;
 };
 
-export { RunTracker, initRunTracker, getRunTracker };
+/**
+ * Reset the current run tracker. Used for testing only.
+ * @internal
+ */
+const resetRunTracker = (): void => {
+  currentRunTracker = null;
+};
+
+export { RunTracker, initRunTracker, getRunTracker, resetRunTracker };
