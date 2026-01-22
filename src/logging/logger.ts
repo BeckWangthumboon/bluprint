@@ -1,20 +1,15 @@
-import { join } from 'path';
 import { ResultAsync, ok } from 'neverthrow';
-import { fsUtils } from '../fs.js';
-import { workspaceConstants } from '../workspace.js';
-import type { Session, OpenCodeSDKSession } from './opencodesdk.js';
-
-const { RUNS_DIR } = workspaceConstants;
+import type { Session, OpenCodeSDKSession } from '../agent/opencodesdk.js';
+import { loggingIO } from './io.js';
+import type { LoggingIO } from './io.js';
 
 class Logger {
-  private runDir: string;
-  private sessionsDir: string;
-  private debugLogPath: string;
+  private runId: string;
+  private io: LoggingIO;
 
-  constructor(runId: string) {
-    this.runDir = join(RUNS_DIR, runId);
-    this.sessionsDir = join(this.runDir, 'sessions');
-    this.debugLogPath = join(this.runDir, 'debug.log');
+  constructor(runId: string, io: LoggingIO = loggingIO) {
+    this.runId = runId;
+    this.io = io;
   }
 
   /**
@@ -26,7 +21,7 @@ class Logger {
       event,
       ...data,
     };
-    fsUtils.appendFile(this.debugLogPath, JSON.stringify(entry) + '\n').mapErr(() => {});
+    this.io.appendDebugLog(this.runId, JSON.stringify(entry) + '\n').mapErr(() => {});
   }
 
   /**
@@ -40,8 +35,7 @@ class Logger {
     const prefix = String(meta.iteration ?? 0).padStart(3, '0');
     const agentShort = meta.agent.replace('Agent', '');
     const filename = `${prefix}-${agentShort}-${sessionId}.json`;
-    const filepath = join(this.sessionsDir, filename);
-    await fsUtils.writeFile(filepath, JSON.stringify(sessionData, null, 2));
+    await this.io.writeSessionFile(this.runId, filename, JSON.stringify(sessionData, null, 2));
   }
 }
 
@@ -51,6 +45,7 @@ const noopLogger = { debug: () => {} } as Pick<Logger, 'debug'>;
 
 /**
  * Get the current logger instance. Throws if not initialized.
+ * @returns Current Logger instance
  */
 const getLogger = (): Logger => {
   if (!currentLogger) {
@@ -62,27 +57,33 @@ const getLogger = (): Logger => {
 /**
  * Get a debug-only logger that returns a no-op if not initialized.
  * Safe to call before initLogger().
+ * @returns Debug logger with a debug method
  */
 const getDebugLogger = (): Pick<Logger, 'debug'> => currentLogger ?? noopLogger;
 
 /**
  * Initialize a new logger
+ * @param runId - The run identifier
+ * @returns Initialized Logger instance
  */
 const initLogger = (runId: string): Logger => {
   currentLogger = new Logger(runId);
   return currentLogger;
 };
 
-interface SessionMetaData {
+type SessionMetaData = {
   agent: string;
   iteration?: number;
-}
+};
 
 const toError = (e: unknown): Error => (e instanceof Error ? e : new Error(String(e)));
 
 /**
  * Log session data before cleanup.
  * Fetches session data and messages, logs them, and handles errors gracefully.
+ * @param session - OpenCode session to log
+ * @param meta - Metadata for log naming
+ * @returns ResultAsync resolving to void
  */
 const logSessionData = (session: Session, meta: SessionMetaData): ResultAsync<void, Error> =>
   ResultAsync.combine([session.getData(), session.messages()])
@@ -103,4 +104,4 @@ const logSessionData = (session: Session, meta: SessionMetaData): ResultAsync<vo
     });
 
 export type { SessionMetaData };
-export { Logger, getLogger, getDebugLogger, initLogger, logSessionData, RUNS_DIR };
+export { Logger, getLogger, getDebugLogger, initLogger, logSessionData };

@@ -6,7 +6,7 @@ import {
   type OpencodeClient,
   type Session as OpenCodeSDKSession,
 } from '@opencode-ai/sdk';
-import { getDebugLogger } from './logger.js';
+import { getDebugLogger } from '../logging/index.js';
 import type { ModelConfig } from '../config/index.js';
 import { getAbortSignal } from '../exit.js';
 

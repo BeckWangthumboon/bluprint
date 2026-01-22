@@ -17,7 +17,7 @@ import { createCommitForTask, type CommitAgentConfig } from './commitAgent.js';
 import { reviewAndGenerateTask, type MasterAgentConfig } from './masterAgent.js';
 import type { MasterAgentOutput } from './types.js';
 import { isObject, toError } from './utils.js';
-import { initLogger } from './logger.js';
+import { initLogger } from '../logging/index.js';
 import { initRunTracker, type ManifestData } from '../telemetry/index.js';
 import { getAbortSignal } from '../exit.js';
 import { resolveRuntimeConfig, getTimeoutMs, formatResolveError } from '../config/index.js';
