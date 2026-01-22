@@ -15,7 +15,7 @@ import {
   type Session,
   type PromptResponse,
 } from './opencodesdk.js';
-import { readState } from '../state.js';
+import { stateUtils } from '../orchestration/index.js';
 import { exec } from '../shell.js';
 import { findPlanStep, getPlanStep } from './planUtils.js';
 import { getRunTracker } from '../telemetry/index.js';
@@ -248,7 +248,7 @@ export const reviewAndGenerateTask = (
       }
 
       // Read all required context files
-      return readState()
+      return stateUtils.readState()
         .andThen((state) => {
           return workspace.cache.spec
             .read()

@@ -1,6 +1,6 @@
 import { ResultAsync, err, errAsync } from 'neverthrow';
 import { workspace } from '../workspace.js';
-import { readState } from '../state.js';
+import { stateUtils } from '../orchestration/index.js';
 import { getOpenCodeLib, abortAndCleanup } from './opencodesdk.js';
 import { getPlanStep, extractPlanOutline, formatStepHeader } from './planUtils.js';
 import {
@@ -60,7 +60,7 @@ export const executeCodingAgent = (
           workspace.cache.plan
             .read()
             .mapErr((e) => new Error(`Could not read plan.md: ${e.message}`)),
-          readState().mapErr((e) => new Error(`Could not read state: ${e.message}`)),
+          stateUtils.readState().mapErr((e) => new Error(`Could not read state: ${e.message}`)),
           loadPromptFile('codingAgent.txt'),
         ]).andThen(([feedback, summary, plan, state, systemPrompt]) => {
           return getPlanStep(plan, state.currentTaskNumber, {

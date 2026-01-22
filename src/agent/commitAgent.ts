@@ -8,7 +8,7 @@ import {
   cleanupSession,
   withTimeout,
 } from './utils.js';
-import { readState } from '../state.js';
+import { stateUtils } from '../orchestration/index.js';
 import { workspace } from '../workspace.js';
 import { getPlanStep, extractPlanOutline } from './planUtils.js';
 import { getOpenCodeLib, abortAndCleanup } from './opencodesdk.js';
@@ -210,7 +210,7 @@ const createCommitForTask = (
 
     const { gitStatus, gitDiff } = gitInfo;
 
-    return readState()
+    return stateUtils.readState()
       .andThen((state) =>
         workspace.cache.plan
           .read()

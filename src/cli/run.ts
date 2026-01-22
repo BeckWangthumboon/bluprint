@@ -2,7 +2,7 @@ import { resolve } from 'path';
 import { workspaceConstants } from '../workspace.js';
 import { fsUtils } from '../fs.js';
 import { generatePlan, type PlanAgentConfig } from '../agent/planAgent.js';
-import { runLoop } from '../agent/loop.js';
+import { runLoop } from '../orchestration/index.js';
 import {
   resolveRuntimeConfig,
   getTimeoutMs,

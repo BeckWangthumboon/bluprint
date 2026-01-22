@@ -1,31 +1,25 @@
 import { ResultAsync } from 'neverthrow';
-import { workspace, archiveCacheToRun } from '../workspace.js';
-import { exec } from '../shell.js';
-import {
-  abortLoop,
-  checkLimits,
-  completeCurrentTask,
-  failLoop,
-  incrementIteration,
-  initializeState,
-  markCurrentTaskAsRetry,
-  readState,
-  startExecution,
-} from '../state.js';
-import { executeCodingAgent, type CodingAgentConfig } from './codingAgent.js';
-import { createCommitForTask, type CommitAgentConfig } from './commitAgent.js';
-import { reviewAndGenerateTask, type MasterAgentConfig } from './masterAgent.js';
-import type { MasterAgentOutput } from './types.js';
-import { isObject, toError } from './utils.js';
-import { initLogger } from '../logging/index.js';
-import { initRunTracker, type ManifestData } from '../telemetry/index.js';
-import { getAbortSignal } from '../exit.js';
 import { resolveRuntimeConfig, getTimeoutMs, formatResolveError } from '../config/index.js';
+import { getAbortSignal } from '../exit.js';
+import { initLogger } from '../logging/index.js';
+import { exec } from '../shell.js';
+import { stateUtils } from './state.js';
+import { initRunTracker } from '../telemetry/index.js';
+import { archiveCacheToRun, workspace } from '../workspace.js';
+import { createCommitForTask } from '../agent/commitAgent.js';
+import { executeCodingAgent } from '../agent/codingAgent.js';
+import { reviewAndGenerateTask } from '../agent/masterAgent.js';
+import { isObject, toError } from '../agent/utils.js';
+import type { CommitAgentConfig } from '../agent/commitAgent.js';
+import type { CodingAgentConfig } from '../agent/codingAgent.js';
+import type { MasterAgentConfig } from '../agent/masterAgent.js';
+import type { MasterAgentOutput } from '../agent/types.js';
+import type { ManifestData } from '../telemetry/index.js';
 
-export interface LoopConfig {
+type LoopConfig = {
   preset?: string;
   graphite: boolean;
-}
+};
 
 const parseMasterOutput = (raw: string): MasterAgentOutput => {
   let parsed: unknown;
@@ -63,23 +57,39 @@ const unwrapOrThrow = async <T>(result: ResultAsync<T, Error>): Promise<T> => {
   return resolved.value;
 };
 
-export const saveReport = (report: string): ResultAsync<void, Error> =>
+/**
+ * Persist the coding agent report for the current run.
+ * @param report - Report contents to write.
+ * @returns A ResultAsync that resolves when the report is written.
+ */
+const saveReport = (report: string): ResultAsync<void, Error> =>
   workspace.cache.report
     .write(report)
     .mapErr((e) => new Error(`Error saving report: ${e.message}`));
 
-export const saveTaskMarkdown = (task: string): ResultAsync<void, Error> =>
+/**
+ * Persist the current task instructions for the next iteration.
+ * @param task - Task content to write.
+ * @returns A ResultAsync that resolves when the task is written.
+ */
+const saveTaskMarkdown = (task: string): ResultAsync<void, Error> =>
   workspace.cache.task.write(task).mapErr((e) => new Error(`Error saving task: ${e.message}`));
 
-export const applyDecision = (
+/**
+ * Apply the master decision to the loop state.
+ * @param decision - Accept or reject decision.
+ * @param commitHash - Optional commit hash to attach to the task.
+ * @returns A ResultAsync that resolves when the state is updated.
+ */
+const applyDecision = (
   decision: 'accept' | 'reject',
   commitHash?: string
 ): ResultAsync<void, Error> => {
   if (decision === 'accept') {
     // Allow empty commit hash for cases where there are no changes to commit
-    return completeCurrentTask(commitHash ?? '');
+    return stateUtils.completeCurrentTask(commitHash ?? '');
   }
-  return markCurrentTaskAsRetry();
+  return stateUtils.markCurrentTaskAsRetry();
 };
 
 /**
@@ -105,7 +115,7 @@ export const applyDecision = (
  * @returns A ResultAsync that resolves when the loop completes successfully
  *          or rejects with an error if limits are exceeded or an error occurs
  */
-export const runLoop = (options?: {
+const runLoop = (options?: {
   signal?: AbortSignal;
   config?: LoopConfig;
 }): ResultAsync<void, Error> =>
@@ -211,9 +221,9 @@ export const runLoop = (options?: {
         const graphiteEnabled = options?.config?.graphite ?? false;
 
         // Initialize state
-        await unwrapOrThrow(initializeState(resolvedConfig.limits));
+        await unwrapOrThrow(stateUtils.initializeState(resolvedConfig.limits));
         stateInitialized = true;
-        await unwrapOrThrow(startExecution());
+        await unwrapOrThrow(stateUtils.startExecution());
         await unwrapOrThrow(workspace.cache.task.write(''));
         await unwrapOrThrow(workspace.cache.report.write(''));
         await runTracker.writeManifest(manifestData);
@@ -222,7 +232,7 @@ export const runLoop = (options?: {
         if (signal.aborted) {
           loopAborted = true;
           await writeManifestSafe('aborted', 'Operation aborted before starting');
-          await abortLoop();
+          await stateUtils.abortLoop();
           await finalizeRunOnFailureOrAbort();
           return;
         }
@@ -232,7 +242,7 @@ export const runLoop = (options?: {
           if (signal.aborted) {
             loopAborted = true;
             await writeManifestSafe('aborted', 'Operation aborted');
-            await abortLoop();
+            await stateUtils.abortLoop();
             await finalizeRunOnFailureOrAbort();
             return;
           }
@@ -240,15 +250,15 @@ export const runLoop = (options?: {
           iteration += 1;
 
           // Get current plan step from state
-          const currentState = await unwrapOrThrow(readState());
+          const currentState = await unwrapOrThrow(stateUtils.readState());
           const planStep = currentState.currentTaskNumber;
 
           const iterationData: ManifestData['iterations'][0] = { iteration, planStep };
 
           // Check limits
-          const limits = await unwrapOrThrow(checkLimits());
+          const limits = await unwrapOrThrow(stateUtils.checkLimits());
           if (limits.exceeded) {
-            await unwrapOrThrow(failLoop());
+            await unwrapOrThrow(stateUtils.failLoop());
             loopFailed = true;
             throw new Error(limits.reason ?? 'Loop limits exceeded');
           }
@@ -304,10 +314,10 @@ export const runLoop = (options?: {
             manifestData.totalIterations = iteration;
             await runTracker.writeManifest(manifestData);
 
-            await unwrapOrThrow(incrementIteration());
+            await unwrapOrThrow(stateUtils.incrementIteration());
 
             // Check if all tasks are completed
-            const state = await unwrapOrThrow(readState());
+            const state = await unwrapOrThrow(stateUtils.readState());
             if (state.status === 'completed') {
               await writeManifestSafe('completed');
               await finalizeRunOnSuccess();
@@ -325,7 +335,7 @@ export const runLoop = (options?: {
             manifestData.totalIterations = iteration;
             await runTracker.writeManifest(manifestData);
 
-            await unwrapOrThrow(incrementIteration());
+            await unwrapOrThrow(stateUtils.incrementIteration());
           }
         }
       } catch (error) {
@@ -336,7 +346,7 @@ export const runLoop = (options?: {
           loopAborted = true;
           await writeManifestSafe('aborted', 'Operation aborted');
           if (stateInitialized) {
-            await abortLoop();
+          await stateUtils.abortLoop();
           }
           await finalizeRunOnFailureOrAbort();
           return;
@@ -345,7 +355,7 @@ export const runLoop = (options?: {
         await writeManifestSafe('failed', errorMessage);
 
         if (stateInitialized && !loopFailed && !loopAborted) {
-          await failLoop().mapErr((e) => {
+          await stateUtils.failLoop().mapErr((e) => {
             console.error(`Failed to update state file: ${e.message}`);
           });
         }
@@ -355,3 +365,6 @@ export const runLoop = (options?: {
     })(),
     toError
   );
+
+export { applyDecision, runLoop, saveReport, saveTaskMarkdown };
+export type { LoopConfig };

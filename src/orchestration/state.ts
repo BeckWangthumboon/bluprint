@@ -1,56 +1,9 @@
 import { ResultAsync } from 'neverthrow';
-import { workspace } from './workspace.js';
-
-export interface TaskStatus {
-  taskNumber: number;
-  status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'aborted';
-  commitHash?: string;
-}
-
-export interface LoopState {
-  version: string;
-  status: 'planning' | 'executing' | 'completed' | 'failed' | 'aborted';
-  currentTaskNumber: number;
-  isRetry: boolean;
-  maxIterations: number;
-  maxTimeMinutes: number;
-  startedAt?: string;
-  iterationCount: number;
-  tasks: TaskStatus[];
-}
+import { workspace } from '../workspace.js';
+import { LoopStateSchema } from './types.js';
+import type { InitStateConfig, LoopState, TaskStatus } from './types.js';
 
 const STATE_VERSION = '1.0.0';
-
-const validateState = (data: unknown): data is LoopState => {
-  if (typeof data !== 'object' || data === null) return false;
-
-  const state = data as Partial<LoopState>;
-
-  return (
-    typeof state.version === 'string' &&
-    (state.status === 'planning' ||
-      state.status === 'executing' ||
-      state.status === 'completed' ||
-      state.status === 'failed' ||
-      state.status === 'aborted') &&
-    typeof state.currentTaskNumber === 'number' &&
-    typeof state.isRetry === 'boolean' &&
-    typeof state.maxIterations === 'number' &&
-    typeof state.maxTimeMinutes === 'number' &&
-    typeof state.iterationCount === 'number' &&
-    Array.isArray(state.tasks) &&
-    state.tasks.every(
-      (task) =>
-        typeof task.taskNumber === 'number' &&
-        (task.status === 'pending' ||
-          task.status === 'in_progress' ||
-          task.status === 'completed' ||
-          task.status === 'failed' ||
-          task.status === 'aborted') &&
-        (task.commitHash === undefined || typeof task.commitHash === 'string')
-    )
-  );
-};
 
 const toError = (e: unknown): Error => (e instanceof Error ? e : new Error(String(e)));
 
@@ -94,19 +47,24 @@ const parsePlanTasks = (planContent: string): ResultAsync<number[], Error> => {
   return ResultAsync.fromSafePromise(Promise.resolve(taskNumbers));
 };
 
-export const readState = (): ResultAsync<LoopState, Error> =>
+/**
+ * Read and validate the loop state from disk.
+ * @returns A ResultAsync with the parsed loop state.
+ */
+const readState = (): ResultAsync<LoopState, Error> =>
   workspace.cache.state
     .read()
     .mapErr((e: Error) => new Error(`Failed to read state file: ${e.message}`))
     .andThen((content: string) => {
       try {
         const parsed: unknown = JSON.parse(content);
-        if (!validateState(parsed)) {
+        const validation = LoopStateSchema.safeParse(parsed);
+        if (!validation.success) {
           return ResultAsync.fromSafePromise(
-            Promise.reject(new Error('Invalid state file structure'))
+            Promise.reject(new Error(`Invalid state file structure: ${validation.error.message}`))
           );
         }
-        return ResultAsync.fromSafePromise(Promise.resolve(parsed));
+        return ResultAsync.fromSafePromise(Promise.resolve(validation.data));
       } catch (e) {
         return ResultAsync.fromSafePromise(
           Promise.reject(new Error(`Failed to parse state JSON: ${toError(e).message}`))
@@ -114,7 +72,11 @@ export const readState = (): ResultAsync<LoopState, Error> =>
       }
     });
 
-export const getCurrentTask = (): ResultAsync<TaskStatus, Error> =>
+/**
+ * Retrieve the current task status from the loop state.
+ * @returns A ResultAsync with the current task status.
+ */
+const getCurrentTask = (): ResultAsync<TaskStatus, Error> =>
   readState().andThen((state) => {
     const task = state.tasks.find((t) => t.taskNumber === state.currentTaskNumber);
     if (!task) {
@@ -125,14 +87,18 @@ export const getCurrentTask = (): ResultAsync<TaskStatus, Error> =>
     return ResultAsync.fromSafePromise(Promise.resolve(task));
   });
 
-export const isRetry = (): ResultAsync<boolean, Error> => readState().map((state) => state.isRetry);
+/**
+ * Check whether the current iteration is a retry.
+ * @returns A ResultAsync with the retry flag.
+ */
+const isRetry = (): ResultAsync<boolean, Error> => readState().map((state) => state.isRetry);
 
-export interface InitStateConfig {
-  maxIterations: number;
-  maxTimeMinutes: number;
-}
-
-export const initializeState = (config: InitStateConfig): ResultAsync<void, Error> =>
+/**
+ * Initialize the loop state based on the plan file and limits.
+ * @param config - Limits for the loop state initialization.
+ * @returns A ResultAsync that resolves when state is written.
+ */
+const initializeState = (config: InitStateConfig): ResultAsync<void, Error> =>
   workspace.cache.plan
     .read()
     .mapErr((e) => new Error(`Could not read plan file: ${e.message}`))
@@ -155,7 +121,11 @@ export const initializeState = (config: InitStateConfig): ResultAsync<void, Erro
       return writeState(initialState);
     });
 
-export const startExecution = (): ResultAsync<void, Error> =>
+/**
+ * Transition the loop state into execution mode and mark the first task in progress.
+ * @returns A ResultAsync that resolves when state is updated.
+ */
+const startExecution = (): ResultAsync<void, Error> =>
   readState().andThen((state) => {
     const updatedState: LoopState = {
       ...state,
@@ -168,7 +138,11 @@ export const startExecution = (): ResultAsync<void, Error> =>
     return writeState(updatedState);
   });
 
-export const incrementIteration = (): ResultAsync<void, Error> =>
+/**
+ * Increment the loop iteration counter.
+ * @returns A ResultAsync that resolves when state is updated.
+ */
+const incrementIteration = (): ResultAsync<void, Error> =>
   readState().andThen((state) => {
     const updatedState: LoopState = {
       ...state,
@@ -177,7 +151,11 @@ export const incrementIteration = (): ResultAsync<void, Error> =>
     return writeState(updatedState);
   });
 
-export const markCurrentTaskAsRetry = (): ResultAsync<void, Error> =>
+/**
+ * Mark the current task as a retry attempt.
+ * @returns A ResultAsync that resolves when state is updated.
+ */
+const markCurrentTaskAsRetry = (): ResultAsync<void, Error> =>
   readState().andThen((state) => {
     const updatedState: LoopState = {
       ...state,
@@ -186,7 +164,12 @@ export const markCurrentTaskAsRetry = (): ResultAsync<void, Error> =>
     return writeState(updatedState);
   });
 
-export const completeCurrentTask = (commitHash: string): ResultAsync<void, Error> =>
+/**
+ * Mark the current task as completed and advance to the next task if available.
+ * @param commitHash - Commit hash associated with the task completion.
+ * @returns A ResultAsync that resolves when state is updated.
+ */
+const completeCurrentTask = (commitHash: string): ResultAsync<void, Error> =>
   readState().andThen((state) => {
     const currentTaskIndex = state.tasks.findIndex((t) => t.taskNumber === state.currentTaskNumber);
 
@@ -226,18 +209,22 @@ export const completeCurrentTask = (commitHash: string): ResultAsync<void, Error
         tasks: updatedTasks,
       };
       return writeState(updatedState);
-    } else {
-      // All tasks completed
-      const updatedState: LoopState = {
-        ...state,
-        status: 'completed',
-        tasks: updatedTasks,
-      };
-      return writeState(updatedState);
     }
+
+    // All tasks completed
+    const updatedState: LoopState = {
+      ...state,
+      status: 'completed',
+      tasks: updatedTasks,
+    };
+    return writeState(updatedState);
   });
 
-export const checkLimits = (): ResultAsync<{ exceeded: boolean; reason?: string }, Error> =>
+/**
+ * Check whether loop limits have been exceeded.
+ * @returns A ResultAsync with limit status and optional reason.
+ */
+const checkLimits = (): ResultAsync<{ exceeded: boolean; reason?: string }, Error> =>
   readState().map((state) => {
     // Check iteration limit
     if (state.iterationCount >= state.maxIterations) {
@@ -264,7 +251,11 @@ export const checkLimits = (): ResultAsync<{ exceeded: boolean; reason?: string 
     return { exceeded: false };
   });
 
-export const failLoop = (): ResultAsync<void, Error> =>
+/**
+ * Mark the loop and current task as failed.
+ * @returns A ResultAsync that resolves when state is updated.
+ */
+const failLoop = (): ResultAsync<void, Error> =>
   readState().andThen((state) => {
     const updatedTasks = state.tasks.map((task) =>
       task.taskNumber === state.currentTaskNumber ? { ...task, status: 'failed' as const } : task
@@ -279,7 +270,11 @@ export const failLoop = (): ResultAsync<void, Error> =>
     return writeState(updatedState);
   });
 
-export const abortLoop = (): ResultAsync<void, Error> =>
+/**
+ * Mark the loop and current task as aborted.
+ * @returns A ResultAsync that resolves when state is updated.
+ */
+const abortLoop = (): ResultAsync<void, Error> =>
   readState().andThen((state) => {
     const updatedTasks = state.tasks.map((task) =>
       task.taskNumber === state.currentTaskNumber ? { ...task, status: 'aborted' as const } : task
@@ -293,3 +288,19 @@ export const abortLoop = (): ResultAsync<void, Error> =>
 
     return writeState(updatedState);
   });
+
+const stateUtils = {
+  readState,
+  getCurrentTask,
+  isRetry,
+  initializeState,
+  startExecution,
+  incrementIteration,
+  markCurrentTaskAsRetry,
+  completeCurrentTask,
+  checkLimits,
+  failLoop,
+  abortLoop,
+};
+
+export { stateUtils };
