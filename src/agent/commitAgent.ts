@@ -1,5 +1,4 @@
 import { ResultAsync, err, ok } from 'neverthrow';
-import { exec } from '../shell.js';
 import {
   parseTextResponse,
   toError,
@@ -13,7 +12,12 @@ import { workspace } from '../workspace.js';
 import { getPlanStep, extractPlanOutline } from './planUtils.js';
 import { getOpenCodeLib, abortAndCleanup } from './opencodesdk.js';
 import type { ModelConfig } from '../config/index.js';
-import { graphite } from './graphite.js';
+import {
+  stageAndGetGitInfo,
+  performNormalCommit,
+  performGraphiteCommit,
+  type CommitResult,
+} from '../git/index.js';
 
 export interface CommitAgentConfig {
   model: ModelConfig;
@@ -21,40 +25,7 @@ export interface CommitAgentConfig {
   graphite: boolean;
 }
 
-export interface CommitResult {
-  hash: string;
-  message: string;
-}
-
-/**
- * Stages all changes and retrieves git status and diff
- */
-const stageAndGetGitInfo = (): ResultAsync<
-  { gitStatus: string; gitDiff: string } | null,
-  Error
-> => {
-  return exec('git', ['status', '--short'])
-    .andThen((result) => {
-      const gitStatus = result.stdout.trim();
-      if (!gitStatus) {
-        return ResultAsync.fromSafePromise(Promise.resolve(null));
-      }
-
-      return exec('git', ['add', '-A']).map(() => gitStatus);
-    })
-    .andThen((gitStatus) => {
-      if (!gitStatus) {
-        return ResultAsync.fromSafePromise(Promise.resolve(null));
-      }
-
-      return exec('git', ['diff', '--cached'])
-        .map((diffResult) => ({
-          gitStatus,
-          gitDiff: diffResult.stdout,
-        }))
-        .orElse(() => ResultAsync.fromSafePromise(Promise.resolve({ gitStatus, gitDiff: '' })));
-    });
-};
+export type { CommitResult };
 
 /**
  * Generates a commit message using the commit agent
@@ -135,57 +106,6 @@ If you need more context about any files, use your tools to read them.`;
         );
     })
   );
-};
-
-/**
- * Commits the staged changes and returns the commit hash and cleaned message
- */
-const performNormalCommit = (commitMessage: string): ResultAsync<CommitResult, Error> => {
-  const cleanMessage = commitMessage
-    .replace(/^```[^\n]*\n?/, '')
-    .replace(/\n?```$/, '')
-    .trim();
-
-  return exec('git', ['commit', '-m', cleanMessage])
-    .andThen(() => exec('git', ['rev-parse', 'HEAD']))
-    .map((result) => ({
-      hash: result.stdout.trim(),
-      message: cleanMessage,
-    }))
-    .mapErr((error) => new Error(`Failed to commit: ${error.message}`));
-};
-
-/**
- * Creates a stacked branch via Graphite CLI.
- * Note: gt create automatically commits staged changes.
- *
- * Falls back to normal commit if Graphite fails.
- */
-const performGraphiteCommit = (
-  commitMessage: string,
-  stepNumber: number,
-  stepTitle: string
-): ResultAsync<CommitResult, Error> => {
-  const cleanMessage = commitMessage
-    .replace(/^```[^\n]*\n?/, '')
-    .replace(/\n?```$/, '')
-    .trim();
-
-  return graphite
-    .createStackedBranchForStep(stepNumber, stepTitle, cleanMessage)
-    .andThen((branchName) => {
-      console.log(`[graphite] Created stacked branch: ${branchName}`);
-      return exec('git', ['rev-parse', 'HEAD']).map((result) => ({
-        hash: result.stdout.trim(),
-        message: cleanMessage,
-      }));
-    })
-    .orElse((error) => {
-      console.warn(
-        `[graphite] Failed to create stacked branch: ${error.message}. Falling back to normal commit.`
-      );
-      return performNormalCommit(commitMessage);
-    });
 };
 
 /**

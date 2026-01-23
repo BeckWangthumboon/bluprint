@@ -11,7 +11,7 @@ import {
   DEFAULT_GENERAL_CONFIG,
 } from '../config/index.js';
 import { exit } from '../exit.js';
-import { graphite } from '../agent/graphite.js';
+import { graphite } from '../git/index.js';
 
 export interface RunOptions {
   spec?: string;
