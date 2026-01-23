@@ -6,11 +6,10 @@ import { exec } from '../shell.js';
 import { stateUtils } from './state.js';
 import { initRunTracker } from '../telemetry/index.js';
 import { archiveCacheToRun, workspace } from '../workspace.js';
-import { createCommitForTask } from '../agent/commitAgent.js';
+import { createCommitForTask, type CommitOrchestrationConfig } from './commit.js';
 import { executeCodingAgent } from '../agent/codingAgent.js';
 import { reviewAndGenerateTask } from '../agent/masterAgent.js';
 import { isObject, toError } from '../agent/utils.js';
-import type { CommitAgentConfig } from '../agent/commitAgent.js';
 import type { CodingAgentConfig } from '../agent/codingAgent.js';
 import type { MasterAgentConfig } from '../agent/masterAgent.js';
 import type { MasterAgentOutput } from '../agent/types.js';
@@ -291,13 +290,13 @@ const runLoop = (options?: {
 
           // Handle decision
           if (reviewOutput.decision === 'accept') {
-            const commitAgentConfig: CommitAgentConfig = {
+            const commitConfig: CommitOrchestrationConfig = {
               model: resolvedConfig.preset.commit,
               timeoutMs: getTimeoutMs(resolvedConfig.timeouts, 'commit'),
               graphite: graphiteEnabled,
             };
             const commitResult = await unwrapOrThrow(
-              createCommitForTask(iteration, signal, commitAgentConfig)
+              createCommitForTask(iteration, signal, commitConfig)
             );
             if (commitResult) {
               iterationData.commit = {

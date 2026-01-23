@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { ResultAsync } from 'neverthrow';
-import type { CommitResult } from '../../../src/agent/commitAgent.js';
+import type { CommitResult } from '../../../src/git/index.js';
 import type { ResolvedConfig } from '../../../src/config/schemas.js';
 import type { LoopState } from '../../../src/orchestration/types.js';
 import { createWorkspaceFixture, createWorkspaceModule } from '../../helpers/workspace.js';
@@ -88,7 +88,7 @@ describe('orchestration/loop', () => {
     await mock.module('../../../src/agent/masterAgent.js', () => ({
       reviewAndGenerateTask: reviewAndGenerateTaskMock,
     }));
-    await mock.module('../../../src/agent/commitAgent.js', () => ({
+    await mock.module('../../../src/orchestration/commit.js', () => ({
       createCommitForTask: createCommitForTaskMock,
     }));
     await mock.module('../../../src/telemetry/index.js', () => ({
