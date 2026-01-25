@@ -6,7 +6,7 @@ import type {
   PromptResponse,
   MessageInfo,
   OpenCodeSDKSession,
-} from '../../src/agent/opencodesdk.js';
+} from '../../src/sdk/index.js';
 
 const TEST_PROVIDERS_ENV = 'BLUPRINT_TEST_OPENCODE_PROVIDERS';
 

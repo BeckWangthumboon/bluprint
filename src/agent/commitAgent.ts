@@ -6,7 +6,7 @@ import {
   cleanupSession,
   withTimeout,
 } from './utils.js';
-import { getOpenCodeLib, abortAndCleanup } from './opencodesdk.js';
+import { getOpenCodeLib, abortAndCleanup } from '../sdk/index.js';
 import type { ModelConfig } from '../config/index.js';
 
 export interface CommitAgentConfig {

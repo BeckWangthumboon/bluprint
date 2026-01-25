@@ -14,7 +14,7 @@ import {
   abortAndCleanup,
   type Session,
   type PromptResponse,
-} from './opencodesdk.js';
+} from '../sdk/index.js';
 import { stateUtils } from '../orchestration/index.js';
 import { exec } from '../shell.js';
 import { findPlanStep, getPlanStep } from './planUtils.js';

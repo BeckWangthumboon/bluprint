@@ -8,7 +8,7 @@ import {
   cleanupSession,
   withTimeout,
 } from './utils.js';
-import { getOpenCodeLib } from './opencodesdk.js';
+import { getOpenCodeLib } from '../sdk/index.js';
 import type { ModelConfig } from '../config/index.js';
 
 export interface SummarizerAgentConfig {

@@ -5,7 +5,7 @@ import { ResultAsync } from 'neverthrow';
 import { Logger } from '../../../src/logging/logger.js';
 import { createLoggingIO } from '../../../src/logging/io.js';
 import type { LoggingIO } from '../../../src/logging/io.js';
-import type { OpenCodeSDKSession } from '../../../src/agent/opencodesdk.js';
+import type { OpenCodeSDKSession } from '../../../src/sdk/index.js';
 import { createTempDir } from '../../helpers/tempDir.js';
 
 describe('logging/logger', () => {

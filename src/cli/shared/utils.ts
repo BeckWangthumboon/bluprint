@@ -6,7 +6,7 @@ import {
   modelConfigEquals,
   formatModelConfig,
 } from '../../config/index.js';
-import { getOpenCodeLib, type Provider, type Lib } from '../../agent/opencodesdk.js';
+import { getOpenCodeLib, type Provider, type Lib } from '../../sdk/index.js';
 import { exit } from '../../exit.js';
 
 /**

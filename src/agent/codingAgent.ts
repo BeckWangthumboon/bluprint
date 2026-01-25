@@ -1,7 +1,7 @@
 import { ResultAsync, err, errAsync } from 'neverthrow';
 import { workspace } from '../workspace.js';
 import { stateUtils } from '../orchestration/index.js';
-import { getOpenCodeLib, abortAndCleanup } from './opencodesdk.js';
+import { getOpenCodeLib, abortAndCleanup } from '../sdk/index.js';
 import { getPlanStep, extractPlanOutline, formatStepHeader } from './planUtils.js';
 import {
   parseTextResponse,

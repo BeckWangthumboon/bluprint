@@ -1,7 +1,7 @@
 import { ResultAsync, err } from 'neverthrow';
 import { workspace } from '../workspace.js';
 import { generateSummary } from './summarizerAgent.js';
-import { getOpenCodeLib } from './opencodesdk.js';
+import { getOpenCodeLib } from '../sdk/index.js';
 import {
   parseTextResponse,
   toError,

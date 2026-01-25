@@ -1,7 +1,7 @@
 import { ResultAsync, errAsync } from 'neverthrow';
 import { fsUtils } from '../fs.js';
 import { join, dirname } from 'path';
-import type { Session } from './opencodesdk.js';
+import type { Session } from '../sdk/index.js';
 import { logSessionData } from '../logging/index.js';
 
 export const toError = (e: unknown): Error => (e instanceof Error ? e : new Error(String(e)));

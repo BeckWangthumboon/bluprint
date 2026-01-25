@@ -1,4 +1,4 @@
-import { getOpencodeServer, isOpencodeInitialized } from './agent/opencodesdk.js';
+import { getOpencodeServer, isOpencodeInitialized } from './sdk/index.js';
 
 const globalController = new AbortController();
 

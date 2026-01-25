@@ -1,5 +1,5 @@
 import { ResultAsync, ok } from 'neverthrow';
-import type { Session, OpenCodeSDKSession } from '../agent/opencodesdk.js';
+import type { Session, OpenCodeSDKSession } from '../sdk/index.js';
 import { loggingIO } from './io.js';
 import type { LoggingIO } from './io.js';
 

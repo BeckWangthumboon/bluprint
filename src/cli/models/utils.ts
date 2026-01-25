@@ -6,7 +6,7 @@ import {
   formatModelConfig,
   modelConfigEquals,
 } from '../../config/index.js';
-import type { Provider } from '../../agent/opencodesdk.js';
+import type { Provider } from '../../sdk/index.js';
 import { exit } from '../../exit.js';
 import { findPresetsUsingModel, type SDKWithProviders } from '../shared/utils.js';
 
