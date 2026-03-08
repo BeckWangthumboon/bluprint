@@ -39,14 +39,17 @@ describe('orchestration/state', () => {
   };
 
   const buildState = (overrides: Partial<LoopState> = {}): LoopState => ({
-    version: '1.0.0',
+    version: '2.0.0',
+    runId: 'test-run',
     status: 'executing',
-    currentTaskNumber: 1,
+    currentStepNumber: 1,
     isRetry: false,
     maxIterations: 5,
     maxTimeMinutes: 10,
     iterationCount: 0,
-    tasks: [{ taskNumber: 1, status: 'in_progress' }],
+    attempts: [{ attempt: 1, startedAt: new Date().toISOString(), status: 'in_progress' }],
+    activeAttempt: 0,
+    steps: [{ stepNumber: 1, status: 'running' }],
     ...overrides,
   });
 
@@ -69,112 +72,161 @@ describe('orchestration/state', () => {
 
   it('initializes state from sequential plan tasks', async () => {
     await writePlan('## 1 First task\n\n## 2 Second task\n');
-    const result = await stateUtils.initializeState({ maxIterations: 3, maxTimeMinutes: 15 });
+    const result = await stateUtils.initializeState({
+      runId: 'test-run',
+      maxIterations: 3,
+      maxTimeMinutes: 15,
+    });
 
     expect(result.isOk()).toBe(true);
 
     const state = await readState();
+    expect(state.version).toBe('2.0.0');
+    expect(state.runId).toBe('test-run');
     expect(state.status).toBe('planning');
-    expect(state.currentTaskNumber).toBe(1);
+    expect(state.currentStepNumber).toBe(1);
     expect(state.isRetry).toBe(false);
     expect(state.maxIterations).toBe(3);
     expect(state.maxTimeMinutes).toBe(15);
     expect(state.iterationCount).toBe(0);
-    expect(state.tasks).toEqual([
-      { taskNumber: 1, status: 'pending' },
-      { taskNumber: 2, status: 'pending' },
+    expect(state.attempts).toHaveLength(1);
+    expect(state.activeAttempt).toBe(0);
+    expect(state.attempts[0]?.attempt).toBe(1);
+    expect(state.attempts[0]?.status).toBe('in_progress');
+    expect(state.steps).toEqual([
+      { stepNumber: 1, status: 'pending' },
+      { stepNumber: 2, status: 'pending' },
     ]);
   });
 
-  it('fails when plan has no tasks', async () => {
+  it('fails when plan has no steps', async () => {
     await writePlan('# Plan\n- Do something\n');
     await expectError(
-      stateUtils.initializeState({ maxIterations: 2, maxTimeMinutes: 10 }),
-      'No tasks'
+      stateUtils.initializeState({ runId: 'test-run', maxIterations: 2, maxTimeMinutes: 10 }),
+      'No steps'
     );
   });
 
-  it('fails when plan tasks are not sequential', async () => {
+  it('fails when plan steps are not sequential', async () => {
     await writePlan('## 1 First task\n\n## 3 Third task\n');
     await expectError(
-      stateUtils.initializeState({ maxIterations: 2, maxTimeMinutes: 10 }),
-      'Task numbers must be sequential'
+      stateUtils.initializeState({ runId: 'test-run', maxIterations: 2, maxTimeMinutes: 10 }),
+      'Step numbers must be sequential'
     );
   });
 
-  it('startExecution marks the first task in progress', async () => {
+  it('startExecution marks the first step as running', async () => {
     await writePlan('## 1 First task\n\n## 2 Second task\n');
-    await expectOk(stateUtils.initializeState({ maxIterations: 2, maxTimeMinutes: 10 }));
+    await expectOk(stateUtils.initializeState({ runId: 'test-run', maxIterations: 2, maxTimeMinutes: 10 }));
     await expectOk(stateUtils.startExecution());
 
     const state = await readState();
     expect(state.status).toBe('executing');
-    expect(state.startedAt).toBeTruthy();
-    expect(state.tasks[0]?.status).toBe('in_progress');
-    expect(state.tasks[1]?.status).toBe('pending');
+    expect(state.steps[0]?.status).toBe('running');
+    expect(state.steps[1]?.status).toBe('pending');
+    expect(state.attempts[0]?.status).toBe('in_progress');
   });
 
-  it('returns loop context and task info', async () => {
+  it('resumeExecution closes prior attempt and starts a new one', async () => {
     await writePlan('## 1 First task\n\n## 2 Second task\n');
-    await expectOk(stateUtils.initializeState({ maxIterations: 2, maxTimeMinutes: 10 }));
+    await expectOk(stateUtils.initializeState({ runId: 'test-run', maxIterations: 3, maxTimeMinutes: 10 }));
     await expectOk(stateUtils.startExecution());
-    await expectOk(stateUtils.markCurrentTaskAsRetry());
 
-    const currentTaskNumber = await expectOk(stateUtils.getCurrentTaskNumber());
+    await expectOk(stateUtils.resumeExecution('test-run'));
+
+    const state = await readState();
+    expect(state.status).toBe('executing');
+    expect(state.currentStepNumber).toBe(1);
+    expect(state.steps[0]?.status).toBe('running');
+    expect(state.steps[1]?.status).toBe('pending');
+    expect(state.attempts).toHaveLength(2);
+    expect(state.attempts[0]?.status).toBe('aborted');
+    expect(state.attempts[0]?.endedAt).toBeTruthy();
+    expect(state.attempts[1]?.attempt).toBe(2);
+    expect(state.attempts[1]?.status).toBe('in_progress');
+    expect(state.activeAttempt).toBe(1);
+  });
+
+  it('resumeExecution errors on run ID mismatch', async () => {
+    await writePlan('## 1 First task\n');
+    await expectOk(stateUtils.initializeState({ runId: 'test-run', maxIterations: 2, maxTimeMinutes: 10 }));
+    await expectOk(stateUtils.startExecution());
+
+    await expectError(stateUtils.resumeExecution('different-run'), 'Run ID mismatch');
+  });
+
+  it('returns loop context and step info', async () => {
+    await writePlan('## 1 First task\n\n## 2 Second task\n');
+    await expectOk(stateUtils.initializeState({ runId: 'test-run', maxIterations: 2, maxTimeMinutes: 10 }));
+    await expectOk(stateUtils.startExecution());
+    await expectOk(stateUtils.markCurrentStepAsRetry());
+
+    const currentStepNumber = await expectOk(stateUtils.getCurrentStepNumber());
     const loopStatus = await expectOk(stateUtils.getLoopStatus());
     const planProgress = await expectOk(stateUtils.getPlanProgress());
     const loopContext = await expectOk(stateUtils.getLoopContext());
     const isRetry = await expectOk(stateUtils.isRetry());
-    const currentTask = await expectOk(stateUtils.getCurrentTask());
+    const currentStep = await expectOk(stateUtils.getCurrentStep());
 
-    expect(currentTaskNumber).toBe(1);
+    expect(currentStepNumber).toBe(1);
     expect(loopStatus).toBe('executing');
-    expect(planProgress).toEqual({ currentTaskNumber: 1, totalTasks: 2 });
-    expect(loopContext).toEqual({ currentTaskNumber: 1, totalTasks: 2, isRetry: true });
+    expect(planProgress).toEqual({ currentStepNumber: 1, totalSteps: 2 });
+    expect(loopContext).toEqual({ currentStepNumber: 1, totalSteps: 2, isRetry: true });
     expect(isRetry).toBe(true);
-    expect(currentTask).toEqual({ taskNumber: 1, status: 'in_progress' });
+    expect(currentStep).toEqual({ stepNumber: 1, status: 'running' });
   });
 
-  it('getCurrentTask errors when the current task is missing', async () => {
+  it('getCurrentStep errors when the current step is missing', async () => {
     const state = buildState({
-      currentTaskNumber: 99,
-      tasks: [{ taskNumber: 1, status: 'pending' }],
+      currentStepNumber: 99,
+      steps: [{ stepNumber: 1, status: 'pending' }],
     });
     await fixture.writeCacheFile('state.json', JSON.stringify(state, null, 2));
 
-    await expectError(stateUtils.getCurrentTask(), 'Current task 99 not found');
+    await expectError(stateUtils.getCurrentStep(), 'Current step 99 not found');
   });
 
-  it('completeCurrentTask advances to the next task when available', async () => {
+  it('completeCurrentStep advances to the next step when available', async () => {
     await writePlan('## 1 First task\n\n## 2 Second task\n');
-    await expectOk(stateUtils.initializeState({ maxIterations: 2, maxTimeMinutes: 10 }));
+    await expectOk(stateUtils.initializeState({ runId: 'test-run', maxIterations: 2, maxTimeMinutes: 10 }));
     await expectOk(stateUtils.startExecution());
-    await expectOk(stateUtils.markCurrentTaskAsRetry());
-    await expectOk(stateUtils.completeCurrentTask('abc123'));
+    await expectOk(stateUtils.markCurrentStepAsRetry());
+    await expectOk(stateUtils.completeCurrentStep('abc123'));
 
     const state = await readState();
-    expect(state.currentTaskNumber).toBe(2);
+    expect(state.currentStepNumber).toBe(2);
     expect(state.isRetry).toBe(false);
-    expect(state.tasks).toEqual([
-      { taskNumber: 1, status: 'completed', commitHash: 'abc123' },
-      { taskNumber: 2, status: 'in_progress' },
+    expect(state.steps).toEqual([
+      { stepNumber: 1, status: 'done', commitHash: 'abc123' },
+      { stepNumber: 2, status: 'running' },
     ]);
   });
 
-  it('completeCurrentTask completes the loop on the final task', async () => {
-    await writePlan('## 1 Only task\n');
-    await expectOk(stateUtils.initializeState({ maxIterations: 1, maxTimeMinutes: 10 }));
+  it('completeCurrentStep completes the loop on the final step', async () => {
+    await writePlan('## 1 Only step\n');
+    await expectOk(stateUtils.initializeState({ runId: 'test-run', maxIterations: 1, maxTimeMinutes: 10 }));
     await expectOk(stateUtils.startExecution());
-    await expectOk(stateUtils.completeCurrentTask('done'));
+    await expectOk(stateUtils.completeCurrentStep('done'));
 
     const state = await readState();
     expect(state.status).toBe('completed');
-    expect(state.tasks).toEqual([{ taskNumber: 1, status: 'completed', commitHash: 'done' }]);
+    expect(state.steps).toEqual([{ stepNumber: 1, status: 'done', commitHash: 'done' }]);
+    expect(state.attempts[0]?.status).toBe('completed');
+    expect(state.attempts[0]?.endedAt).toBeTruthy();
+  });
+
+  it('resumeExecution fails for completed runs', async () => {
+    await writePlan('## 1 Only step\n');
+    await expectOk(stateUtils.initializeState({ runId: 'test-run', maxIterations: 1, maxTimeMinutes: 10 }));
+    await expectOk(stateUtils.startExecution());
+    await expectOk(stateUtils.completeCurrentStep('done'));
+
+    await expectError(stateUtils.resumeExecution('test-run'), 'Cannot resume a completed run');
   });
 
   it('checkLimits reports iteration limit exceeded', async () => {
-    await writePlan('## 1 Only task\n');
-    await expectOk(stateUtils.initializeState({ maxIterations: 1, maxTimeMinutes: 10 }));
+    await writePlan('## 1 Only step\n');
+    await expectOk(stateUtils.initializeState({ runId: 'test-run', maxIterations: 1, maxTimeMinutes: 10 }));
     await expectOk(stateUtils.startExecution());
     await expectOk(stateUtils.incrementIteration());
 
@@ -188,7 +240,10 @@ describe('orchestration/state', () => {
 
   it('checkLimits reports time limit exceeded', async () => {
     const startedAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
-    const state = buildState({ maxTimeMinutes: 1, startedAt });
+    const state = buildState({
+      maxTimeMinutes: 1,
+      attempts: [{ attempt: 1, startedAt, status: 'in_progress' }],
+    });
     await fixture.writeCacheFile('state.json', JSON.stringify(state, null, 2));
 
     const result = await stateUtils.checkLimits();
@@ -199,33 +254,37 @@ describe('orchestration/state', () => {
     }
   });
 
-  it('failLoop marks the loop failed and current task failed', async () => {
+  it('failLoop marks the loop failed and current step failed', async () => {
     await writePlan('## 1 First task\n\n## 2 Second task\n');
-    await expectOk(stateUtils.initializeState({ maxIterations: 2, maxTimeMinutes: 10 }));
+    await expectOk(stateUtils.initializeState({ runId: 'test-run', maxIterations: 2, maxTimeMinutes: 10 }));
     await expectOk(stateUtils.startExecution());
     await expectOk(stateUtils.failLoop());
 
     const state = await readState();
     expect(state.status).toBe('failed');
-    expect(state.tasks[0]?.status).toBe('failed');
-    expect(state.tasks[1]?.status).toBe('pending');
+    expect(state.steps[0]?.status).toBe('failed');
+    expect(state.steps[1]?.status).toBe('pending');
+    expect(state.attempts[0]?.status).toBe('failed');
+    expect(state.attempts[0]?.endedAt).toBeTruthy();
   });
 
-  it('abortLoop marks the loop aborted and current task aborted', async () => {
+  it('abortLoop marks the loop aborted and current step failed', async () => {
     await writePlan('## 1 First task\n\n## 2 Second task\n');
-    await expectOk(stateUtils.initializeState({ maxIterations: 2, maxTimeMinutes: 10 }));
+    await expectOk(stateUtils.initializeState({ runId: 'test-run', maxIterations: 2, maxTimeMinutes: 10 }));
     await expectOk(stateUtils.startExecution());
     await expectOk(stateUtils.abortLoop());
 
     const state = await readState();
     expect(state.status).toBe('aborted');
-    expect(state.tasks[0]?.status).toBe('aborted');
-    expect(state.tasks[1]?.status).toBe('pending');
+    expect(state.steps[0]?.status).toBe('failed');
+    expect(state.steps[1]?.status).toBe('pending');
+    expect(state.attempts[0]?.status).toBe('aborted');
+    expect(state.attempts[0]?.endedAt).toBeTruthy();
   });
 
   it('incrementIteration increments the iteration count', async () => {
-    await writePlan('## 1 Only task\n');
-    await expectOk(stateUtils.initializeState({ maxIterations: 2, maxTimeMinutes: 10 }));
+    await writePlan('## 1 Only step\n');
+    await expectOk(stateUtils.initializeState({ runId: 'test-run', maxIterations: 2, maxTimeMinutes: 10 }));
     await expectOk(stateUtils.startExecution());
     await expectOk(stateUtils.incrementIteration());
 

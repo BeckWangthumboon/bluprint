@@ -109,6 +109,28 @@ const createWorkspaceModule = (paths: WorkspacePaths) => {
   const readFileResult = (filePath: string) => fsUtils.readFile(filePath);
   const writeFileResult = (filePath: string, content: string) =>
     fsUtils.writeFile(filePath, content);
+  const getRunDir = (runId: string): string => join(paths.runsDir, runId);
+  const getRunFilePaths = (runId: string) => {
+    const runDir = getRunDir(runId);
+    return {
+      runDir,
+      spec: join(runDir, 'spec.md'),
+      plan: join(runDir, 'plan.md'),
+      summary: join(runDir, 'summary.md'),
+      state: join(runDir, 'state.json'),
+      task: join(runDir, 'task.md'),
+      report: join(runDir, 'report.md'),
+    };
+  };
+  const hydrateCacheFromRun = (runId: string) => {
+    const runFiles = getRunFilePaths(runId);
+    return ResultAsync.combine([
+      fsUtils.copyFile(runFiles.spec, paths.specFile),
+      fsUtils.copyFile(runFiles.plan, paths.planFile),
+      fsUtils.copyFile(runFiles.summary, paths.summaryFile),
+      fsUtils.copyFile(runFiles.state, paths.stateFile),
+    ]).map(() => undefined);
+  };
 
   const workspace = {
     cache: {
@@ -136,6 +158,10 @@ const createWorkspaceModule = (paths: WorkspacePaths) => {
         write: (content: string) => writeFileResult(paths.reportFile, content),
       },
     },
+    run: {
+      getFilePaths: getRunFilePaths,
+      hydrateCache: hydrateCacheFromRun,
+    },
     config: {},
   };
 
@@ -145,6 +171,7 @@ const createWorkspaceModule = (paths: WorkspacePaths) => {
     BLUPRINT_DIR: paths.bluprintDir,
     RUNS_DIR: paths.runsDir,
     CACHE_DIR: paths.cacheDir,
+    getRunDir,
     SPEC_FILE: paths.specFile,
     PLAN_FILE: paths.planFile,
     SUMMARY_FILE: paths.summaryFile,
@@ -153,7 +180,13 @@ const createWorkspaceModule = (paths: WorkspacePaths) => {
     REPORT_FILE: paths.reportFile,
   };
 
-  return { workspace, archiveCacheToRun, workspaceConstants };
+  return {
+    workspace,
+    archiveCacheToRun,
+    workspaceConstants,
+    getRunFilePaths,
+    hydrateCacheFromRun,
+  };
 };
 
 export type { WorkspaceFixture, WorkspacePaths };

@@ -20,6 +20,10 @@ type LoopConfig = {
   graphite: boolean;
 };
 
+type ResumeConfig = {
+  runId: string;
+};
+
 const parseMasterOutput = (raw: string): MasterAgentOutput => {
   let parsed: unknown;
   try {
@@ -86,9 +90,9 @@ const applyDecision = (
 ): ResultAsync<void, Error> => {
   if (decision === 'accept') {
     // Allow empty commit hash for cases where there are no changes to commit
-    return stateUtils.completeCurrentTask(commitHash ?? '');
+    return stateUtils.completeCurrentStep(commitHash ?? '');
   }
-  return stateUtils.markCurrentTaskAsRetry();
+  return stateUtils.markCurrentStepAsRetry();
 };
 
 /**
@@ -117,6 +121,7 @@ const applyDecision = (
 const runLoop = (options?: {
   signal?: AbortSignal;
   config?: LoopConfig;
+  resume?: ResumeConfig;
 }): ResultAsync<void, Error> =>
   ResultAsync.fromPromise(
     (async () => {
@@ -126,7 +131,9 @@ const runLoop = (options?: {
       let loopFailed = false;
       let loopAborted = false;
       let iteration = 0;
-      const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const resumeConfig = options?.resume;
+      const isResume = Boolean(resumeConfig);
+      const runId = resumeConfig?.runId ?? `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const startedAt = new Date();
 
       // Resolve runtime configuration
@@ -219,12 +226,23 @@ const runLoop = (options?: {
 
         const graphiteEnabled = options?.config?.graphite ?? false;
 
-        // Initialize state
-        await unwrapOrThrow(stateUtils.initializeState(resolvedConfig.limits));
+        // Initialize or resume state
+        if (isResume) {
+          await unwrapOrThrow(stateUtils.resumeExecution(runId));
+        } else {
+          await unwrapOrThrow(
+            stateUtils.initializeState({
+              ...resolvedConfig.limits,
+              runId,
+            })
+          );
+          await unwrapOrThrow(stateUtils.startExecution());
+        }
         stateInitialized = true;
-        await unwrapOrThrow(stateUtils.startExecution());
         await unwrapOrThrow(workspace.cache.task.write(''));
         await unwrapOrThrow(workspace.cache.report.write(''));
+        iteration = await unwrapOrThrow(stateUtils.getIterationCount());
+        manifestData.totalIterations = iteration;
         await runTracker.writeManifest(manifestData);
 
         // Check for abort before entering main loop
@@ -249,7 +267,7 @@ const runLoop = (options?: {
           iteration += 1;
 
           // Get current plan step from state
-          const planStep = await unwrapOrThrow(stateUtils.getCurrentTaskNumber());
+          const planStep = await unwrapOrThrow(stateUtils.getCurrentStepNumber());
 
           const iterationData: ManifestData['iterations'][0] = { iteration, planStep };
 
@@ -314,7 +332,7 @@ const runLoop = (options?: {
 
             await unwrapOrThrow(stateUtils.incrementIteration());
 
-            // Check if all tasks are completed
+            // Check if all steps are completed
             const loopStatus = await unwrapOrThrow(stateUtils.getLoopStatus());
             if (loopStatus === 'completed') {
               await writeManifestSafe('completed');

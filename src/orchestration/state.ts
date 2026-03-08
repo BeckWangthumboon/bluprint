@@ -1,11 +1,123 @@
 import { ResultAsync } from 'neverthrow';
+import { z } from 'zod';
 import { workspace } from '../workspace.js';
 import { LoopStateSchema } from './types.js';
-import type { InitStateConfig, LoopState, TaskStatus } from './types.js';
+import type {
+  InitStateConfig,
+  LoopState,
+  RunAttempt,
+  StepState,
+  StepStatus,
+} from './types.js';
 
-const STATE_VERSION = '1.0.0';
+const STATE_VERSION = '2.0.0';
+const LEGACY_RUN_ID = 'unknown';
 
 const toError = (e: unknown): Error => (e instanceof Error ? e : new Error(String(e)));
+
+const LEGACY_TASK_STATUS_VALUES = [
+  'pending',
+  'in_progress',
+  'completed',
+  'failed',
+  'aborted',
+] as const;
+const LEGACY_LOOP_STATUS_VALUES = ['planning', 'executing', 'completed', 'failed', 'aborted'] as const;
+
+const LegacyTaskStatusSchema = z.object({
+  taskNumber: z.number(),
+  status: z.enum(LEGACY_TASK_STATUS_VALUES),
+  commitHash: z.string().optional(),
+});
+
+const LegacyLoopStateSchema = z.object({
+  version: z.string(),
+  status: z.enum(LEGACY_LOOP_STATUS_VALUES),
+  currentTaskNumber: z.number(),
+  isRetry: z.boolean(),
+  maxIterations: z.number(),
+  maxTimeMinutes: z.number(),
+  startedAt: z.string().optional(),
+  iterationCount: z.number(),
+  tasks: z.array(LegacyTaskStatusSchema),
+});
+
+type LegacyLoopState = z.infer<typeof LegacyLoopStateSchema>;
+
+const mapLegacyStepStatus = (status: LegacyLoopState['tasks'][number]['status']): StepStatus => {
+  switch (status) {
+    case 'pending':
+      return 'pending';
+    case 'in_progress':
+      return 'running';
+    case 'completed':
+      return 'done';
+    case 'failed':
+      return 'failed';
+    case 'aborted':
+      return 'failed';
+  }
+};
+
+const mapLegacyAttemptStatus = (
+  status: LegacyLoopState['status']
+): RunAttempt['status'] => {
+  switch (status) {
+    case 'completed':
+      return 'completed';
+    case 'failed':
+      return 'failed';
+    case 'aborted':
+      return 'aborted';
+    default:
+      return 'in_progress';
+  }
+};
+
+const mapLoopStatusToAttemptStatus = (status: LoopState['status']): RunAttempt['status'] => {
+  switch (status) {
+    case 'completed':
+      return 'completed';
+    case 'failed':
+      return 'failed';
+    case 'aborted':
+      return 'aborted';
+    default:
+      return 'aborted';
+  }
+};
+
+const migrateLegacyState = (legacy: LegacyLoopState): LoopState => {
+  const attemptStatus = mapLegacyAttemptStatus(legacy.status);
+  const startedAt = legacy.startedAt ?? new Date().toISOString();
+  const endedAt =
+    attemptStatus === 'in_progress' ? undefined : legacy.startedAt ?? new Date().toISOString();
+
+  return {
+    version: STATE_VERSION,
+    runId: LEGACY_RUN_ID,
+    status: legacy.status,
+    currentStepNumber: legacy.currentTaskNumber,
+    isRetry: legacy.isRetry,
+    maxIterations: legacy.maxIterations,
+    maxTimeMinutes: legacy.maxTimeMinutes,
+    iterationCount: legacy.iterationCount,
+    attempts: [
+      {
+        attempt: 1,
+        startedAt,
+        endedAt,
+        status: attemptStatus,
+      },
+    ],
+    activeAttempt: 0,
+    steps: legacy.tasks.map((task) => ({
+      stepNumber: task.taskNumber,
+      status: mapLegacyStepStatus(task.status),
+      commitHash: task.commitHash,
+    })),
+  };
+};
 
 const writeState = (state: LoopState): ResultAsync<void, Error> => {
   const json = JSON.stringify(state, null, 2);
@@ -14,38 +126,108 @@ const writeState = (state: LoopState): ResultAsync<void, Error> => {
     .mapErr((e) => new Error(`Failed to write state: ${e.message}`));
 };
 
-const parsePlanTasks = (planContent: string): ResultAsync<number[], Error> => {
-  const taskNumberRegex = /^## (\d+) /gm;
-  const taskNumbers: number[] = [];
+const parsePlanSteps = (planContent: string): ResultAsync<number[], Error> => {
+  const stepNumberRegex = /^## (\d+) /gm;
+  const stepNumbers: number[] = [];
   let match;
 
-  while ((match = taskNumberRegex.exec(planContent)) !== null) {
+  while ((match = stepNumberRegex.exec(planContent)) !== null) {
     const matchedNumber = match[1];
     if (matchedNumber) {
-      taskNumbers.push(parseInt(matchedNumber, 10));
+      stepNumbers.push(parseInt(matchedNumber, 10));
     }
   }
 
-  if (taskNumbers.length === 0) {
-    return ResultAsync.fromSafePromise(Promise.reject(new Error('No tasks found in plan.md')));
+  if (stepNumbers.length === 0) {
+    return ResultAsync.fromSafePromise(Promise.reject(new Error('No steps found in plan.md')));
   }
 
   // Validate sequential numbering starting from 1
-  for (let i = 0; i < taskNumbers.length; i++) {
-    const taskNum = taskNumbers[i];
-    if (taskNum === undefined || taskNum !== i + 1) {
+  for (let i = 0; i < stepNumbers.length; i++) {
+    const stepNum = stepNumbers[i];
+    if (stepNum === undefined || stepNum !== i + 1) {
       return ResultAsync.fromSafePromise(
         Promise.reject(
           new Error(
-            `Task numbers must be sequential starting from 1. Expected ${i + 1}, found ${taskNum}`
+            `Step numbers must be sequential starting from 1. Expected ${i + 1}, found ${stepNum}`
           )
         )
       );
     }
   }
 
-  return ResultAsync.fromSafePromise(Promise.resolve(taskNumbers));
+  return ResultAsync.fromSafePromise(Promise.resolve(stepNumbers));
 };
+
+const getActiveAttempt = (state: LoopState): RunAttempt | undefined =>
+  state.attempts[state.activeAttempt];
+
+const updateActiveAttempt = (
+  state: LoopState,
+  updates: Partial<RunAttempt>
+): RunAttempt[] => {
+  if (state.activeAttempt < 0 || state.activeAttempt >= state.attempts.length) {
+    return state.attempts;
+  }
+
+  return state.attempts.map((attempt, index) =>
+    index === state.activeAttempt ? { ...attempt, ...updates } : attempt
+  );
+};
+
+const closeActiveAttempt = (
+  state: LoopState,
+  status: RunAttempt['status']
+): RunAttempt[] => {
+  const activeAttempt = getActiveAttempt(state);
+  if (!activeAttempt || activeAttempt.endedAt) {
+    return state.attempts;
+  }
+
+  const endedAt = new Date().toISOString();
+  return updateActiveAttempt(state, { status, endedAt });
+};
+
+const ensureActiveAttempt = (
+  state: LoopState
+): { attempts: RunAttempt[]; activeAttempt: number } => {
+  if (
+    state.attempts.length > 0 &&
+    state.activeAttempt >= 0 &&
+    state.activeAttempt < state.attempts.length
+  ) {
+    return { attempts: state.attempts, activeAttempt: state.activeAttempt };
+  }
+
+  const attempt: RunAttempt = {
+    attempt: 1,
+    startedAt: new Date().toISOString(),
+    status: 'in_progress',
+  };
+
+  return { attempts: [attempt], activeAttempt: 0 };
+};
+
+const appendAttempt = (attempts: RunAttempt[]): { attempts: RunAttempt[]; activeAttempt: number } => {
+  const lastAttempt = attempts[attempts.length - 1];
+  const nextAttemptNumber = lastAttempt ? lastAttempt.attempt + 1 : 1;
+  const newAttempt: RunAttempt = {
+    attempt: nextAttemptNumber,
+    startedAt: new Date().toISOString(),
+    status: 'in_progress',
+  };
+
+  return {
+    attempts: [...attempts, newAttempt],
+    activeAttempt: attempts.length,
+  };
+};
+
+const normalizeStepsForResume = (steps: StepState[]): StepState[] =>
+  steps.map((step) => (step.status === 'running' ? { ...step, status: 'failed' } : step));
+
+const findNextStepToRun = (steps: StepState[]): StepState | undefined =>
+  steps.find((step) => step.status === 'pending' || step.status === 'failed');
 
 /**
  * Read and validate the loop state from disk.
@@ -59,12 +241,23 @@ const readState = (): ResultAsync<LoopState, Error> =>
       try {
         const parsed: unknown = JSON.parse(content);
         const validation = LoopStateSchema.safeParse(parsed);
-        if (!validation.success) {
-          return ResultAsync.fromSafePromise(
-            Promise.reject(new Error(`Invalid state file structure: ${validation.error.message}`))
-          );
+        if (validation.success) {
+          return ResultAsync.fromSafePromise(Promise.resolve(validation.data));
         }
-        return ResultAsync.fromSafePromise(Promise.resolve(validation.data));
+
+        const legacyValidation = LegacyLoopStateSchema.safeParse(parsed);
+        if (legacyValidation.success) {
+          return ResultAsync.fromSafePromise(Promise.resolve(migrateLegacyState(legacyValidation.data)));
+        }
+
+        const legacyMessage = legacyValidation.error.message;
+        return ResultAsync.fromSafePromise(
+          Promise.reject(
+            new Error(
+              `Invalid state file structure: ${validation.error.message}; legacy parse error: ${legacyMessage}`
+            )
+          )
+        );
       } catch (e) {
         return ResultAsync.fromSafePromise(
           Promise.reject(new Error(`Failed to parse state JSON: ${toError(e).message}`))
@@ -73,11 +266,11 @@ const readState = (): ResultAsync<LoopState, Error> =>
     });
 
 /**
- * Get the current task number from the loop state.
- * @returns A ResultAsync with the current task number.
+ * Get the current step number from the loop state.
+ * @returns A ResultAsync with the current step number.
  */
-const getCurrentTaskNumber = (): ResultAsync<number, Error> =>
-  readState().map((state) => state.currentTaskNumber);
+const getCurrentStepNumber = (): ResultAsync<number, Error> =>
+  readState().map((state) => state.currentStepNumber);
 
 /**
  * Get the current loop status from the loop state.
@@ -88,41 +281,41 @@ const getLoopStatus = (): ResultAsync<LoopState['status'], Error> =>
 
 /**
  * Get plan progress details from the loop state.
- * @returns A ResultAsync with current task number and total task count.
+ * @returns A ResultAsync with current step number and total step count.
  */
-const getPlanProgress = (): ResultAsync<{ currentTaskNumber: number; totalTasks: number }, Error> =>
+const getPlanProgress = (): ResultAsync<{ currentStepNumber: number; totalSteps: number }, Error> =>
   readState().map((state) => ({
-    currentTaskNumber: state.currentTaskNumber,
-    totalTasks: state.tasks.length,
+    currentStepNumber: state.currentStepNumber,
+    totalSteps: state.steps.length,
   }));
 
 /**
- * Get the current task context for decision logic.
- * @returns A ResultAsync with task number, total tasks, and retry flag.
+ * Get the current loop context for decision logic.
+ * @returns A ResultAsync with step number, total steps, and retry flag.
  */
 const getLoopContext = (): ResultAsync<
-  { currentTaskNumber: number; totalTasks: number; isRetry: boolean },
+  { currentStepNumber: number; totalSteps: number; isRetry: boolean },
   Error
 > =>
   readState().map((state) => ({
-    currentTaskNumber: state.currentTaskNumber,
-    totalTasks: state.tasks.length,
+    currentStepNumber: state.currentStepNumber,
+    totalSteps: state.steps.length,
     isRetry: state.isRetry,
   }));
 
 /**
- * Retrieve the current task status from the loop state.
- * @returns A ResultAsync with the current task status.
+ * Retrieve the current step state from the loop state.
+ * @returns A ResultAsync with the current step state.
  */
-const getCurrentTask = (): ResultAsync<TaskStatus, Error> =>
+const getCurrentStep = (): ResultAsync<StepState, Error> =>
   readState().andThen((state) => {
-    const task = state.tasks.find((t) => t.taskNumber === state.currentTaskNumber);
-    if (!task) {
+    const step = state.steps.find((s) => s.stepNumber === state.currentStepNumber);
+    if (!step) {
       return ResultAsync.fromSafePromise(
-        Promise.reject(new Error(`Current task ${state.currentTaskNumber} not found in state`))
+        Promise.reject(new Error(`Current step ${state.currentStepNumber} not found in state`))
       );
     }
-    return ResultAsync.fromSafePromise(Promise.resolve(task));
+    return ResultAsync.fromSafePromise(Promise.resolve(step));
   });
 
 /**
@@ -130,6 +323,13 @@ const getCurrentTask = (): ResultAsync<TaskStatus, Error> =>
  * @returns A ResultAsync with the retry flag.
  */
 const isRetry = (): ResultAsync<boolean, Error> => readState().map((state) => state.isRetry);
+
+/**
+ * Get the current iteration count from the loop state.
+ * @returns A ResultAsync with the iteration count.
+ */
+const getIterationCount = (): ResultAsync<number, Error> =>
+  readState().map((state) => state.iterationCount);
 
 /**
  * Initialize the loop state based on the plan file and limits.
@@ -140,18 +340,27 @@ const initializeState = (config: InitStateConfig): ResultAsync<void, Error> =>
   workspace.cache.plan
     .read()
     .mapErr((e) => new Error(`Could not read plan file: ${e.message}`))
-    .andThen(parsePlanTasks)
-    .andThen((taskNumbers) => {
+    .andThen(parsePlanSteps)
+    .andThen((stepNumbers) => {
+      const initialAttempt: RunAttempt = {
+        attempt: 1,
+        startedAt: new Date().toISOString(),
+        status: 'in_progress',
+      };
+
       const initialState: LoopState = {
         version: STATE_VERSION,
+        runId: config.runId,
         status: 'planning',
-        currentTaskNumber: 1,
+        currentStepNumber: stepNumbers[0] ?? 1,
         isRetry: false,
         maxIterations: config.maxIterations,
         maxTimeMinutes: config.maxTimeMinutes,
         iterationCount: 0,
-        tasks: taskNumbers.map((taskNumber) => ({
-          taskNumber,
+        attempts: [initialAttempt],
+        activeAttempt: 0,
+        steps: stepNumbers.map((stepNumber) => ({
+          stepNumber,
           status: 'pending',
         })),
       };
@@ -160,19 +369,72 @@ const initializeState = (config: InitStateConfig): ResultAsync<void, Error> =>
     });
 
 /**
- * Transition the loop state into execution mode and mark the first task in progress.
+ * Transition the loop state into execution mode and mark the first step as running.
  * @returns A ResultAsync that resolves when state is updated.
  */
 const startExecution = (): ResultAsync<void, Error> =>
   readState().andThen((state) => {
+    const ensured = ensureActiveAttempt(state);
+    const updatedSteps: StepState[] = state.steps.map((step, index): StepState =>
+      index === 0 ? { ...step, status: 'running' } : step
+    );
     const updatedState: LoopState = {
       ...state,
       status: 'executing',
-      startedAt: new Date().toISOString(),
-      tasks: state.tasks.map((task, index) =>
-        index === 0 ? { ...task, status: 'in_progress' } : task
-      ),
+      currentStepNumber: updatedSteps[0]?.stepNumber ?? state.currentStepNumber,
+      attempts: ensured.attempts,
+      activeAttempt: ensured.activeAttempt,
+      steps: updatedSteps,
     };
+    return writeState(updatedState);
+  });
+
+/**
+ * Resume execution using an existing state file.
+ * @param runId - The run identifier to resume
+ * @returns A ResultAsync that resolves when state is updated.
+ */
+const resumeExecution = (runId: string): ResultAsync<void, Error> =>
+  readState().andThen((state) => {
+    if (state.status === 'completed') {
+      return ResultAsync.fromSafePromise(
+        Promise.reject(new Error('Cannot resume a completed run.'))
+      );
+    }
+
+    if (state.runId !== runId && state.runId !== LEGACY_RUN_ID) {
+      return ResultAsync.fromSafePromise(
+        Promise.reject(new Error(`Run ID mismatch. State has ${state.runId}, expected ${runId}.`))
+      );
+    }
+
+    const updatedSteps = normalizeStepsForResume(state.steps);
+    const nextStep = findNextStepToRun(updatedSteps);
+    if (!nextStep) {
+      return ResultAsync.fromSafePromise(
+        Promise.reject(new Error('No pending or failed steps remain to resume.'))
+      );
+    }
+
+    const attemptStatus = mapLoopStatusToAttemptStatus(state.status);
+    const closedAttempts = closeActiveAttempt(state, attemptStatus);
+    const nextAttempts = appendAttempt(closedAttempts);
+
+    const stepsWithRunning: StepState[] = updatedSteps.map((step): StepState =>
+      step.stepNumber === nextStep.stepNumber ? { ...step, status: 'running' } : step
+    );
+
+    const updatedState: LoopState = {
+      ...state,
+      runId: state.runId === LEGACY_RUN_ID ? runId : state.runId,
+      status: 'executing',
+      currentStepNumber: nextStep.stepNumber,
+      isRetry: false,
+      attempts: nextAttempts.attempts,
+      activeAttempt: nextAttempts.activeAttempt,
+      steps: stepsWithRunning,
+    };
+
     return writeState(updatedState);
   });
 
@@ -190,10 +452,10 @@ const incrementIteration = (): ResultAsync<void, Error> =>
   });
 
 /**
- * Mark the current task as a retry attempt.
+ * Mark the current step as a retry attempt.
  * @returns A ResultAsync that resolves when state is updated.
  */
-const markCurrentTaskAsRetry = (): ResultAsync<void, Error> =>
+const markCurrentStepAsRetry = (): ResultAsync<void, Error> =>
   readState().andThen((state) => {
     const updatedState: LoopState = {
       ...state,
@@ -203,57 +465,59 @@ const markCurrentTaskAsRetry = (): ResultAsync<void, Error> =>
   });
 
 /**
- * Mark the current task as completed and advance to the next task if available.
- * @param commitHash - Commit hash associated with the task completion.
+ * Mark the current step as completed and advance to the next step if available.
+ * @param commitHash - Commit hash associated with the step completion.
  * @returns A ResultAsync that resolves when state is updated.
  */
-const completeCurrentTask = (commitHash: string): ResultAsync<void, Error> =>
+const completeCurrentStep = (commitHash: string): ResultAsync<void, Error> =>
   readState().andThen((state) => {
-    const currentTaskIndex = state.tasks.findIndex((t) => t.taskNumber === state.currentTaskNumber);
+    const currentStepIndex = state.steps.findIndex(
+      (step) => step.stepNumber === state.currentStepNumber
+    );
 
-    if (currentTaskIndex === -1) {
+    if (currentStepIndex === -1) {
       return ResultAsync.fromSafePromise(
-        Promise.reject(new Error(`Current task ${state.currentTaskNumber} not found`))
+        Promise.reject(new Error(`Current step ${state.currentStepNumber} not found`))
       );
     }
 
-    // Mark current task as completed
-    const updatedTasks = [...state.tasks];
-    const currentTask = updatedTasks[currentTaskIndex]!;
+    const updatedSteps = [...state.steps];
+    const currentStep = updatedSteps[currentStepIndex]!;
 
-    updatedTasks[currentTaskIndex] = {
-      taskNumber: currentTask.taskNumber,
-      status: 'completed',
+    updatedSteps[currentStepIndex] = {
+      stepNumber: currentStep.stepNumber,
+      status: 'done',
       commitHash,
     };
 
-    // Check if there are more tasks
-    const hasMoreTasks = currentTaskIndex < state.tasks.length - 1;
+    const hasMoreSteps = currentStepIndex < state.steps.length - 1;
 
-    if (hasMoreTasks) {
-      const nextTaskIndex = currentTaskIndex + 1;
-      const nextTask = updatedTasks[nextTaskIndex]!;
+    if (hasMoreSteps) {
+      const nextStepIndex = currentStepIndex + 1;
+      const nextStep = updatedSteps[nextStepIndex]!;
 
-      updatedTasks[nextTaskIndex] = {
-        taskNumber: nextTask.taskNumber,
-        status: 'in_progress',
-        commitHash: nextTask.commitHash,
+      updatedSteps[nextStepIndex] = {
+        stepNumber: nextStep.stepNumber,
+        status: 'running',
+        commitHash: nextStep.commitHash,
       };
 
       const updatedState: LoopState = {
         ...state,
-        currentTaskNumber: state.currentTaskNumber + 1,
+        currentStepNumber: nextStep.stepNumber,
         isRetry: false,
-        tasks: updatedTasks,
+        steps: updatedSteps,
       };
       return writeState(updatedState);
     }
 
-    // All tasks completed
+    const completedAttempts = closeActiveAttempt(state, 'completed');
     const updatedState: LoopState = {
       ...state,
       status: 'completed',
-      tasks: updatedTasks,
+      isRetry: false,
+      attempts: completedAttempts,
+      steps: updatedSteps,
     };
     return writeState(updatedState);
   });
@@ -264,7 +528,6 @@ const completeCurrentTask = (commitHash: string): ResultAsync<void, Error> =>
  */
 const checkLimits = (): ResultAsync<{ exceeded: boolean; reason?: string }, Error> =>
   readState().map((state) => {
-    // Check iteration limit
     if (state.iterationCount >= state.maxIterations) {
       return {
         exceeded: true,
@@ -272,9 +535,9 @@ const checkLimits = (): ResultAsync<{ exceeded: boolean; reason?: string }, Erro
       };
     }
 
-    // Check time limit
-    if (state.startedAt) {
-      const startTime = new Date(state.startedAt).getTime();
+    const activeAttempt = getActiveAttempt(state);
+    if (activeAttempt) {
+      const startTime = new Date(activeAttempt.startedAt).getTime();
       const currentTime = new Date().getTime();
       const elapsedMinutes = (currentTime - startTime) / 1000 / 60;
 
@@ -290,55 +553,59 @@ const checkLimits = (): ResultAsync<{ exceeded: boolean; reason?: string }, Erro
   });
 
 /**
- * Mark the loop and current task as failed.
+ * Mark the loop and current step as failed.
  * @returns A ResultAsync that resolves when state is updated.
  */
 const failLoop = (): ResultAsync<void, Error> =>
   readState().andThen((state) => {
-    const updatedTasks = state.tasks.map((task) =>
-      task.taskNumber === state.currentTaskNumber ? { ...task, status: 'failed' as const } : task
+    const updatedSteps = state.steps.map((step) =>
+      step.stepNumber === state.currentStepNumber ? { ...step, status: 'failed' as const } : step
     );
 
     const updatedState: LoopState = {
       ...state,
       status: 'failed',
-      tasks: updatedTasks,
+      attempts: closeActiveAttempt(state, 'failed'),
+      steps: updatedSteps,
     };
 
     return writeState(updatedState);
   });
 
 /**
- * Mark the loop and current task as aborted.
+ * Mark the loop and current step as aborted.
  * @returns A ResultAsync that resolves when state is updated.
  */
 const abortLoop = (): ResultAsync<void, Error> =>
   readState().andThen((state) => {
-    const updatedTasks = state.tasks.map((task) =>
-      task.taskNumber === state.currentTaskNumber ? { ...task, status: 'aborted' as const } : task
+    const updatedSteps = state.steps.map((step) =>
+      step.stepNumber === state.currentStepNumber ? { ...step, status: 'failed' as const } : step
     );
 
     const updatedState: LoopState = {
       ...state,
       status: 'aborted',
-      tasks: updatedTasks,
+      attempts: closeActiveAttempt(state, 'aborted'),
+      steps: updatedSteps,
     };
 
     return writeState(updatedState);
   });
 
 const stateUtils = {
-  getCurrentTaskNumber,
+  getCurrentStepNumber,
   getLoopStatus,
   getPlanProgress,
   getLoopContext,
-  getCurrentTask,
+  getCurrentStep,
   isRetry,
+  getIterationCount,
   initializeState,
   startExecution,
+  resumeExecution,
   incrementIteration,
-  markCurrentTaskAsRetry,
-  completeCurrentTask,
+  markCurrentStepAsRetry,
+  completeCurrentStep,
   checkLimits,
   failLoop,
   abortLoop,

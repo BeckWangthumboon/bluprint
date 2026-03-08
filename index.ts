@@ -64,11 +64,18 @@ await yargs(hideBin(process.argv))
           type: 'boolean',
           description: 'Create stacked branches using Graphite CLI',
         })
+        .option('resume', {
+          type: 'string',
+          description: 'Resume a previous run by run ID',
+        })
         .check((argv) => {
-          if (argv['plan-only'] && argv['build-only']) {
+          if (argv.plan && argv.build) {
             throw new Error(
-              'Options --plan-only and --build-only cannot be used together. Please choose only one of these flags.'
+              'Options --plan and --build cannot be used together. Please choose only one of these flags.'
             );
+          }
+          if (argv.resume && (argv.spec || argv.plan || argv.build)) {
+            throw new Error('Option --resume cannot be used with --spec, --plan, or --build.');
           }
           return true;
         }),
@@ -79,6 +86,7 @@ await yargs(hideBin(process.argv))
         buildOnly: argv['build'],
         preset: argv.preset,
         graphite: argv.graphite,
+        resume: argv.resume,
       });
     }
   )

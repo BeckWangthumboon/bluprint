@@ -1,34 +1,50 @@
 import { z } from 'zod';
 
-const TASK_STATUS_VALUES = ['pending', 'in_progress', 'completed', 'failed', 'aborted'] as const;
+const STEP_STATUS_VALUES = ['pending', 'running', 'done', 'failed', 'skipped'] as const;
 const LOOP_STATUS_VALUES = ['planning', 'executing', 'completed', 'failed', 'aborted'] as const;
+const ATTEMPT_STATUS_VALUES = ['in_progress', 'completed', 'failed', 'aborted'] as const;
 
-const TaskStatusSchema = z.object({
-  taskNumber: z.number(),
-  status: z.enum(TASK_STATUS_VALUES),
+const StepStatusSchema = z.enum(STEP_STATUS_VALUES);
+
+const StepStateSchema = z.object({
+  stepNumber: z.number(),
+  status: StepStatusSchema,
   commitHash: z.string().optional(),
 });
 
+const RunAttemptSchema = z.object({
+  attempt: z.number(),
+  startedAt: z.string(),
+  endedAt: z.string().optional(),
+  status: z.enum(ATTEMPT_STATUS_VALUES),
+  reason: z.string().optional(),
+});
+
 const LoopStateSchema = z.object({
-  version: z.string(),
+  version: z.literal('2.0.0'),
+  runId: z.string(),
   status: z.enum(LOOP_STATUS_VALUES),
-  currentTaskNumber: z.number(),
+  currentStepNumber: z.number(),
   isRetry: z.boolean(),
   maxIterations: z.number(),
   maxTimeMinutes: z.number(),
-  startedAt: z.string().optional(),
   iterationCount: z.number(),
-  tasks: z.array(TaskStatusSchema),
+  attempts: z.array(RunAttemptSchema),
+  activeAttempt: z.number(),
+  steps: z.array(StepStateSchema),
 });
 
 const InitStateConfigSchema = z.object({
+  runId: z.string(),
   maxIterations: z.number(),
   maxTimeMinutes: z.number(),
 });
 
-type TaskStatus = z.infer<typeof TaskStatusSchema>;
+type StepStatus = z.infer<typeof StepStatusSchema>;
+type StepState = z.infer<typeof StepStateSchema>;
+type RunAttempt = z.infer<typeof RunAttemptSchema>;
 type LoopState = z.infer<typeof LoopStateSchema>;
 type InitStateConfig = z.infer<typeof InitStateConfigSchema>;
 
-export { TaskStatusSchema, LoopStateSchema, InitStateConfigSchema };
-export type { TaskStatus, LoopState, InitStateConfig };
+export { StepStatusSchema, StepStateSchema, RunAttemptSchema, LoopStateSchema, InitStateConfigSchema };
+export type { StepStatus, StepState, RunAttempt, LoopState, InitStateConfig };
