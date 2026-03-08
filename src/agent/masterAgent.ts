@@ -262,7 +262,7 @@ export const reviewAndGenerateTask = (
             });
         })
         .andThen(({ loopContext, spec, plan }) =>
-          getPlanStep(plan, loopContext.currentTaskNumber, {
+          getPlanStep(plan, loopContext.currentStepNumber, {
             missingStep: (stepNumber) => `Could not find task ${stepNumber} in plan.md`,
           }).map((currentStep) => ({ loopContext, spec, plan, currentStep }))
         )
@@ -333,8 +333,8 @@ ${currentStep}`,
                 systemPrompt,
               }) => {
                 // Determine if there's a next step
-                const hasNextStep = loopContext.currentTaskNumber < loopContext.totalTasks;
-                const nextStepNumber = loopContext.currentTaskNumber + 1;
+                const hasNextStep = loopContext.currentStepNumber < loopContext.totalSteps;
+                const nextStepNumber = loopContext.currentStepNumber + 1;
                 let nextStepContent = '';
 
                 if (hasNextStep) {
@@ -350,7 +350,7 @@ ${currentStep}`,
 ## Specification (spec.md)
 ${spec}
 
-## Current Plan Step (Task ${loopContext.currentTaskNumber})
+## Current Plan Step (Task ${loopContext.currentStepNumber})
 ${currentStep}
 
 ## Coding Agent Report (report.md)
@@ -367,9 +367,9 @@ ${gitDiff || '(no changes)'}
 \`\`\`
 
 ## Status Information
-- Current task number: ${loopContext.currentTaskNumber}
+- Current task number: ${loopContext.currentStepNumber}
 - Is retry: ${loopContext.isRetry}
-- Total tasks: ${loopContext.totalTasks}
+- Total tasks: ${loopContext.totalSteps}
 - Has next step: ${hasNextStep}
 
 ${hasNextStep ? `## Next Plan Step (Task ${nextStepNumber})\n${nextStepContent}` : '## Note\nThis is the LAST task in the plan. After acceptance, the loop will complete.'}
@@ -379,7 +379,7 @@ ${hasNextStep ? `## Next Plan Step (Task ${nextStepNumber})\n${nextStepContent}`
 Review the current task implementation and decide whether to accept or reject. Output ONLY valid JSON.`;
 
                 const startedAt = new Date();
-                const planStep = loopContext.currentTaskNumber;
+                const planStep = loopContext.currentStepNumber;
 
                 // Call model with repair capability
                 return lib.session.create('Master Agent Review').andThen((session) => {

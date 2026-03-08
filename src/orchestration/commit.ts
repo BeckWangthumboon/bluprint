@@ -35,27 +35,27 @@ export const createCommitForTask = (
     const { gitStatus, gitDiff } = gitInfo;
 
     return stateUtils
-      .getCurrentTaskNumber()
-      .andThen((currentTaskNumber) =>
+      .getCurrentStepNumber()
+      .andThen((currentStepNumber) =>
         workspace.cache.plan
           .read()
           .mapErr((e) => new Error(`Could not read plan.md: ${e.message}`))
-          .map((plan) => ({ currentTaskNumber, plan }))
+          .map((plan) => ({ currentStepNumber, plan }))
       )
-      .andThen(({ currentTaskNumber, plan }) =>
-        getPlanStep(plan, currentTaskNumber, {
+      .andThen(({ currentStepNumber, plan }) =>
+        getPlanStep(plan, currentStepNumber, {
           missingStep: (stepNumber) => `Could not find task ${stepNumber} in plan.md`,
-        }).map((currentStep) => ({ currentTaskNumber, plan, currentStep }))
+        }).map((currentStep) => ({ currentStepNumber, plan, currentStep }))
       )
-      .andThen(({ currentTaskNumber, plan, currentStep }) =>
+      .andThen(({ currentStepNumber, plan, currentStep }) =>
         loadPromptFile('commitAgent.txt').map((systemPrompt) => ({
-          currentTaskNumber,
+          currentStepNumber,
           plan,
           currentStep,
           systemPrompt,
         }))
       )
-      .andThen(({ currentTaskNumber, plan, currentStep, systemPrompt }) =>
+      .andThen(({ currentStepNumber, plan, currentStep, systemPrompt }) =>
         generateCommitMessage(
           systemPrompt,
           currentStep,
@@ -67,7 +67,7 @@ export const createCommitForTask = (
           config.timeoutMs
         ).andThen((commitMessage: string) => {
           if (config.graphite) {
-            const stepNumber = currentTaskNumber;
+            const stepNumber = currentStepNumber;
             const planOutline = extractPlanOutline(plan);
             const stepHeader = planOutline.find((h) => h.stepNumber === stepNumber);
             const stepTitle = stepHeader?.title ?? `step-${stepNumber}`;

@@ -58,6 +58,15 @@ const moveFile = (src: string, dest: string): ResultAsync<void, Error> =>
     toError
   );
 
+const copyFile = (src: string, dest: string): ResultAsync<void, Error> =>
+  ResultAsync.fromPromise(
+    (async () => {
+      await fs.mkdir(dirname(dest), { recursive: true });
+      await fs.copyFile(src, dest);
+    })(),
+    toError
+  );
+
 const removeFile = (filePath: string): ResultAsync<void, Error> =>
   ResultAsync.fromPromise(
     fs.rm(filePath, { force: true }).catch(() => {}),
@@ -86,6 +95,7 @@ export const fsUtils = {
   clearFile,
   removeDir,
   moveFile,
+  copyFile,
   removeFile,
   fileExists,
   ensureDir,

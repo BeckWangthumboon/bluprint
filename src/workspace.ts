@@ -6,6 +6,8 @@ const BLUPRINT_DIR = join(process.cwd(), '.bluprint');
 const RUNS_DIR = join(BLUPRINT_DIR, 'runs');
 const CACHE_DIR = join(BLUPRINT_DIR, 'cache');
 
+const getRunDir = (runId: string): string => join(RUNS_DIR, runId);
+
 // Workspace files
 const SPEC_FILE = join(CACHE_DIR, 'spec.md');
 const PLAN_FILE = join(CACHE_DIR, 'plan.md');
@@ -46,6 +48,34 @@ const writeSummary = (content: string): ResultAsync<void, Error> =>
 const readState = (): ResultAsync<string, Error> => fsUtils.readFile(STATE_FILE);
 const writeState = (content: string): ResultAsync<void, Error> =>
   fsUtils.writeFile(STATE_FILE, content);
+
+const getRunFilePaths = (runId: string) => {
+  const runDir = getRunDir(runId);
+  return {
+    runDir,
+    spec: join(runDir, 'spec.md'),
+    plan: join(runDir, 'plan.md'),
+    summary: join(runDir, 'summary.md'),
+    state: join(runDir, 'state.json'),
+    task: join(runDir, 'task.md'),
+    report: join(runDir, 'report.md'),
+  };
+};
+
+/**
+ * Copy persisted run files into the cache directory for resuming.
+ * @param runId - The run identifier to hydrate from
+ * @returns A ResultAsync that resolves when the cache is hydrated
+ */
+const hydrateCacheFromRun = (runId: string): ResultAsync<void, Error> => {
+  const runFiles = getRunFilePaths(runId);
+  return ResultAsync.combine([
+    fsUtils.copyFile(runFiles.spec, SPEC_FILE),
+    fsUtils.copyFile(runFiles.plan, PLAN_FILE),
+    fsUtils.copyFile(runFiles.summary, SUMMARY_FILE),
+    fsUtils.copyFile(runFiles.state, STATE_FILE),
+  ]).map(() => undefined);
+};
 
 /**
  * Archive cache files to the run directory.
@@ -98,6 +128,7 @@ const workspaceConstants = {
   BLUPRINT_DIR,
   RUNS_DIR,
   CACHE_DIR,
+  getRunDir,
   SPEC_FILE,
   PLAN_FILE,
   SUMMARY_FILE,
@@ -132,7 +163,11 @@ const workspace = {
       write: writeReport,
     },
   },
+  run: {
+    getFilePaths: getRunFilePaths,
+    hydrateCache: hydrateCacheFromRun,
+  },
   config: {},
 };
 
-export { workspace, workspaceConstants, archiveCacheToRun };
+export { workspace, workspaceConstants, archiveCacheToRun, hydrateCacheFromRun, getRunFilePaths };
