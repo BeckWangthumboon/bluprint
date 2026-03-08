@@ -141,9 +141,13 @@ describe('orchestration/loop', () => {
     expect(await fixture.readCacheFile('task.md')).toBe('Fix the issue');
   });
 
-  it('applyDecision accepts and completes the current task', async () => {
-    await writeLoopInputs('## 1 Only task\n');
-    const initResult = await stateUtils.initializeState({ maxIterations: 2, maxTimeMinutes: 10 });
+  it('applyDecision accepts and completes the current step', async () => {
+    await writeLoopInputs('## 1 Only step\n');
+    const initResult = await stateUtils.initializeState({
+      runId: 'test-run',
+      maxIterations: 2,
+      maxTimeMinutes: 10,
+    });
     const startResult = await stateUtils.startExecution();
     expect(initResult.isOk()).toBe(true);
     expect(startResult.isOk()).toBe(true);
@@ -153,12 +157,16 @@ describe('orchestration/loop', () => {
 
     const state = await readState();
     expect(state.status).toBe('completed');
-    expect(state.tasks).toEqual([{ taskNumber: 1, status: 'completed', commitHash: 'abc123' }]);
+    expect(state.steps).toEqual([{ stepNumber: 1, status: 'done', commitHash: 'abc123' }]);
   });
 
   it('applyDecision rejects and marks retry', async () => {
-    await writeLoopInputs('## 1 Only task\n');
-    const initResult = await stateUtils.initializeState({ maxIterations: 2, maxTimeMinutes: 10 });
+    await writeLoopInputs('## 1 Only step\n');
+    const initResult = await stateUtils.initializeState({
+      runId: 'test-run',
+      maxIterations: 2,
+      maxTimeMinutes: 10,
+    });
     const startResult = await stateUtils.startExecution();
     expect(initResult.isOk()).toBe(true);
     expect(startResult.isOk()).toBe(true);
@@ -171,7 +179,7 @@ describe('orchestration/loop', () => {
   });
 
   it('runLoop completes when the master accepts', async () => {
-    await writeLoopInputs('## 1 Only task\n');
+    await writeLoopInputs('## 1 Only step\n');
     codingReports = ['report-1'];
     masterResponses = ['{"decision":"accept"}'];
     commitResults = [{ hash: 'abc123', message: 'Done' }];
@@ -185,12 +193,12 @@ describe('orchestration/loop', () => {
     const state = await readState();
     expect(state.status).toBe('completed');
     expect(state.iterationCount).toBe(1);
-    expect(state.tasks[0]).toEqual({ taskNumber: 1, status: 'completed', commitHash: 'abc123' });
+    expect(state.steps[0]).toEqual({ stepNumber: 1, status: 'done', commitHash: 'abc123' });
     expect(await fixture.readCacheFile('report.md')).toBe('report-1');
   });
 
   it('runLoop saves reject instructions and continues to accept', async () => {
-    await writeLoopInputs('## 1 Only task\n');
+    await writeLoopInputs('## 1 Only step\n');
     codingReports = ['report-1', 'report-2'];
     masterResponses = ['{"decision":"reject","task":"Fix the tests"}', '{"decision":"accept"}'];
     commitResults = [{ hash: 'def456', message: 'Fixed' }];
@@ -206,11 +214,11 @@ describe('orchestration/loop', () => {
 
     const state = await readState();
     expect(state.status).toBe('completed');
-    expect(state.tasks[0]).toEqual({ taskNumber: 1, status: 'completed', commitHash: 'def456' });
+    expect(state.steps[0]).toEqual({ stepNumber: 1, status: 'done', commitHash: 'def456' });
   });
 
   it('runLoop fails on invalid master output', async () => {
-    await writeLoopInputs('## 1 Only task\n');
+    await writeLoopInputs('## 1 Only step\n');
     codingReports = ['report-1'];
     masterResponses = ['not-json'];
 
@@ -225,11 +233,11 @@ describe('orchestration/loop', () => {
 
     const state = await readState();
     expect(state.status).toBe('failed');
-    expect(state.tasks[0]?.status).toBe('failed');
+    expect(state.steps[0]?.status).toBe('failed');
   });
 
   it('runLoop aborts before entering the main loop when signal is already aborted', async () => {
-    await writeLoopInputs('## 1 Only task\n');
+    await writeLoopInputs('## 1 Only step\n');
     const controller = new AbortController();
     controller.abort();
 
@@ -238,6 +246,6 @@ describe('orchestration/loop', () => {
 
     const state = await readState();
     expect(state.status).toBe('aborted');
-    expect(state.tasks[0]?.status).toBe('aborted');
+    expect(state.steps[0]?.status).toBe('failed');
   });
 });

@@ -46,8 +46,13 @@ async function resolveSpecPath(cliSpec?: string): Promise<string> {
   return resolve(specFile);
 }
 
+const RUN_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const isValidRunId = (runId: string): boolean =>
-  runId.trim() === runId && runId !== '' && !runId.includes('/') && !runId.includes('\\');
+  runId.trim() === runId &&
+  runId !== '' &&
+  runId !== '.' &&
+  runId !== '..' &&
+  RUN_ID_PATTERN.test(runId);
 
 const ensureResumeFiles = async (runId: string): Promise<Error | null> => {
   const runFiles = getRunFilePaths(runId);
@@ -117,7 +122,7 @@ export async function handleRun(options: RunOptions): Promise<void> {
   }
 
   if (isResume && (!resumeRunId || !isValidRunId(resumeRunId))) {
-    console.error('Error: --resume requires a valid run ID (no path separators).');
+    console.error('Error: --resume requires a valid run ID (alphanumeric start, then alphanumeric/._-).');
     await exit(1);
     return;
   }
