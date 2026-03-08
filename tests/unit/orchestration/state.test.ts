@@ -91,9 +91,8 @@ describe('orchestration/state', () => {
     expect(state.iterationCount).toBe(0);
     expect(state.attempts).toHaveLength(1);
     expect(state.activeAttempt).toBe(0);
-    expect(state.attempts[0]).toEqual(
-      expect.objectContaining({ attempt: 1, status: 'in_progress' })
-    );
+    expect(state.attempts[0]?.attempt).toBe(1);
+    expect(state.attempts[0]?.status).toBe('in_progress');
     expect(state.steps).toEqual([
       { stepNumber: 1, status: 'pending' },
       { stepNumber: 2, status: 'pending' },
@@ -141,9 +140,10 @@ describe('orchestration/state', () => {
     expect(state.steps[0]?.status).toBe('running');
     expect(state.steps[1]?.status).toBe('pending');
     expect(state.attempts).toHaveLength(2);
-    expect(state.attempts[0]).toEqual(expect.objectContaining({ status: 'aborted' }));
+    expect(state.attempts[0]?.status).toBe('aborted');
     expect(state.attempts[0]?.endedAt).toBeTruthy();
-    expect(state.attempts[1]).toEqual(expect.objectContaining({ attempt: 2, status: 'in_progress' }));
+    expect(state.attempts[1]?.attempt).toBe(2);
+    expect(state.attempts[1]?.status).toBe('in_progress');
     expect(state.activeAttempt).toBe(1);
   });
 

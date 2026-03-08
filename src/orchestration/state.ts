@@ -375,7 +375,7 @@ const initializeState = (config: InitStateConfig): ResultAsync<void, Error> =>
 const startExecution = (): ResultAsync<void, Error> =>
   readState().andThen((state) => {
     const ensured = ensureActiveAttempt(state);
-    const updatedSteps = state.steps.map((step, index) =>
+    const updatedSteps: StepState[] = state.steps.map((step, index): StepState =>
       index === 0 ? { ...step, status: 'running' } : step
     );
     const updatedState: LoopState = {
@@ -420,7 +420,7 @@ const resumeExecution = (runId: string): ResultAsync<void, Error> =>
     const closedAttempts = closeActiveAttempt(state, attemptStatus);
     const nextAttempts = appendAttempt(closedAttempts);
 
-    const stepsWithRunning = updatedSteps.map((step) =>
+    const stepsWithRunning: StepState[] = updatedSteps.map((step): StepState =>
       step.stepNumber === nextStep.stepNumber ? { ...step, status: 'running' } : step
     );
 
